@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Phase 1: Foundation -->
     <string name="app_name">TutorSync</string>
     <string name="app_tagline">Smart Offline Tuition, Attendance &amp; Fee Manager</string>
 
@@ -33,4 +34,21 @@
     <string name="cd_selected_indicator">Selected option</string>
     <string name="msg_language_updated">Language updated to English</string>
     <string name="msg_theme_updated">Appearance mode updated</string>
+
+    <!-- Phase 2A: Account & Auth -->
+    <string name="auth_sign_in_title">Sign In to TutorSync</string>
+    <string name="auth_sign_up_title">Create Account</string>
+    <string name="auth_username">Username</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_confirm_password">Confirm Password</string>
+    <string name="auth_action_sign_in">Sign In</string>
+    <string name="auth_action_sign_up">Create Account</string>
+    <string name="auth_prompt_no_account">Don\'t have an account? Sign Up</string>
+    <string name="auth_prompt_have_account">Already have an account? Sign In</string>
+    <string name="auth_err_empty">Fields cannot be empty</string>
+    <string name="auth_err_password_mismatch">Passwords do not match</string>
+    <string name="auth_err_user_exists">Username already taken</string>
+    <string name="auth_err_invalid_credentials">Invalid username or password</string>
+    <string name="auth_err_hashing">Security error processing password</string>
+    <string name="action_sign_out">Sign Out</string>
 </resources>
