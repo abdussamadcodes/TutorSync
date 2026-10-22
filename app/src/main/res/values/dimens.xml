@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="space_xxs">4dp</dimen>
+    <dimen name="space_xs">8dp</dimen>
+    <dimen name="space_sm">12dp</dimen>
+    <dimen name="space_md">16dp</dimen>
+    <dimen name="space_lg">24dp</dimen>
+    <dimen name="space_xl">32dp</dimen>
+    <dimen name="space_xxl">48dp</dimen>
+
+    <dimen name="screen_padding_horizontal">20dp</dimen>
+    <dimen name="screen_padding_vertical">24dp</dimen>
+    <dimen name="content_max_width">520dp</dimen>
+    <dimen name="card_corner_radius">16dp</dimen>
+    <dimen name="button_corner_radius">12dp</dimen>
+    <dimen name="card_elevation_default">0dp</dimen>
+    <dimen name="card_stroke_width">1dp</dimen>
+    <dimen name="card_stroke_width_selected">2dp</dimen>
+    <dimen name="min_touch_target">48dp</dimen>
+    <dimen name="logo_container_size">72dp</dimen>
+</resources>

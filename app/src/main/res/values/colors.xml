@@ -1,5 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- Brand Primary Palette (Light) -->
+    <color name="ts_primary_light">#0F4C81</color>
+    <color name="ts_on_primary_light">#FFFFFF</color>
+    <color name="ts_primary_container_light">#D2E4FF</color>
+    <color name="ts_on_primary_container_light">#001D36</color>
+
+    <color name="ts_secondary_light">#006874</color>
+    <color name="ts_on_secondary_light">#FFFFFF</color>
+    <color name="ts_secondary_container_light">#97F0FF</color>
+    <color name="ts_on_secondary_container_light">#001F24</color>
+
+    <color name="ts_background_light">#F8FAFC</color>
+    <color name="ts_on_background_light">#0F172A</color>
+    <color name="ts_surface_light">#FFFFFF</color>
+    <color name="ts_on_surface_light">#0F172A</color>
+    <color name="ts_surface_variant_light">#F1F5F9</color>
+    <color name="ts_on_surface_variant_light">#475569</color>
+    <color name="ts_outline_light">#CBD5E1</color>
+    <color name="ts_outline_variant_light">#E2E8F0</color>
+
+    <!-- Brand Primary Palette (Dark) -->
+    <color name="ts_primary_dark">#9ECAFF</color>
+    <color name="ts_on_primary_dark">#003258</color>
+    <color name="ts_primary_container_dark">#00497D</color>
+    <color name="ts_on_primary_container_dark">#D2E4FF</color>
+
+    <color name="ts_secondary_dark">#4FD8EB</color>
+    <color name="ts_on_secondary_dark">#00363D</color>
+    <color name="ts_secondary_container_dark">#004F58</color>
+    <color name="ts_on_secondary_container_dark">#97F0FF</color>
+
+    <color name="ts_background_dark">#0B1120</color>
+    <color name="ts_on_background_dark">#F1F5F9</color>
+    <color name="ts_surface_dark">#1E293B</color>
+    <color name="ts_on_surface_dark">#F8FAFC</color>
+    <color name="ts_surface_variant_dark">#334155</color>
+    <color name="ts_on_surface_variant_dark">#CBD5E1</color>
+    <color name="ts_outline_dark">#475569</color>
+    <color name="ts_outline_variant_dark">#334155</color>
+
+    <!-- Semantic Status Colors -->
+    <color name="ts_success">#15803D</color>
+    <color name="ts_success_container">#DCFCE7</color>
+    <color name="ts_warning">#B45309</color>
+    <color name="ts_warning_container">#FEF3C7</color>
+    <color name="ts_error_light">#B91C1C</color>
+    <color name="ts_on_error_light">#FFFFFF</color>
+    <color name="ts_error_container_light">#FEE2E2</color>
+    <color name="ts_on_error_container_light">#7F1D1D</color>
+
+    <color name="ts_error_dark">#FCA5A5</color>
+    <color name="ts_on_error_dark">#7F1D1D</color>
+    <color name="ts_error_container_dark">#991B1B</color>
+    <color name="ts_on_error_container_dark">#FEE2E2</color>
 </resources>

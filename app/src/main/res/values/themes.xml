@@ -1,9 +1,58 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
     <style name="Base.Theme.TutorSync" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/ts_primary_light</item>
+        <item name="colorOnPrimary">@color/ts_on_primary_light</item>
+        <item name="colorPrimaryContainer">@color/ts_primary_container_light</item>
+        <item name="colorOnPrimaryContainer">@color/ts_on_primary_container_light</item>
+
+        <item name="colorSecondary">@color/ts_secondary_light</item>
+        <item name="colorOnSecondary">@color/ts_on_secondary_light</item>
+        <item name="colorSecondaryContainer">@color/ts_secondary_container_light</item>
+        <item name="colorOnSecondaryContainer">@color/ts_on_secondary_container_light</item>
+
+        <item name="android:colorBackground">@color/ts_background_light</item>
+        <item name="colorOnBackground">@color/ts_on_background_light</item>
+        <item name="colorSurface">@color/ts_surface_light</item>
+        <item name="colorOnSurface">@color/ts_on_surface_light</item>
+        <item name="colorSurfaceVariant">@color/ts_surface_variant_light</item>
+        <item name="colorOnSurfaceVariant">@color/ts_on_surface_variant_light</item>
+        <item name="colorOutline">@color/ts_outline_light</item>
+        <item name="colorOutlineVariant">@color/ts_outline_variant_light</item>
+
+        <item name="colorError">@color/ts_error_light</item>
+        <item name="colorOnError">@color/ts_on_error_light</item>
+        <item name="colorErrorContainer">@color/ts_error_container_light</item>
+        <item name="colorOnErrorContainer">@color/ts_on_error_container_light</item>
+
+        <item name="android:statusBarColor">@color/ts_background_light</item>
+        <item name="android:navigationBarColor">@color/ts_background_light</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <style name="Theme.TutorSync" parent="Base.Theme.TutorSync" />
+
+    <style name="Widget.TutorSync.Card" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/card_elevation_default</item>
+        <item name="strokeWidth">@dimen/card_stroke_width</item>
+        <item name="strokeColor">?attr/colorOutlineVariant</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
+    </style>
+
+    <style name="Widget.TutorSync.Button.Primary" parent="Widget.Material3.Button">
+        <item name="android:minHeight">54dp</item>
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Widget.TutorSync.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">50dp</item>
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">15sp</item>
+        <item name="strokeColor">?attr/colorOutline</item>
+    </style>
 </resources>

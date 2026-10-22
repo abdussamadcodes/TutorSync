@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="screen_padding_horizontal">48dp</dimen>
+    <dimen name="screen_padding_vertical">36dp</dimen>
+    <dimen name="content_max_width">560dp</dimen>
+    <dimen name="logo_container_size">88dp</dimen>
+</resources>

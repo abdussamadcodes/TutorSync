@@ -1,7 +1,32 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
     <style name="Base.Theme.TutorSync" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <item name="colorPrimary">@color/ts_primary_dark</item>
+        <item name="colorOnPrimary">@color/ts_on_primary_dark</item>
+        <item name="colorPrimaryContainer">@color/ts_primary_container_dark</item>
+        <item name="colorOnPrimaryContainer">@color/ts_on_primary_container_dark</item>
+
+        <item name="colorSecondary">@color/ts_secondary_dark</item>
+        <item name="colorOnSecondary">@color/ts_on_secondary_dark</item>
+        <item name="colorSecondaryContainer">@color/ts_secondary_container_dark</item>
+        <item name="colorOnSecondaryContainer">@color/ts_on_secondary_container_dark</item>
+
+        <item name="android:colorBackground">@color/ts_background_dark</item>
+        <item name="colorOnBackground">@color/ts_on_background_dark</item>
+        <item name="colorSurface">@color/ts_surface_dark</item>
+        <item name="colorOnSurface">@color/ts_on_surface_dark</item>
+        <item name="colorSurfaceVariant">@color/ts_surface_variant_dark</item>
+        <item name="colorOnSurfaceVariant">@color/ts_on_surface_variant_dark</item>
+        <item name="colorOutline">@color/ts_outline_dark</item>
+        <item name="colorOutlineVariant">@color/ts_outline_variant_dark</item>
+
+        <item name="colorError">@color/ts_error_dark</item>
+        <item name="colorOnError">@color/ts_on_error_dark</item>
+        <item name="colorErrorContainer">@color/ts_error_container_dark</item>
+        <item name="colorOnErrorContainer">@color/ts_on_error_container_dark</item>
+
+        <item name="android:statusBarColor">@color/ts_background_dark</item>
+        <item name="android:navigationBarColor">@color/ts_background_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
