@@ -137,5 +137,7 @@ public class WelcomeActivity extends BaseActivity {
     private void navigateToMainAndFinish() {
         startActivity(new Intent(this, MainActivity.class));
         finish();
+        // Applies a smooth crossfade when navigating to the next screen
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
     }
 }

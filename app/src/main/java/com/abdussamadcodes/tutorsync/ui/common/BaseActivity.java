@@ -21,6 +21,13 @@ public abstract class BaseActivity extends AppCompatActivity {
         appPreferences = new AppPreferences(this);
     }
 
+    // Intercepts the screen rebuild and applies a smooth crossfade
+    @Override
+    public void recreate() {
+        super.recreate();
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+    }
+
     protected void applySystemBarInsets(@NonNull View rootView) {
         final int initialLeft = rootView.getPaddingLeft();
         final int initialTop = rootView.getPaddingTop();
