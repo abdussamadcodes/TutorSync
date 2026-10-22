@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Phase 1: Foundation -->
     <string name="app_name">টিউটরসিঙ্ক (TutorSync)</string>
     <string name="app_tagline">স্মার্ট অফলাইন টিউশন, উপস্থিতি ও ফি ব্যবস্থাপনা</string>
 
@@ -35,20 +34,31 @@
     <string name="msg_language_updated">ভাষা বাংলায় পরিবর্তন করা হয়েছে</string>
     <string name="msg_theme_updated">থিম মোড পরিবর্তন করা হয়েছে</string>
 
-    <!-- Phase 2A: Account & Auth -->
+    <!-- Phase 2: Account & Auth -->
     <string name="auth_sign_in_title">টিউটরসিঙ্কে সাইন ইন করুন</string>
     <string name="auth_sign_up_title">অ্যাকাউন্ট তৈরি করুন</string>
-    <string name="auth_username">ইউজারনেম</string>
+    <string name="auth_full_name">পুরো নাম</string>
+    <string name="auth_username">ইউজারনেম (শুধুমাত্র অক্ষর ও সংখ্যা)</string>
     <string name="auth_password">পাসওয়ার্ড</string>
     <string name="auth_confirm_password">পাসওয়ার্ড নিশ্চিত করুন</string>
     <string name="auth_action_sign_in">সাইন ইন</string>
     <string name="auth_action_sign_up">অ্যাকাউন্ট তৈরি করুন</string>
     <string name="auth_prompt_no_account">অ্যাকাউন্ট নেই? সাইন আপ করুন</string>
     <string name="auth_prompt_have_account">আগে থেকেই অ্যাকাউন্ট আছে? সাইন ইন করুন</string>
+
     <string name="auth_err_empty">ঘরগুলো খালি রাখা যাবে না</string>
     <string name="auth_err_password_mismatch">পাসওয়ার্ড মিলেনি</string>
     <string name="auth_err_user_exists">এই ইউজারনেমটি আগে থেকেই ব্যবহৃত হচ্ছে</string>
     <string name="auth_err_invalid_credentials">ভুল ইউজারনেম বা পাসওয়ার্ড</string>
     <string name="auth_err_hashing">পাসওয়ার্ড প্রক্রিয়াকরণে নিরাপত্তা ত্রুটি</string>
+    <string name="auth_err_invalid_username">ইউজারনেমে শুধুমাত্র অক্ষর এবং সংখ্যা ব্যবহার করা যাবে (কোনো স্পেস বা চিহ্ন নয়)</string>
+
+    <!-- Dynamic Password Strength Errors -->
+    <string name="auth_err_pass_length">পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে</string>
+    <string name="auth_err_pass_upper">পাসওয়ার্ডে অন্তত একটি বড় হাতের অক্ষর (A-Z) থাকতে হবে</string>
+    <string name="auth_err_pass_lower">পাসওয়ার্ডে অন্তত একটি ছোট হাতের অক্ষর (a-z) থাকতে হবে</string>
+    <string name="auth_err_pass_digit">পাসওয়ার্ডে অন্তত একটি সংখ্যা (0-9) থাকতে হবে</string>
+    <string name="auth_err_pass_special">পাসওয়ার্ডে অন্তত একটি বিশেষ চিহ্ন (@#$%^&amp;+=!*()~_-) থাকতে হবে</string>
+
     <string name="action_sign_out">সাইন আউট</string>
 </resources>

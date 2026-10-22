@@ -21,6 +21,7 @@ public class LocalAccountStore {
         try {
             JSONObject json = new JSONObject();
             json.put("id", account.getId());
+            json.put("fullName", account.getFullName());
             json.put("username", account.getUsername());
             json.put("passwordHash", account.getPasswordHash());
             json.put("salt", account.getSalt());
@@ -39,6 +40,7 @@ public class LocalAccountStore {
             JSONObject json = new JSONObject(jsonString);
             return new Account(
                     json.getString("id"),
+                    json.optString("fullName", "Unknown User"), // Fallback for old tests
                     json.getString("username"),
                     json.getString("passwordHash"),
                     json.getString("salt")

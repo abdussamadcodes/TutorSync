@@ -17,15 +17,12 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        // Suppresses the flash when the OS restarts the activity for a language change
+        if (savedInstanceState != null) {
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        }
         super.onCreate(savedInstanceState);
         appPreferences = new AppPreferences(this);
-    }
-
-    // Intercepts the screen rebuild and applies a smooth crossfade
-    @Override
-    public void recreate() {
-        super.recreate();
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
     }
 
     protected void applySystemBarInsets(@NonNull View rootView) {
@@ -35,15 +32,8 @@ public abstract class BaseActivity extends AppCompatActivity {
         final int initialBottom = rootView.getPaddingBottom();
 
         ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(
-                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
-            );
-            v.setPadding(
-                    initialLeft + insets.left,
-                    initialTop + insets.top,
-                    initialRight + insets.right,
-                    initialBottom + insets.bottom
-            );
+            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(initialLeft + insets.left, initialTop + insets.top, initialRight + insets.right, initialBottom + insets.bottom);
             return windowInsets;
         });
     }

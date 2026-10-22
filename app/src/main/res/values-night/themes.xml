@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Base.Theme.TutorSync" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Assign the premium fade to the whole app -->
+        <item name="android:windowAnimationStyle">@style/WindowAnimationFade</item>
+
         <item name="colorPrimary">@color/ts_primary_dark</item>
         <item name="colorOnPrimary">@color/ts_on_primary_dark</item>
         <item name="colorPrimaryContainer">@color/ts_primary_container_dark</item>

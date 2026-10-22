@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:name=".TutorSyncApp"
@@ -11,7 +12,8 @@
         android:localeConfig="@xml/locales_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.TutorSync">
+        android:theme="@style/Theme.TutorSync"
+        tools:targetApi="34">
 
         <activity
             android:name=".ui.onboarding.WelcomeActivity"
@@ -25,6 +27,16 @@
 
         <activity
             android:name=".ui.main.MainActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.account.SignInActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.account.SignUpActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 

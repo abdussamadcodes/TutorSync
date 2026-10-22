@@ -10,8 +10,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivityWelcomeBinding;
+import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
-import com.abdussamadcodes.tutorsync.ui.main.MainActivity;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
 import com.google.android.material.card.MaterialCardView;
@@ -36,7 +36,7 @@ public class WelcomeActivity extends BaseActivity {
         isReopenedFromInsideApp = getIntent().getBooleanExtra(EXTRA_REOPEN_FOR_LANGUAGE_CHANGE, false);
 
         if (appPreferences.isOnboardingCompleted() && !isReopenedFromInsideApp) {
-            navigateToMainAndFinish();
+            navigateToSignInAndFinish();
             return;
         }
 
@@ -68,23 +68,14 @@ public class WelcomeActivity extends BaseActivity {
     }
 
     private void setupListeners() {
-        binding.cardLanguageEnglish.setOnClickListener(
-                v -> onLanguageChosen(AppPreferences.LANG_ENGLISH)
-        );
-        binding.cardLanguageBangla.setOnClickListener(
-                v -> onLanguageChosen(AppPreferences.LANG_BANGLA)
-        );
+        binding.cardLanguageEnglish.setOnClickListener(v -> onLanguageChosen(AppPreferences.LANG_ENGLISH));
+        binding.cardLanguageBangla.setOnClickListener(v -> onLanguageChosen(AppPreferences.LANG_BANGLA));
 
         binding.toggleGroupTheme.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (!isChecked) {
-                return;
-            }
+            if (!isChecked) return;
             String targetTheme = AppPreferences.THEME_SYSTEM;
-            if (checkedId == R.id.btnThemeLight) {
-                targetTheme = AppPreferences.THEME_LIGHT;
-            } else if (checkedId == R.id.btnThemeDark) {
-                targetTheme = AppPreferences.THEME_DARK;
-            }
+            if (checkedId == R.id.btnThemeLight) targetTheme = AppPreferences.THEME_LIGHT;
+            else if (checkedId == R.id.btnThemeDark) targetTheme = AppPreferences.THEME_DARK;
 
             if (!targetTheme.equals(appPreferences.getThemeMode())) {
                 appPreferences.setThemeMode(targetTheme);
@@ -97,7 +88,7 @@ public class WelcomeActivity extends BaseActivity {
             if (isReopenedFromInsideApp) {
                 finish();
             } else {
-                navigateToMainAndFinish();
+                navigateToSignInAndFinish();
             }
         });
     }
@@ -111,18 +102,9 @@ public class WelcomeActivity extends BaseActivity {
         }
     }
 
-    private void updateCardSelectionState(
-            @NonNull MaterialCardView card,
-            @NonNull View checkIcon,
-            boolean isSelected) {
-        int strokeWidthPx = getResources().getDimensionPixelSize(
-                isSelected ? R.dimen.card_stroke_width_selected : R.dimen.card_stroke_width
-        );
-        int strokeColor = resolveThemeColor(
-                isSelected
-                        ? com.google.android.material.R.attr.colorPrimary
-                        : com.google.android.material.R.attr.colorOutlineVariant
-        );
+    private void updateCardSelectionState(@NonNull MaterialCardView card, @NonNull View checkIcon, boolean isSelected) {
+        int strokeWidthPx = getResources().getDimensionPixelSize(isSelected ? R.dimen.card_stroke_width_selected : R.dimen.card_stroke_width);
+        int strokeColor = resolveThemeColor(isSelected ? com.google.android.material.R.attr.colorPrimary : com.google.android.material.R.attr.colorOutlineVariant);
         card.setStrokeWidth(strokeWidthPx);
         card.setStrokeColor(strokeColor);
         checkIcon.setVisibility(isSelected ? View.VISIBLE : View.INVISIBLE);
@@ -134,10 +116,14 @@ public class WelcomeActivity extends BaseActivity {
         return typedValue.data;
     }
 
-    private void navigateToMainAndFinish() {
-        startActivity(new Intent(this, MainActivity.class));
+    private void navigateToSignInAndFinish() {
+        startActivity(new Intent(this, SignInActivity.class));
         finish();
-        // Applies a smooth crossfade when navigating to the next screen
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out);
+        } else {
+            //noinspection deprecation
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        }
     }
 }

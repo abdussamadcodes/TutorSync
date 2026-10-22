@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Premium Fade Animation Styles to stop black jumps -->
+    <style name="WindowAnimationFade" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:activityOpenExitAnimation">@android:anim/fade_out</item>
+        <item name="android:activityCloseEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:activityCloseExitAnimation">@android:anim/fade_out</item>
+    </style>
+
     <style name="Base.Theme.TutorSync" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Assign the premium fade to the whole app -->
+        <item name="android:windowAnimationStyle">@style/WindowAnimationFade</item>
+
         <item name="colorPrimary">@color/ts_primary_light</item>
         <item name="colorOnPrimary">@color/ts_on_primary_light</item>
         <item name="colorPrimaryContainer">@color/ts_primary_container_light</item>
