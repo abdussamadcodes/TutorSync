@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">টিউটরসিঙ্ক (TutorSync)</string>
+    <string name="app_tagline">স্মার্ট অফলাইন টিউশন, উপস্থিতি ও ফি ব্যবস্থাপনা</string>
+
+    <string name="welcome_badge">অফলাইন-ফার্স্ট টিউটর প্ল্যাটফর্ম</string>
+    <string name="welcome_title">টিউটরসিঙ্কে স্বাগতম</string>
+    <string name="welcome_subtitle">আপনার শিক্ষার্থী, ক্লাসের রুটিন, উপস্থিতি, মাসিক বেতন এবং পিডিএফ ইনভয়েস—সবকিছু এক জায়গায় নিরাপদে পরিচালনা করুন।</string>
+    <string name="welcome_select_language_label">আপনার ভাষা নির্বাচন করুন / Choose Language</string>
+    <string name="welcome_lang_english_title">English</string>
+    <string name="welcome_lang_english_subtitle">ইংরেজি ভাষায় ব্যবহার করুন</string>
+    <string name="welcome_lang_bangla_title">বাংলা (Bangla)</string>
+    <string name="welcome_lang_bangla_subtitle">সম্পূর্ণ অ্যাপ বাংলায় ব্যবহার করুন</string>
+
+    <string name="welcome_select_theme_label">অ্যাপের থিম (Appearance)</string>
+    <string name="theme_system">সিস্টেম</string>
+    <string name="theme_light">লাইট</string>
+    <string name="theme_dark">ডার্ক</string>
+
+    <string name="action_continue">এগিয়ে যান</string>
+    <string name="action_save_and_close">পছন্দ সংরক্ষণ করুন</string>
+
+    <string name="main_foundation_header">টিউটরসিঙ্ক ফাউন্ডেশন প্রস্তুত</string>
+    <string name="main_foundation_description">আপনার বাংলা ও ইংরেজি ভাষা ইঞ্জিন, রেসপনসিভ ম্যাটেরিয়াল ৩ ডিজাইন সিস্টেম এবং স্ক্রিন ইনসেট হ্যান্ডলার সচল রয়েছে।</string>
+    <string name="main_current_language_label">বর্তমান ভাষা</string>
+    <string name="main_current_language_value">বাংলা (bn)</string>
+    <string name="main_current_theme_label">বর্তমান থিম মোড</string>
+    <string name="main_action_change_language">ভাষা পরিবর্তন করুন / Change Language</string>
+    <string name="main_action_cycle_theme">থিম মোড পরিবর্তন করুন</string>
+    <string name="main_status_offline_ready">অফলাইন স্টোরেজ মোড: সচল (ডিফল্ট মুদ্রা: BDT ৳)</string>
+
+    <string name="cd_app_logo">টিউটরসিঙ্ক অ্যাপ লোগো</string>
+    <string name="cd_selected_indicator">নির্বাচিত অপশন</string>
+    <string name="msg_language_updated">ভাষা বাংলায় পরিবর্তন করা হয়েছে</string>
+    <string name="msg_theme_updated">থিম মোড পরিবর্তন করা হয়েছে</string>
+</resources>

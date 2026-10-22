@@ -1,3 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TutorSync</string>
+    <string name="app_tagline">Smart Offline Tuition, Attendance &amp; Fee Manager</string>
+
+    <string name="welcome_badge">OFFLINE-FIRST TUTOR WORKSPACE</string>
+    <string name="welcome_title">Welcome to TutorSync</string>
+    <string name="welcome_subtitle">Organize your students, class schedules, attendance, monthly fees, and PDF invoices in one secure place.</string>
+    <string name="welcome_select_language_label">Choose Your Language / ভাষা নির্বাচন করুন</string>
+    <string name="welcome_lang_english_title">English</string>
+    <string name="welcome_lang_english_subtitle">Use TutorSync in English</string>
+    <string name="welcome_lang_bangla_title">বাংলা (Bangla)</string>
+    <string name="welcome_lang_bangla_subtitle">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন</string>
+
+    <string name="welcome_select_theme_label">Appearance</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+
+    <string name="action_continue">Continue</string>
+    <string name="action_save_and_close">Save Selection</string>
+
+    <string name="main_foundation_header">TutorSync Foundation Ready</string>
+    <string name="main_foundation_description">Your localization engine, responsive Material 3 design system, and system inset handlers are active.</string>
+    <string name="main_current_language_label">Active Language</string>
+    <string name="main_current_language_value">English (en)</string>
+    <string name="main_current_theme_label">Active Theme Mode</string>
+    <string name="main_action_change_language">Change Language / ভাষা পরিবর্তন</string>
+    <string name="main_action_cycle_theme">Switch Theme Mode</string>
+    <string name="main_status_offline_ready">Offline Storage Mode: Ready (Currency default: BDT ৳)</string>
+
+    <string name="cd_app_logo">TutorSync application logo</string>
+    <string name="cd_selected_indicator">Selected option</string>
+    <string name="msg_language_updated">Language updated to English</string>
+    <string name="msg_theme_updated">Appearance mode updated</string>
 </resources>
