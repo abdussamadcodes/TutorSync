@@ -2,10 +2,12 @@ package com.abdussamadcodes.tutorsync.ui.main;
 
 import android.content.Intent;
 import android.os.Bundle;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivityMainBinding;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
+import com.abdussamadcodes.tutorsync.ui.account.PinLockActivity;
 import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.onboarding.WelcomeActivity;
@@ -15,10 +17,18 @@ import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
 public class MainActivity extends BaseActivity {
     private ActivityMainBinding binding;
     private SessionManager sessionManager;
+    private boolean isPinVerifiedThisSession = false;
+    private static final String STATE_PIN_VERIFIED = "state_pin_verified";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Restore the PIN verification state if the activity was recreated (e.g., theme change)
+        if (savedInstanceState != null) {
+            isPinVerifiedThisSession = savedInstanceState.getBoolean(STATE_PIN_VERIFIED, false);
+        }
+
         sessionManager = new SessionManager(this);
 
         if (!sessionManager.hasActiveSession()) {
@@ -34,10 +44,23 @@ public class MainActivity extends BaseActivity {
     }
 
     @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // Save the PIN verification state before the activity is destroyed
+        outState.putBoolean(STATE_PIN_VERIFIED, isPinVerifiedThisSession);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         if (sessionManager.hasActiveSession()) {
             refreshStatusLabels();
+            // Trigger PIN Lock only if it hasn't been verified yet this session
+            if (!isPinVerifiedThisSession) {
+                startActivity(new Intent(this, PinLockActivity.class));
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                isPinVerifiedThisSession = true;
+            }
         }
     }
 
@@ -62,7 +85,7 @@ public class MainActivity extends BaseActivity {
             showMessage(binding.getRoot(), R.string.msg_theme_updated);
         });
 
-        // Repurposing a click listener on the logo for Sign Out testing for now
+        // Sign Out
         binding.mainContentContainer.getChildAt(0).setOnClickListener(v -> {
             sessionManager.logout();
             startActivity(new Intent(this, SignInActivity.class));
