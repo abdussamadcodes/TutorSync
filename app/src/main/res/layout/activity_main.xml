@@ -26,6 +26,7 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintWidth_max="@dimen/content_max_width">
 
+            <!-- Header Section with Logo and Title -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -66,17 +67,27 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/app_tagline"
+                        android:text="Dashboard"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="13sp" />
+                        android:textSize="14sp" />
                 </LinearLayout>
+
+                <!-- Sign Out Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSignOut"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/action_sign_out"
+                    android:textColor="?attr/colorError" />
             </LinearLayout>
 
+            <!-- Dashboard Placeholder (Will be filled in later phases) -->
             <com.google.android.material.card.MaterialCardView
                 style="@style/Widget.TutorSync.Card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_lg">
+                android:layout_marginTop="@dimen/space_xl">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -87,7 +98,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/main_foundation_header"
+                        android:text="Welcome to your Dashboard!"
                         android:textColor="?attr/colorOnSurface"
                         android:textSize="18sp"
                         android:textStyle="bold" />
@@ -96,16 +107,33 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xs"
-                        android:lineSpacingMultiplier="1.2"
-                        android:text="@string/main_foundation_description"
+                        android:text="Your active students and upcoming classes will appear here."
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="14sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginVertical="@dimen/space_md"
-                        android:background="?attr/colorOutlineVariant" />
+            <!-- Settings Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:text="Settings"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.TutorSync.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="@dimen/space_lg">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -155,16 +183,6 @@
                             android:textStyle="bold"
                             tools:text="System" />
                     </LinearLayout>
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_md"
-                        android:background="?attr/colorSurfaceVariant"
-                        android:padding="@dimen/space_sm"
-                        android:text="@string/main_status_offline_ready"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="13sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -173,7 +191,7 @@
                 style="@style/Widget.TutorSync.Button.Primary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_lg"
+                android:layout_marginTop="@dimen/space_md"
                 android:text="@string/main_action_change_language"
                 app:icon="@drawable/ic_language"
                 app:iconGravity="textStart" />

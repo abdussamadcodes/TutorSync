@@ -1,52 +1,84 @@
 package com.abdussamadcodes.tutorsync.account;
 
+import android.content.ContentValues;
 import android.content.Context;
-import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import com.abdussamadcodes.tutorsync.database.DatabaseManager;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry;
 import com.abdussamadcodes.tutorsync.model.Account;
-import org.json.JSONObject;
 
 public class LocalAccountStore {
-    private static final String PREF_NAME = "tutorsync_accounts_db";
-    private final SharedPreferences prefs;
 
     public LocalAccountStore(@NonNull Context context) {
-        this.prefs = context.getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        // SharedPreferences no longer used for accounts
     }
 
     public boolean saveAccount(@NonNull Account account) {
-        String key = account.getUsername().toLowerCase();
-        if (prefs.contains(key)) return false;
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        boolean success = false;
+
         try {
-            JSONObject json = new JSONObject();
-            json.put("id", account.getId());
-            json.put("fullName", account.getFullName());
-            json.put("username", account.getUsername());
-            json.put("passwordHash", account.getPasswordHash());
-            json.put("salt", account.getSalt());
-            prefs.edit().putString(key, json.toString()).apply();
-            return true;
-        } catch (Exception e) {
-            return false;
+            ContentValues values = new ContentValues();
+            values.put(AccountEntry.COLUMN_ID, account.getId());
+            values.put(AccountEntry.COLUMN_FULL_NAME, account.getFullName());
+            values.put(AccountEntry.COLUMN_USERNAME, account.getUsername().toLowerCase());
+            values.put(AccountEntry.COLUMN_PASSWORD_HASH, account.getPasswordHash());
+            values.put(AccountEntry.COLUMN_SALT, account.getSalt());
+
+            long currentTime = System.currentTimeMillis();
+            values.put(AccountEntry.COLUMN_CREATED_AT, currentTime);
+            values.put(AccountEntry.COLUMN_UPDATED_AT, currentTime);
+
+            // insert returns -1 if an error occurred (e.g., username already exists due to UNIQUE constraint)
+            long newRowId = db.insert(AccountEntry.TABLE_NAME, null, values);
+            success = newRowId != -1;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
         }
+        return success;
     }
 
     @Nullable
     public Account getAccountByUsername(@NonNull String username) {
-        String jsonString = prefs.getString(username.toLowerCase(), null);
-        if (jsonString == null) return null;
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        Account account = null;
+
+        String selection = AccountEntry.COLUMN_USERNAME + " = ?";
+        String[] selectionArgs = { username.toLowerCase() };
+
+        Cursor cursor = null;
         try {
-            JSONObject json = new JSONObject(jsonString);
-            return new Account(
-                    json.getString("id"),
-                    json.optString("fullName", "Unknown User"), // Fallback for old tests
-                    json.getString("username"),
-                    json.getString("passwordHash"),
-                    json.getString("salt")
+            cursor = db.query(
+                    AccountEntry.TABLE_NAME,
+                    null,
+                    selection,
+                    selectionArgs,
+                    null,
+                    null,
+                    null
             );
-        } catch (Exception e) {
-            return null;
+
+            if (cursor != null && cursor.moveToFirst()) {
+                String id = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_ID));
+                String fullName = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_FULL_NAME));
+                String savedUsername = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_USERNAME));
+                String passwordHash = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_PASSWORD_HASH));
+                String salt = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_SALT));
+
+                account = new Account(id, fullName, savedUsername, passwordHash, salt);
+            }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+            DatabaseManager.getInstance().closeDatabase();
         }
+
+        return account;
     }
 }

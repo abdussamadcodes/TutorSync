@@ -24,7 +24,6 @@ public class MainActivity extends BaseActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Restore the PIN verification state if the activity was recreated (e.g., theme change)
         if (savedInstanceState != null) {
             isPinVerifiedThisSession = savedInstanceState.getBoolean(STATE_PIN_VERIFIED, false);
         }
@@ -46,7 +45,6 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        // Save the PIN verification state before the activity is destroyed
         outState.putBoolean(STATE_PIN_VERIFIED, isPinVerifiedThisSession);
     }
 
@@ -55,10 +53,16 @@ public class MainActivity extends BaseActivity {
         super.onResume();
         if (sessionManager.hasActiveSession()) {
             refreshStatusLabels();
-            // Trigger PIN Lock only if it hasn't been verified yet this session
+
+            // Trigger PIN Lock on resume if not verified (Mock setting for Phase 2B)
             if (!isPinVerifiedThisSession) {
                 startActivity(new Intent(this, PinLockActivity.class));
-                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                if (android.os.Build.VERSION.SDK_INT >= 34) {
+                    overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out);
+                } else {
+                    //noinspection deprecation
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                }
                 isPinVerifiedThisSession = true;
             }
         }
@@ -85,8 +89,8 @@ public class MainActivity extends BaseActivity {
             showMessage(binding.getRoot(), R.string.msg_theme_updated);
         });
 
-        // Sign Out
-        binding.mainContentContainer.getChildAt(0).setOnClickListener(v -> {
+        // Use the explicit Sign Out button
+        binding.btnSignOut.setOnClickListener(v -> {
             sessionManager.logout();
             startActivity(new Intent(this, SignInActivity.class));
             finish();
