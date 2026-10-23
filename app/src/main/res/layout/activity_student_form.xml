@@ -14,7 +14,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="Add Student" />
+            app:title="@string/student_form_title" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -27,23 +27,25 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
+
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                android:hint="Student ID (Must be unique for your account)">
+                android:hint="@string/student_form_id_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etStudentIdDisplay"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="text"/>
             </com.google.android.material.textfield.TextInputLayout>
+
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Student Name *">
+                android:hint="@string/student_form_name_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etName"
                     android:layout_width="match_parent"
@@ -56,7 +58,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:hint="Grade / Class">
+                android:hint="@string/student_form_grade_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etGrade"
                     android:layout_width="match_parent"
@@ -69,7 +71,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:hint="School / Institution">
+                android:hint="@string/student_form_school_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etSchool"
                     android:layout_width="match_parent"
@@ -82,7 +84,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:hint="Guardian Name">
+                android:hint="@string/student_form_guardian_name_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etGuardianName"
                     android:layout_width="match_parent"
@@ -95,7 +97,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:hint="Guardian Phone">
+                android:hint="@string/student_form_guardian_phone_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etGuardianPhone"
                     android:layout_width="match_parent"
@@ -109,7 +111,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:text="Save Student"/>
+                android:text="@string/student_form_save_button"/>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

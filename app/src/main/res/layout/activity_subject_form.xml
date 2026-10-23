@@ -14,7 +14,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="Add Subject" />
+            app:title="@string/subject_form_title" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -32,7 +32,7 @@
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Subject Title * (e.g. Mathematics)">
+                android:hint="@string/subject_form_title_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etTitle"
                     android:layout_width="match_parent"
@@ -45,7 +45,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:hint="Level (e.g. O-Level, Grade 10)">
+                android:hint="@string/subject_form_level_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etLevel"
                     android:layout_width="match_parent"
@@ -59,7 +59,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:text="Save Subject"/>
+                android:text="@string/subject_form_save_button"/>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

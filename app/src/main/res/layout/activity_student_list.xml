@@ -14,7 +14,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="Students"
+            app:title="@string/student_list_title"
             app:navigationIcon="?attr/homeAsUpIndicator"/>
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -32,7 +32,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:text="No students found.\nTap + to add one."
+        android:text="@string/student_list_empty"
         android:textAlignment="center"
         android:textColor="?android:attr/textColorSecondary"
         android:visibility="gone"/>
@@ -43,7 +43,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
-        android:text="Add Student"
+        android:text="@string/student_add_button"
         app:icon="@android:drawable/ic_input_add"/>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

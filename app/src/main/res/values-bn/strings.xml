@@ -87,4 +87,29 @@
     <string name="settings_section_preferences">পছন্দসমূহ</string>
     <string name="settings_language">ভাষা</string>
     <string name="settings_theme_mode">থিম মোড</string>
+    <!-- Phase 4: Students & Subjects -->
+    <string name="student_list_title">শিক্ষার্থী তালিকা</string>
+    <string name="student_list_empty">কোনো শিক্ষার্থী পাওয়া যায়নি।\nনতুন যোগ করতে + চাপুন।</string>
+    <string name="student_add_button">শিক্ষার্থী যোগ করুন</string>
+    <string name="student_form_title">শিক্ষার্থী যোগ করুন</string>
+    <string name="student_form_id_hint">স্টুডেন্ট আইডি (অ্যাকাউন্টে অবশ্যই অনন্য হতে হবে)</string>
+    <string name="student_form_name_hint">শিক্ষার্থীর নাম *</string>
+    <string name="student_form_grade_hint">শ্রেণী / ক্লাস</string>
+    <string name="student_form_school_hint">স্কুল / প্রতিষ্ঠান</string>
+    <string name="student_form_guardian_name_hint">অভিভাবকের নাম</string>
+    <string name="student_form_guardian_phone_hint">অভিভাবকের ফোন</string>
+    <string name="student_form_save_button">সংরক্ষণ করুন</string>
+
+    <string name="subject_list_title">বিষয় তালিকা</string>
+    <string name="subject_list_empty">কোনো বিষয় পাওয়া যায়নি।\nনতুন যোগ করতে + চাপুন।</string>
+    <string name="subject_add_button">বিষয় যোগ করুন</string>
+    <string name="subject_form_title">বিষয় যোগ করুন</string>
+    <string name="subject_form_title_hint">বিষয়ের নাম * (যেমন: গণিত)</string>
+    <string name="subject_form_level_hint">লেভেল (যেমন: ও-লেভেল, ১০ম শ্রেণী)</string>
+    <string name="subject_form_save_button">সংরক্ষণ করুন</string>
+
+    <string name="enrollment_dialog_title">ভর্তি পরিচালনা</string>
+    <string name="enrollment_dialog_empty">কোনো বিষয় পাওয়া যায়নি।</string>
+    <string name="action_cancel">বাতিল</string>
+    <string name="action_save">সংরক্ষণ</string>
 </resources>

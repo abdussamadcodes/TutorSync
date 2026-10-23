@@ -87,4 +87,29 @@
     <string name="settings_section_preferences">Preferences</string>
     <string name="settings_language">Language</string>
     <string name="settings_theme_mode">Theme Mode</string>
+    <!-- Phase 4: Students & Subjects -->
+    <string name="student_list_title">Students</string>
+    <string name="student_list_empty">No students found.\nTap + to add one.</string>
+    <string name="student_add_button">Add Student</string>
+    <string name="student_form_title">Add Student</string>
+    <string name="student_form_id_hint">Student ID (Must be unique for your account)</string>
+    <string name="student_form_name_hint">Student Name *</string>
+    <string name="student_form_grade_hint">Grade / Class</string>
+    <string name="student_form_school_hint">School / Institution</string>
+    <string name="student_form_guardian_name_hint">Guardian Name</string>
+    <string name="student_form_guardian_phone_hint">Guardian Phone</string>
+    <string name="student_form_save_button">Save Student</string>
+
+    <string name="subject_list_title">Subjects</string>
+    <string name="subject_list_empty">No subjects found.\nTap + to add one.</string>
+    <string name="subject_add_button">Add Subject</string>
+    <string name="subject_form_title">Add Subject</string>
+    <string name="subject_form_title_hint">Subject Title * (e.g. Mathematics)</string>
+    <string name="subject_form_level_hint">Level (e.g. O-Level, Grade 10)</string>
+    <string name="subject_form_save_button">Save Subject</string>
+
+    <string name="enrollment_dialog_title">Manage Enrollments</string>
+    <string name="enrollment_dialog_empty">No available subjects found.</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
 </resources>
