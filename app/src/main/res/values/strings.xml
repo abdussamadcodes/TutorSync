@@ -112,4 +112,30 @@
     <string name="enrollment_dialog_empty">No available subjects found.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
+    <!-- Phase 5: Calendar, Attendance, and Lessons -->
+    <string name="schedule_title">Schedule Class</string>
+    <string name="schedule_select_student">Select Student</string>
+    <string name="schedule_select_subject">Select Subject</string>
+    <string name="schedule_is_recurring">Recurring Weekly Class</string>
+    <string name="schedule_is_recurring_desc">Class repeats every week on a specific day</string>
+    <string name="schedule_day_of_week">Day of the Week</string>
+    <string name="schedule_specific_date">Specific Class Date</string>
+    <string name="schedule_start_time">Start Time</string>
+    <string name="schedule_duration_minutes">Duration (Minutes)</string>
+    <string name="action_save_schedule">Save Schedule</string>
+    <string name="schedule_err_select_student">Please select a student</string>
+    <string name="schedule_err_select_subject">Please select a subject</string>
+    <string name="schedule_err_time">Please select a start time</string>
+    <string name="schedule_err_date">Please select a date</string>
+    <string name="schedule_success">Class scheduled successfully</string>
+    <string name="schedule_failed">Failed to schedule class</string>
+    <string-array name="days_of_week_array">
+        <item>Sunday</item>
+        <item>Monday</item>
+        <item>Tuesday</item>
+        <item>Wednesday</item>
+        <item>Thursday</item>
+        <item>Friday</item>
+        <item>Saturday</item>
+    </string-array>
 </resources>

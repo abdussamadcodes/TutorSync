@@ -112,4 +112,21 @@
     <string name="enrollment_dialog_empty">কোনো বিষয় পাওয়া যায়নি।</string>
     <string name="action_cancel">বাতিল</string>
     <string name="action_save">সংরক্ষণ</string>
+    <!-- Phase 5: Calendar, Attendance, and Lessons -->
+    <string name="schedule_title">ক্লাসের সময়সূচী</string>
+    <string name="schedule_select_student">শিক্ষার্থী নির্বাচন করুন</string>
+    <string name="schedule_select_subject">বিষয় নির্বাচন করুন</string>
+    <string name="schedule_is_recurring">সাপ্তাহিক ক্লাস (পুনরাবৃত্তি)</string>
+    <string name="schedule_is_recurring_desc">ক্লাসটি প্রতি সপ্তাহে নির্দিষ্ট দিনে হবে</string>
+    <string name="schedule_day_of_week">সপ্তাহের দিন</string>
+    <string name="schedule_specific_date">নির্দিষ্ট ক্লাসের তারিখ</string>
+    <string name="schedule_start_time">শুরুর সময়</string>
+    <string name="schedule_duration_minutes">সময়কাল (মিনিট)</string>
+    <string name="action_save_schedule">সংরক্ষণ করুন</string>
+    <string name="schedule_err_select_student">দয়া করে একজন শিক্ষার্থী নির্বাচন করুন</string>
+    <string name="schedule_err_select_subject">দয়া করে একটি বিষয় নির্বাচন করুন</string>
+    <string name="schedule_err_time">দয়া করে শুরুর সময় নির্বাচন করুন</string>
+    <string name="schedule_err_date">দয়া করে তারিখ নির্বাচন করুন</string>
+    <string name="schedule_success">ক্লাসের সময়সূচী সফলভাবে সংরক্ষিত হয়েছে</string>
+    <string name="schedule_failed">সময়সূচী সংরক্ষণ করতে ব্যর্থ হয়েছে</string>
 </resources>
