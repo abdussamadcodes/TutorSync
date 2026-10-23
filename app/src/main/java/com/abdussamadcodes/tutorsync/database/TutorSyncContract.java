@@ -23,5 +23,37 @@ public final class TutorSyncContract {
         public static final String COLUMN_UPDATED_AT = "updated_at";
     }
 
-    // Other tables (students, subjects, etc.) will be added here in Phase 4.
+    public static class StudentEntry implements BaseColumns {
+        public static final String TABLE_NAME = "students";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_NAME = "name";
+        public static final String COLUMN_GRADE = "grade";
+        public static final String COLUMN_SCHOOL = "school";
+        public static final String COLUMN_GUARDIAN_NAME = "guardian_name";
+        public static final String COLUMN_GUARDIAN_PHONE = "guardian_phone";
+        public static final String COLUMN_ADDRESS = "address";
+        public static final String COLUMN_IS_ACTIVE = "is_active";
+        public static final String COLUMN_IS_DELETED = "is_deleted";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
+    }
+
+    public static class SubjectEntry implements BaseColumns {
+        public static final String TABLE_NAME = "subjects";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_TITLE = "title";
+        public static final String COLUMN_LEVEL = "level";
+        public static final String COLUMN_COLOR_TAG = "color_tag";
+        public static final String COLUMN_IS_ACTIVE = "is_active";
+        public static final String COLUMN_IS_DELETED = "is_deleted";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
+    }
+
+    public static class StudentSubjectEntry implements BaseColumns {
+        public static final String TABLE_NAME = "student_subjects";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_SUBJECT_ID = "subject_id";
+    }
 }
