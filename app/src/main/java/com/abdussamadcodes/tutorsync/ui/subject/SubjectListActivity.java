@@ -31,9 +31,8 @@ public class SubjectListActivity extends BaseActivity {
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        adapter = new SubjectAdapter(subject -> {
-            showMessage(binding.getRoot(), "Selected: " + subject.getTitle());
-        });
+        // FIX IS HERE: Null listener because we handle the clicks differently based on EnrollmentMode
+        adapter = new SubjectAdapter(null);
 
         binding.rvSubjects.setLayoutManager(new LinearLayoutManager(this));
         binding.rvSubjects.setAdapter(adapter);

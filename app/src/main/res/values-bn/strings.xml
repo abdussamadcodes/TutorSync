@@ -61,4 +61,30 @@
     <string name="auth_err_pass_special">পাসওয়ার্ডে অন্তত একটি বিশেষ চিহ্ন (@#$%^&amp;+=!*()~_-) থাকতে হবে</string>
 
     <string name="action_sign_out">সাইন আউট</string>
+    <!-- Phase 4: Dashboard & Directory -->
+    <string name="dashboard_greeting">হ্যালো, টিউটর!</string>
+    <string name="dashboard_greeting_sub">আজকের ক্লাসের জন্য প্রস্তুত?</string>
+    <string name="dashboard_title">ড্যাশবোর্ড</string>
+    <string name="dashboard_section_management">ব্যবস্থাপনা</string>
+    <string name="dashboard_section_settings">সেটিংস</string>
+    <string name="dashboard_metric_students">শিক্ষার্থী</string>
+    <string name="dashboard_metric_subjects">বিষয়</string>
+    <string name="dashboard_revenue_title">এই মাসের আয়</string>
+    <string name="dashboard_quick_actions">কুইক অ্যাকশন</string>
+    <string name="dashboard_action_new_student">নতুন শিক্ষার্থী</string>
+    <string name="dashboard_action_new_subject">নতুন বিষয়</string>
+    <string name="dashboard_upcoming_title">আসন্ন ক্লাস</string>
+    <string name="dashboard_upcoming_empty">আজ কোনো ক্লাস নির্ধারিত নেই।\nদিনটি উপভোগ করুন!</string>
+
+    <string name="directory_title">ডিরেক্টরি</string>
+    <string name="directory_manage_students">শিক্ষার্থী পরিচালনা</string>
+    <string name="directory_manage_students_sub">প্রোফাইল, ভর্তি এবং বিস্তারিত দেখুন</string>
+    <string name="directory_manage_subjects">বিষয় পরিচালনা</string>
+    <string name="directory_manage_subjects_sub">কোর্সের বিষয় এবং লেভেল</string>
+
+    <string name="settings_title">সেটিংস</string>
+    <string name="settings_section_account">অ্যাকাউন্ট</string>
+    <string name="settings_section_preferences">পছন্দসমূহ</string>
+    <string name="settings_language">ভাষা</string>
+    <string name="settings_theme_mode">থিম মোড</string>
 </resources>

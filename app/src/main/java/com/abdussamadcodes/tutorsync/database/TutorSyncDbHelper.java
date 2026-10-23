@@ -24,6 +24,7 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
             "CREATE TABLE " + TutorSyncContract.StudentEntry.TABLE_NAME + " (" +
                     TutorSyncContract.StudentEntry.COLUMN_ID + " TEXT PRIMARY KEY, " +
                     TutorSyncContract.StudentEntry.COLUMN_ACCOUNT_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " TEXT, " +
                     TutorSyncContract.StudentEntry.COLUMN_NAME + " TEXT NOT NULL, " +
                     TutorSyncContract.StudentEntry.COLUMN_GRADE + " TEXT, " +
                     TutorSyncContract.StudentEntry.COLUMN_SCHOOL + " TEXT, " +
@@ -34,8 +35,8 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                     TutorSyncContract.StudentEntry.COLUMN_IS_DELETED + " INTEGER NOT NULL DEFAULT 0, " +
                     TutorSyncContract.StudentEntry.COLUMN_UPDATED_AT + " INTEGER NOT NULL, " +
                     "FOREIGN KEY(" + TutorSyncContract.StudentEntry.COLUMN_ACCOUNT_ID + ") REFERENCES " +
-                    TutorSyncContract.AccountEntry.TABLE_NAME + "(" + TutorSyncContract.AccountEntry.COLUMN_ID + ") ON DELETE CASCADE)";
-
+                    TutorSyncContract.AccountEntry.TABLE_NAME + "(" + TutorSyncContract.AccountEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
+                    "UNIQUE(" + TutorSyncContract.StudentEntry.COLUMN_ACCOUNT_ID + ", " + TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY + "))";
     private static final String SQL_CREATE_SUBJECTS =
             "CREATE TABLE " + TutorSyncContract.SubjectEntry.TABLE_NAME + " (" +
                     TutorSyncContract.SubjectEntry.COLUMN_ID + " TEXT PRIMARY KEY, " +

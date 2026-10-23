@@ -6,6 +6,7 @@ import androidx.annotation.Nullable;
 public class Student {
     private final String id;
     private final String accountId;
+    private final String studentIdDisplay;
     private final String name;
     private final String grade;
     private final String school;
@@ -14,11 +15,12 @@ public class Student {
     private final String address;
     private final boolean isActive;
 
-    public Student(@NonNull String id, @NonNull String accountId, @NonNull String name,
+    public Student(@NonNull String id, @NonNull String accountId, @Nullable String studentIdDisplay, @NonNull String name,
                    @Nullable String grade, @Nullable String school, @Nullable String guardianName,
                    @Nullable String guardianPhone, @Nullable String address, boolean isActive) {
         this.id = id;
         this.accountId = accountId;
+        this.studentIdDisplay = studentIdDisplay;
         this.name = name;
         this.grade = grade;
         this.school = school;
@@ -30,6 +32,7 @@ public class Student {
 
     @NonNull public String getId() { return id; }
     @NonNull public String getAccountId() { return accountId; }
+    @Nullable public String getStudentIdDisplay() { return studentIdDisplay; }
     @NonNull public String getName() { return name; }
     @Nullable public String getGrade() { return grade; }
     @Nullable public String getSchool() { return school; }

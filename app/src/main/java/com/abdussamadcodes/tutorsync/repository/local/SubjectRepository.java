@@ -20,7 +20,7 @@ public class SubjectRepository {
             values.put(SubjectEntry.COLUMN_ACCOUNT_ID, subject.getAccountId());
             values.put(SubjectEntry.COLUMN_TITLE, subject.getTitle());
             values.put(SubjectEntry.COLUMN_LEVEL, subject.getLevel());
-            values.put(SubjectEntry.COLUMN_COLOR_TAG, subject.getColorTag());
+            // Intentionally omitting COLUMN_COLOR_TAG to leave it null in DB
             values.put(SubjectEntry.COLUMN_IS_ACTIVE, subject.isActive() ? 1 : 0);
             values.put(SubjectEntry.COLUMN_IS_DELETED, 0);
             values.put(SubjectEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
@@ -49,7 +49,6 @@ public class SubjectRepository {
                         cursor.getString(cursor.getColumnIndexOrThrow(SubjectEntry.COLUMN_ACCOUNT_ID)),
                         cursor.getString(cursor.getColumnIndexOrThrow(SubjectEntry.COLUMN_TITLE)),
                         cursor.getString(cursor.getColumnIndexOrThrow(SubjectEntry.COLUMN_LEVEL)),
-                        cursor.getString(cursor.getColumnIndexOrThrow(SubjectEntry.COLUMN_COLOR_TAG)),
                         cursor.getInt(cursor.getColumnIndexOrThrow(SubjectEntry.COLUMN_IS_ACTIVE)) == 1
                 ));
             }

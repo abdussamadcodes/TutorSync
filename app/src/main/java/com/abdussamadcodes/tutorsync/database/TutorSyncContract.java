@@ -25,8 +25,9 @@ public final class TutorSyncContract {
 
     public static class StudentEntry implements BaseColumns {
         public static final String TABLE_NAME = "students";
-        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ID = "id"; // The hidden UUID
         public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID_DISPLAY = "student_id_display"; // The visible unique ID
         public static final String COLUMN_NAME = "name";
         public static final String COLUMN_GRADE = "grade";
         public static final String COLUMN_SCHOOL = "school";

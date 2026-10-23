@@ -17,7 +17,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Enroll in Subject"
+            android:text="Manage Enrollments"
             android:textAppearance="?attr/textAppearanceTitleLarge"
             android:textStyle="bold"
             android:layout_marginBottom="16dp"/>
@@ -26,7 +26,7 @@
             android:id="@+id/tvEmptySubjects"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="No available subjects to enroll."
+            android:text="No available subjects found."
             android:textColor="?attr/colorError"
             android:visibility="gone"
             android:layout_marginBottom="16dp"/>
@@ -50,7 +50,15 @@
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
                 android:text="Cancel"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveEnrollments"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save"/>
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -30,6 +30,7 @@ public class StudentFormActivity extends BaseActivity {
     }
 
     private void saveStudent() {
+        String studentIdDisplay = binding.etStudentIdDisplay.getText() != null ? binding.etStudentIdDisplay.getText().toString().trim() : "";
         String name = binding.etName.getText() != null ? binding.etName.getText().toString().trim() : "";
         String grade = binding.etGrade.getText() != null ? binding.etGrade.getText().toString().trim() : "";
         String school = binding.etSchool.getText() != null ? binding.etSchool.getText().toString().trim() : "";
@@ -38,6 +39,11 @@ public class StudentFormActivity extends BaseActivity {
 
         if (name.isEmpty()) {
             binding.etName.setError("Student name is required");
+            return;
+        }
+
+        if (studentIdDisplay.isEmpty()) {
+            binding.etStudentIdDisplay.setError("Student ID is required");
             return;
         }
 
@@ -50,6 +56,7 @@ public class StudentFormActivity extends BaseActivity {
         Student newStudent = new Student(
                 UUID.randomUUID().toString(),
                 accountId,
+                studentIdDisplay,
                 name,
                 grade.isEmpty() ? null : grade,
                 school.isEmpty() ? null : school,
@@ -59,8 +66,11 @@ public class StudentFormActivity extends BaseActivity {
                 true
         );
 
-        if (repository.insertStudent(newStudent)) {
+        int result = repository.insertStudent(newStudent);
+        if (result == 1) {
             finish();
+        } else if (result == -1) {
+            binding.etStudentIdDisplay.setError("This Student ID is already used in your account");
         } else {
             showMessage(binding.getRoot(), "Failed to save student.");
         }

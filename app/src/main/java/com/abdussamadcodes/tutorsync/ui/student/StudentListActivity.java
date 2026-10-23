@@ -77,6 +77,7 @@ public class StudentListActivity extends BaseActivity {
     private void showEnrollmentDialog(Student student) {
         String accountId = sessionManager.getActiveAccountId();
         List<Subject> availableSubjects = subjectRepo.getActiveSubjectsForAccount(accountId);
+        List<String> enrolledIds = enrollmentRepo.getEnrolledSubjectIdsForStudent(student.getId());
 
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_enroll_subject, null);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -88,22 +89,30 @@ public class StudentListActivity extends BaseActivity {
         RecyclerView rvAvailableSubjects = dialogView.findViewById(R.id.rvAvailableSubjects);
         View tvEmptySubjects = dialogView.findViewById(R.id.tvEmptySubjects);
         View btnCancel = dialogView.findViewById(R.id.btnCancel);
+        View btnSave = dialogView.findViewById(R.id.btnSaveEnrollments);
 
         if (availableSubjects.isEmpty()) {
             tvEmptySubjects.setVisibility(View.VISIBLE);
             rvAvailableSubjects.setVisibility(View.GONE);
+            btnSave.setVisibility(View.GONE);
         } else {
-            SubjectAdapter subjectAdapter = new SubjectAdapter(subject -> {
-                if (enrollmentRepo.enrollStudentInSubject(student.getId(), subject.getId())) {
-                    showMessage(binding.getRoot(), student.getName() + " enrolled in " + subject.getTitle());
+            // Null listener because adapter handles internal toggle in EnrollmentMode
+            SubjectAdapter subjectAdapter = new SubjectAdapter(null);
+            subjectAdapter.setSubjects(availableSubjects);
+            subjectAdapter.setEnrollmentMode(enrolledIds);
+
+            rvAvailableSubjects.setLayoutManager(new LinearLayoutManager(this));
+            rvAvailableSubjects.setAdapter(subjectAdapter);
+
+            btnSave.setOnClickListener(v -> {
+                java.util.Set<String> finalSelectedIds = subjectAdapter.getSelectedSubjectIds();
+                if (enrollmentRepo.syncStudentEnrollments(student.getId(), finalSelectedIds)) {
+                    showMessage(binding.getRoot(), "Enrollments updated for " + student.getName());
                 } else {
-                    showMessage(binding.getRoot(), "Failed to enroll or already enrolled.");
+                    showMessage(binding.getRoot(), "Failed to update enrollments.");
                 }
                 dialog.dismiss();
             });
-            subjectAdapter.setSubjects(availableSubjects);
-            rvAvailableSubjects.setLayoutManager(new LinearLayoutManager(this));
-            rvAvailableSubjects.setAdapter(subjectAdapter);
         }
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());

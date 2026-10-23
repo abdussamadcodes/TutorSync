@@ -32,7 +32,6 @@ public class SubjectFormActivity extends BaseActivity {
     private void saveSubject() {
         String title = binding.etTitle.getText() != null ? binding.etTitle.getText().toString().trim() : "";
         String level = binding.etLevel.getText() != null ? binding.etLevel.getText().toString().trim() : "";
-        String colorTag = binding.etColorTag.getText() != null ? binding.etColorTag.getText().toString().trim() : "";
 
         if (title.isEmpty()) {
             binding.etTitle.setError("Subject title is required");
@@ -50,7 +49,6 @@ public class SubjectFormActivity extends BaseActivity {
                 accountId,
                 title,
                 level.isEmpty() ? null : level,
-                colorTag.isEmpty() ? null : colorTag,
                 true
         );
 

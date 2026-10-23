@@ -81,7 +81,6 @@ public class MainActivity extends BaseActivity {
         String accId = sessionManager.getActiveAccountId();
         // Since our LocalAccountStore fetches by username, this is slightly tricky.
         // For now, we will set a generic greeting, we can fetch the actual name in Phase 12 if needed.
-        binding.tvGreeting.setText("Hello, Tutor!");
 
         // Setup Bottom Navigation
         binding.bottomNavigation.setOnItemSelectedListener(item -> {
@@ -117,11 +116,21 @@ public class MainActivity extends BaseActivity {
     }
 
     private void refreshStatusLabels() {
-        binding.tvActiveLanguageValue.setText(R.string.main_current_language_value);
+        String currentLang = appPreferences.getLanguageCode();
+        if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
+            binding.tvActiveLanguageValue.setText("বাংলা");
+        } else {
+            binding.tvActiveLanguageValue.setText("English");
+        }
+
         String themeMode = appPreferences.getThemeMode();
-        if (AppPreferences.THEME_LIGHT.equals(themeMode)) binding.tvActiveThemeValue.setText(R.string.theme_light);
-        else if (AppPreferences.THEME_DARK.equals(themeMode)) binding.tvActiveThemeValue.setText(R.string.theme_dark);
-        else binding.tvActiveThemeValue.setText(R.string.theme_system);
+        if (AppPreferences.THEME_LIGHT.equals(themeMode)) {
+            binding.tvActiveThemeValue.setText(R.string.theme_light);
+        } else if (AppPreferences.THEME_DARK.equals(themeMode)) {
+            binding.tvActiveThemeValue.setText(R.string.theme_dark);
+        } else {
+            binding.tvActiveThemeValue.setText(R.string.theme_system);
+        }
     }
 
     private void setupListeners() {

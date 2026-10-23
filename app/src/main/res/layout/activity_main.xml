@@ -46,7 +46,7 @@
                         android:id="@+id/tvGreeting"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Hello, Tutor!"
+                        android:text="@string/dashboard_greeting"
                         android:textSize="18sp"
                         android:textStyle="bold"
                         android:textColor="?attr/colorOnBackground"/>
@@ -54,7 +54,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Ready for today's classes?"
+                        android:text="@string/dashboard_greeting_sub"
                         android:textSize="13sp"
                         android:textColor="?attr/colorOnSurfaceVariant"/>
                 </LinearLayout>
@@ -109,7 +109,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Students"
+                                android:text="@string/dashboard_metric_students"
                                 android:textSize="13sp"
                                 android:textColor="?attr/colorOnSurfaceVariant"/>
                             <TextView
@@ -139,7 +139,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Subjects"
+                                android:text="@string/dashboard_metric_subjects"
                                 android:textSize="13sp"
                                 android:textColor="?attr/colorOnSurfaceVariant"/>
                             <TextView
@@ -172,7 +172,7 @@
                             android:id="@+id/lblRevenue"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="This Month's Revenue"
+                            android:text="@string/dashboard_revenue_title"
                             android:textColor="?attr/colorOnPrimary"
                             android:alpha="0.8"
                             app:layout_constraintTop_toTopOf="parent"
@@ -204,7 +204,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Quick Actions"
+                    android:text="@string/dashboard_quick_actions"
                     android:textStyle="bold"
                     android:textSize="16sp"
                     android:layout_marginTop="24dp"
@@ -245,7 +245,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="New Student"
+                                android:text="@string/dashboard_action_new_student"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorPrimary"/>
                         </LinearLayout>
@@ -280,7 +280,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="New Subject"
+                                android:text="@string/dashboard_action_new_subject"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorSecondary"/>
                         </LinearLayout>
@@ -291,7 +291,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Upcoming Classes"
+                    android:text="@string/dashboard_upcoming_title"
                     android:textStyle="bold"
                     android:textSize="16sp"
                     android:layout_marginTop="24dp"
@@ -301,7 +301,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="No classes scheduled for today.\nEnjoy your day!"
+                    android:text="@string/dashboard_upcoming_empty"
                     android:textAlignment="center"
                     android:padding="32dp"
                     android:textColor="?attr/colorOnSurfaceVariant"
@@ -326,7 +326,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Directory"
+                    android:text="@string/directory_title"
                     android:textSize="24sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="16dp"/>
@@ -359,13 +359,13 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Manage Students"
+                                android:text="@string/directory_manage_students"
                                 android:textSize="16sp"
                                 android:textStyle="bold"/>
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="View profiles, enrollments, and details"
+                                android:text="@string/directory_manage_students_sub"
                                 android:textSize="13sp"
                                 android:textColor="?attr/colorOnSurfaceVariant"/>
                         </LinearLayout>
@@ -404,13 +404,13 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Manage Subjects"
+                                android:text="@string/directory_manage_subjects"
                                 android:textSize="16sp"
                                 android:textStyle="bold"/>
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Course subjects, levels, and colors"
+                                android:text="@string/directory_manage_subjects_sub"
                                 android:textSize="13sp"
                                 android:textColor="?attr/colorOnSurfaceVariant"/>
                         </LinearLayout>
@@ -440,7 +440,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Settings"
+                    android:text="@string/settings_title"
                     android:textSize="24sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="16dp"/>
@@ -459,7 +459,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Account"
+                            android:text="@string/settings_section_account"
                             android:padding="16dp"
                             android:textColor="?attr/colorPrimary"
                             android:textStyle="bold"/>
@@ -468,7 +468,7 @@
                             android:id="@+id/btnSignOut"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Sign Out"
+                            android:text="@string/action_sign_out"
                             android:paddingHorizontal="16dp"
                             android:paddingVertical="12dp"
                             android:textColor="?attr/colorError"
@@ -481,7 +481,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Preferences"
+                            android:text="@string/settings_section_preferences"
                             android:padding="16dp"
                             android:textColor="?attr/colorPrimary"
                             android:textStyle="bold"/>
@@ -498,12 +498,12 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="Language"/>
+                                android:text="@string/settings_language"/>
                             <TextView
                                 android:id="@+id/tvActiveLanguageValue"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="English"
+                                android:text="@string/main_current_language_value"
                                 android:textStyle="bold"/>
                         </LinearLayout>
 
@@ -519,12 +519,12 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="Theme Mode"/>
+                                android:text="@string/settings_theme_mode"/>
                             <TextView
                                 android:id="@+id/tvActiveThemeValue"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="System"
+                                tools:text="System"
                                 android:textStyle="bold"/>
                         </LinearLayout>
                     </LinearLayout>

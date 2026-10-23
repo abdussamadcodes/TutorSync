@@ -27,7 +27,18 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
-
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Student ID (Must be unique for your account)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etStudentIdDisplay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"/>
+            </com.google.android.material.textfield.TextInputLayout>
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"

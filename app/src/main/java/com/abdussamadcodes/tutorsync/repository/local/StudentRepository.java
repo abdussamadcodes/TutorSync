@@ -3,6 +3,7 @@ package com.abdussamadcodes.tutorsync.repository.local;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteConstraintException;
 import androidx.annotation.NonNull;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
@@ -12,12 +13,14 @@ import java.util.List;
 
 public class StudentRepository {
 
-    public boolean insertStudent(@NonNull Student student) {
+    // Returns: 1 for Success, -1 for Duplicate ID, 0 for general error
+    public int insertStudent(@NonNull Student student) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
             ContentValues values = new ContentValues();
             values.put(StudentEntry.COLUMN_ID, student.getId());
             values.put(StudentEntry.COLUMN_ACCOUNT_ID, student.getAccountId());
+            values.put(StudentEntry.COLUMN_STUDENT_ID_DISPLAY, student.getStudentIdDisplay());
             values.put(StudentEntry.COLUMN_NAME, student.getName());
             values.put(StudentEntry.COLUMN_GRADE, student.getGrade());
             values.put(StudentEntry.COLUMN_SCHOOL, student.getSchool());
@@ -28,7 +31,12 @@ public class StudentRepository {
             values.put(StudentEntry.COLUMN_IS_DELETED, 0);
             values.put(StudentEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
 
-            return db.insert(StudentEntry.TABLE_NAME, null, values) != -1;
+            long result = db.insertOrThrow(StudentEntry.TABLE_NAME, null, values);
+            return result != -1 ? 1 : 0;
+        } catch (SQLiteConstraintException e) {
+            return -1; // This triggers when the UNIQUE constraint on (account_id, student_id_display) fails
+        } catch (Exception e) {
+            return 0;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
@@ -39,7 +47,6 @@ public class StudentRepository {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         List<Student> students = new ArrayList<>();
 
-        // Data Isolation: Strict account_id filtering
         String selection = StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
                 StudentEntry.COLUMN_IS_DELETED + " = 0 AND " +
                 StudentEntry.COLUMN_IS_ACTIVE + " = 1";
@@ -50,6 +57,7 @@ public class StudentRepository {
                 students.add(new Student(
                         cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ID)),
                         cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ACCOUNT_ID)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_STUDENT_ID_DISPLAY)),
                         cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_NAME)),
                         cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_GRADE)),
                         cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_SCHOOL)),
