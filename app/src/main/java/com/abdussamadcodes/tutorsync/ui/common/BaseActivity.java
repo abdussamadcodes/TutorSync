@@ -21,18 +21,6 @@ public abstract class BaseActivity extends AppCompatActivity {
         appPreferences = new AppPreferences(this);
     }
 
-    @Override
-    public void recreate() {
-        super.recreate();
-        // Applies a smooth crossfade instead of the default black flash
-        if (android.os.Build.VERSION.SDK_INT >= 34) {
-            overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_CLOSE, android.R.anim.fade_in, android.R.anim.fade_out);
-        } else {
-            //noinspection deprecation
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
-        }
-    }
-
     protected void applySystemBarInsets(@NonNull View rootView) {
         final int initialLeft = rootView.getPaddingLeft();
         final int initialTop = rootView.getPaddingTop();
@@ -48,5 +36,9 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     protected void showMessage(@NonNull View anchorView, @StringRes int messageResId) {
         Snackbar.make(anchorView, messageResId, Snackbar.LENGTH_SHORT).show();
+    }
+
+    protected void showMessage(@NonNull View anchorView, @NonNull String message) {
+        Snackbar.make(anchorView, message, Snackbar.LENGTH_SHORT).show();
     }
 }

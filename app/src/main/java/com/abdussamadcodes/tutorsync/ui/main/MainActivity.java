@@ -95,5 +95,10 @@ public class MainActivity extends BaseActivity {
             startActivity(new Intent(this, SignInActivity.class));
             finish();
         });
+
+        // Open Students List
+        binding.cardStudents.setOnClickListener(v -> {
+            startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.student.StudentListActivity.class));
+        });
     }
 }
