@@ -54,15 +54,9 @@ public class MainActivity extends BaseActivity {
         if (sessionManager.hasActiveSession()) {
             refreshStatusLabels();
 
-            // Trigger PIN Lock on resume if not verified (Mock setting for Phase 2B)
-            if (!isPinVerifiedThisSession) {
+            if (!isPinVerifiedThisSession && sessionManager.hasPinSetup()) {
                 startActivity(new Intent(this, PinLockActivity.class));
-                if (android.os.Build.VERSION.SDK_INT >= 34) {
-                    overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out);
-                } else {
-                    //noinspection deprecation
-                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
-                }
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                 isPinVerifiedThisSession = true;
             }
         }
@@ -89,7 +83,7 @@ public class MainActivity extends BaseActivity {
             showMessage(binding.getRoot(), R.string.msg_theme_updated);
         });
 
-        // Use the explicit Sign Out button
+        // Sign Out
         binding.btnSignOut.setOnClickListener(v -> {
             sessionManager.logout();
             startActivity(new Intent(this, SignInActivity.class));
@@ -99,6 +93,11 @@ public class MainActivity extends BaseActivity {
         // Open Students List
         binding.cardStudents.setOnClickListener(v -> {
             startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.student.StudentListActivity.class));
+        });
+
+        // Open Subjects List
+        binding.cardSubjects.setOnClickListener(v -> {
+            startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.subject.SubjectListActivity.class));
         });
     }
 }
