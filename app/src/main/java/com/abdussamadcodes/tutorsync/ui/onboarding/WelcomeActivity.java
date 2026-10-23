@@ -10,16 +10,14 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivityWelcomeBinding;
-import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import com.abdussamadcodes.tutorsync.ui.main.MainActivity;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
 import com.google.android.material.card.MaterialCardView;
 
 public class WelcomeActivity extends BaseActivity {
-    public static final String EXTRA_REOPEN_FOR_LANGUAGE_CHANGE =
-            "com.abdussamadcodes.tutorsync.EXTRA_REOPEN_FOR_LANGUAGE_CHANGE";
-
+    public static final String EXTRA_REOPEN_FOR_LANGUAGE_CHANGE = "com.abdussamadcodes.tutorsync.EXTRA_REOPEN_FOR_LANGUAGE_CHANGE";
     private ActivityWelcomeBinding binding;
     private boolean isReopenedFromInsideApp = false;
 
@@ -36,7 +34,7 @@ public class WelcomeActivity extends BaseActivity {
         isReopenedFromInsideApp = getIntent().getBooleanExtra(EXTRA_REOPEN_FOR_LANGUAGE_CHANGE, false);
 
         if (appPreferences.isOnboardingCompleted() && !isReopenedFromInsideApp) {
-            navigateToSignInAndFinish();
+            navigateToMainAndFinish();
             return;
         }
 
@@ -44,9 +42,7 @@ public class WelcomeActivity extends BaseActivity {
         setContentView(binding.getRoot());
         applySystemBarInsets(binding.welcomeScrollRoot);
 
-        if (isReopenedFromInsideApp) {
-            binding.btnContinue.setText(R.string.action_save_and_close);
-        }
+        if (isReopenedFromInsideApp) binding.btnContinue.setText(R.string.action_save_and_close);
         bindCurrentSelections();
         setupListeners();
     }
@@ -58,13 +54,9 @@ public class WelcomeActivity extends BaseActivity {
         updateCardSelectionState(binding.cardLanguageBangla, binding.ivCheckBangla, isBangla);
 
         String currentTheme = appPreferences.getThemeMode();
-        if (AppPreferences.THEME_LIGHT.equals(currentTheme)) {
-            binding.toggleGroupTheme.check(R.id.btnThemeLight);
-        } else if (AppPreferences.THEME_DARK.equals(currentTheme)) {
-            binding.toggleGroupTheme.check(R.id.btnThemeDark);
-        } else {
-            binding.toggleGroupTheme.check(R.id.btnThemeSystem);
-        }
+        if (AppPreferences.THEME_LIGHT.equals(currentTheme)) binding.toggleGroupTheme.check(R.id.btnThemeLight);
+        else if (AppPreferences.THEME_DARK.equals(currentTheme)) binding.toggleGroupTheme.check(R.id.btnThemeDark);
+        else binding.toggleGroupTheme.check(R.id.btnThemeSystem);
     }
 
     private void setupListeners() {
@@ -85,11 +77,8 @@ public class WelcomeActivity extends BaseActivity {
 
         binding.btnContinue.setOnClickListener(v -> {
             appPreferences.setOnboardingCompleted(true);
-            if (isReopenedFromInsideApp) {
-                finish();
-            } else {
-                navigateToSignInAndFinish();
-            }
+            if (isReopenedFromInsideApp) finish();
+            else navigateToMainAndFinish();
         });
     }
 
@@ -97,9 +86,7 @@ public class WelcomeActivity extends BaseActivity {
         String currentLang = appPreferences.getLanguageCode();
         appPreferences.setLanguageCode(languageCode);
         bindCurrentSelections();
-        if (!languageCode.equals(currentLang)) {
-            LocaleThemeHelper.applyLanguage(languageCode);
-        }
+        if (!languageCode.equals(currentLang)) LocaleThemeHelper.applyLanguage(languageCode);
     }
 
     private void updateCardSelectionState(@NonNull MaterialCardView card, @NonNull View checkIcon, boolean isSelected) {
@@ -116,9 +103,10 @@ public class WelcomeActivity extends BaseActivity {
         return typedValue.data;
     }
 
-    private void navigateToSignInAndFinish() {
-        startActivity(new Intent(this, SignInActivity.class));
+    private void navigateToMainAndFinish() {
+        startActivity(new Intent(this, MainActivity.class));
         finish();
+        // Applies a smooth crossfade when navigating to the next screen
         if (android.os.Build.VERSION.SDK_INT >= 34) {
             overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out);
         } else {
