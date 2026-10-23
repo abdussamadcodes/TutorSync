@@ -25,9 +25,9 @@ public final class TutorSyncContract {
 
     public static class StudentEntry implements BaseColumns {
         public static final String TABLE_NAME = "students";
-        public static final String COLUMN_ID = "id"; // The hidden UUID
+        public static final String COLUMN_ID = "id";
         public static final String COLUMN_ACCOUNT_ID = "account_id";
-        public static final String COLUMN_STUDENT_ID_DISPLAY = "student_id_display"; // The visible unique ID
+        public static final String COLUMN_STUDENT_ID_DISPLAY = "student_id_display";
         public static final String COLUMN_NAME = "name";
         public static final String COLUMN_GRADE = "grade";
         public static final String COLUMN_SCHOOL = "school";
@@ -45,7 +45,6 @@ public final class TutorSyncContract {
         public static final String COLUMN_ACCOUNT_ID = "account_id";
         public static final String COLUMN_TITLE = "title";
         public static final String COLUMN_LEVEL = "level";
-        public static final String COLUMN_COLOR_TAG = "color_tag";
         public static final String COLUMN_IS_ACTIVE = "is_active";
         public static final String COLUMN_IS_DELETED = "is_deleted";
         public static final String COLUMN_UPDATED_AT = "updated_at";
@@ -56,5 +55,53 @@ public final class TutorSyncContract {
         public static final String COLUMN_ID = "id";
         public static final String COLUMN_STUDENT_ID = "student_id";
         public static final String COLUMN_SUBJECT_ID = "subject_id";
+    }
+
+    // --- PHASE 5 TABLES ---
+
+    public static class ScheduleEntry implements BaseColumns {
+        public static final String TABLE_NAME = "recurring_schedules";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_SUBJECT_ID = "subject_id";
+        public static final String COLUMN_DAY_OF_WEEK = "day_of_week";
+        public static final String COLUMN_START_TIME_MINUTES = "start_time_minutes";
+        public static final String COLUMN_DURATION_MINUTES = "duration_minutes";
+        public static final String COLUMN_START_DATE = "start_date";
+        public static final String COLUMN_END_DATE = "end_date";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
+    }
+
+    public static class OccurrenceEntry implements BaseColumns {
+        public static final String TABLE_NAME = "class_occurrences";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_SCHEDULE_ID = "schedule_id";
+        public static final String COLUMN_DATE = "date";
+        public static final String COLUMN_START_TIME_MINUTES = "start_time_minutes";
+        public static final String COLUMN_DURATION_MINUTES = "duration_minutes";
+    }
+
+    public static class AttendanceEntry implements BaseColumns {
+        public static final String TABLE_NAME = "attendance_records";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_OCCURRENCE_ID = "occurrence_id";
+        public static final String COLUMN_STATUS = "status";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
+    }
+
+    public static class LessonEntry implements BaseColumns {
+        public static final String TABLE_NAME = "lessons";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_OCCURRENCE_ID = "occurrence_id";
+        public static final String COLUMN_TOPIC_COVERED = "topic_covered";
+        public static final String COLUMN_HOMEWORK = "homework";
+        public static final String COLUMN_TUTOR_NOTES = "tutor_notes";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
     }
 }
