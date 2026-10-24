@@ -7,9 +7,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.abdussamadcodes.tutorsync.databinding.ItemOccurrenceBinding;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import com.abdussamadcodes.tutorsync.model.Student;
-import java.text.SimpleDateFormat;
+import com.abdussamadcodes.tutorsync.model.Subject;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -17,6 +16,7 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
 
     private final List<ClassOccurrence> occurrences = new ArrayList<>();
     private final List<Student> students = new ArrayList<>();
+    private final List<Subject> subjects = new ArrayList<>();
     private final OnOccurrenceClickListener listener;
 
     public interface OnOccurrenceClickListener {
@@ -27,11 +27,13 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
         this.listener = listener;
     }
 
-    public void setData(List<ClassOccurrence> newOccurrences, List<Student> newStudents) {
+    public void setData(List<ClassOccurrence> newOccurrences, List<Student> newStudents, List<Subject> newSubjects) {
         occurrences.clear();
         occurrences.addAll(newOccurrences);
         students.clear();
         students.addAll(newStudents);
+        subjects.clear();
+        subjects.addAll(newSubjects);
         notifyDataSetChanged();
     }
 
@@ -77,18 +79,22 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
             }
             binding.tvStudentName.setText(studentName);
 
-            // Format date and time
-            SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
-            String dateStr = sdf.format(new Date(occurrence.getDate()));
+            String subjectName = "Unknown Subject";
+            for (Subject s : subjects) {
+                if (s.getId().equals(occurrence.getSubjectId())) {
+                    subjectName = s.getTitle();
+                    break;
+                }
+            }
+            binding.tvSubjectName.setText(subjectName);
 
             int hours = occurrence.getStartTimeMinutes() / 60;
             int mins = occurrence.getStartTimeMinutes() % 60;
             String ampm = hours >= 12 ? "PM" : "AM";
             hours = hours % 12;
             if (hours == 0) hours = 12;
-            String timeStr = String.format(Locale.getDefault(), "%02d:%02d %s", hours, mins, ampm);
 
-            binding.tvDateTime.setText(dateStr + " at " + timeStr + " (" + occurrence.getDurationMinutes() + " mins)");
+            binding.tvDateTime.setText(String.format(Locale.getDefault(), "Today at %02d:%02d %s (%d mins)", hours, mins, ampm, occurrence.getDurationMinutes()));
         }
     }
 }

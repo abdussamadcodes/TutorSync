@@ -8,6 +8,7 @@ import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 public class OccurrenceRepository {
@@ -19,6 +20,7 @@ public class OccurrenceRepository {
             values.put(OccurrenceEntry.COLUMN_ID, occurrence.getId());
             values.put(OccurrenceEntry.COLUMN_ACCOUNT_ID, occurrence.getAccountId());
             values.put(OccurrenceEntry.COLUMN_STUDENT_ID, occurrence.getStudentId());
+            values.put(OccurrenceEntry.COLUMN_SUBJECT_ID, occurrence.getSubjectId());
             values.put(OccurrenceEntry.COLUMN_SCHEDULE_ID, occurrence.getScheduleId());
             values.put(OccurrenceEntry.COLUMN_DATE, occurrence.getDate());
             values.put(OccurrenceEntry.COLUMN_START_TIME_MINUTES, occurrence.getStartTimeMinutes());
@@ -39,20 +41,37 @@ public class OccurrenceRepository {
         }
     }
 
+    public void deleteOccurrencesByScheduleId(@NonNull String scheduleId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            db.delete(OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ?", new String[]{scheduleId});
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
     @NonNull
-    public List<ClassOccurrence> getOccurrencesForAccount(@NonNull String accountId) {
+    public List<ClassOccurrence> getOccurrencesForToday(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         List<ClassOccurrence> occurrences = new ArrayList<>();
 
-        String selection = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ?";
-        String[] selectionArgs = {accountId};
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        long todayMillis = cal.getTimeInMillis();
 
-        try (Cursor cursor = db.query(OccurrenceEntry.TABLE_NAME, null, selection, selectionArgs, null, null, OccurrenceEntry.COLUMN_DATE + " ASC")) {
+        String selection = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_DATE + " = ?";
+        String[] selectionArgs = {accountId, String.valueOf(todayMillis)};
+
+        try (Cursor cursor = db.query(OccurrenceEntry.TABLE_NAME, null, selection, selectionArgs, null, null, OccurrenceEntry.COLUMN_START_TIME_MINUTES + " ASC")) {
             while (cursor.moveToNext()) {
                 occurrences.add(new ClassOccurrence(
                         cursor.getString(cursor.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_ID)),
                         cursor.getString(cursor.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_ACCOUNT_ID)),
                         cursor.getString(cursor.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_STUDENT_ID)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_SUBJECT_ID)),
                         cursor.getString(cursor.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_SCHEDULE_ID)),
                         cursor.getLong(cursor.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_DATE)),
                         cursor.getInt(cursor.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_START_TIME_MINUTES)),

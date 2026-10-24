@@ -1,5 +1,6 @@
 package com.abdussamadcodes.tutorsync.ui.schedule;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.Nullable;
@@ -39,7 +40,7 @@ public class ScheduleListActivity extends BaseActivity {
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        adapter = new ScheduleAdapter(this::showDeleteDialog);
+        adapter = new ScheduleAdapter(this::showOptionsDialog);
         binding.rvSchedules.setLayoutManager(new LinearLayoutManager(this));
         binding.rvSchedules.setAdapter(adapter);
     }
@@ -69,6 +70,21 @@ public class ScheduleListActivity extends BaseActivity {
         }
     }
 
+    private void showOptionsDialog(RecurringSchedule schedule) {
+        String[] options = {"Edit Schedule", "Delete Schedule"};
+        new AlertDialog.Builder(this)
+                .setTitle("Manage Schedule")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        Intent intent = new Intent(this, ScheduleFormActivity.class);
+                        intent.putExtra("edit_schedule_id", schedule.getId());
+                        startActivity(intent);
+                    } else {
+                        showDeleteDialog(schedule);
+                    }
+                }).show();
+    }
+
     private void showDeleteDialog(RecurringSchedule schedule) {
         new AlertDialog.Builder(this)
                 .setTitle("Delete Schedule?")
@@ -76,7 +92,7 @@ public class ScheduleListActivity extends BaseActivity {
                 .setPositiveButton("Delete", (dialog, which) -> {
                     if (scheduleRepo.deleteSchedule(schedule.getId())) {
                         showMessage(binding.getRoot(), "Schedule deleted");
-                        loadData(); // Refresh the list
+                        loadData();
                     } else {
                         showMessage(binding.getRoot(), "Failed to delete schedule");
                     }

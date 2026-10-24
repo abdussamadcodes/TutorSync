@@ -129,14 +129,16 @@ public class MainActivity extends BaseActivity {
         if (accountId.isEmpty()) return;
 
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
+        List<com.abdussamadcodes.tutorsync.model.Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
         int studentCount = students.size();
-        int subjectCount = subjectRepo.getActiveSubjectsForAccount(accountId).size();
+        int subjectCount = subjects.size();
 
         binding.tvStudentCount.setText(String.valueOf(studentCount));
         binding.tvSubjectCount.setText(String.valueOf(subjectCount));
 
-        List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForAccount(accountId);
-        occurrenceAdapter.setData(occurrences, students);
+        // Now we only fetch TODAY's occurrences!
+        List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
+        occurrenceAdapter.setData(occurrences, students, subjects);
 
         if (occurrences.isEmpty()) {
             binding.tvEmptyUpcoming.setVisibility(View.VISIBLE);

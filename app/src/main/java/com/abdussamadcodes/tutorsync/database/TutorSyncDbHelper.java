@@ -85,7 +85,8 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                     TutorSyncContract.OccurrenceEntry.COLUMN_ID + " TEXT PRIMARY KEY, " +
                     TutorSyncContract.OccurrenceEntry.COLUMN_ACCOUNT_ID + " TEXT NOT NULL, " +
                     TutorSyncContract.OccurrenceEntry.COLUMN_STUDENT_ID + " TEXT NOT NULL, " +
-                    TutorSyncContract.OccurrenceEntry.COLUMN_SCHEDULE_ID + " TEXT, " + // Nullable for one-off classes
+                    TutorSyncContract.OccurrenceEntry.COLUMN_SUBJECT_ID + " TEXT, " +
+                    TutorSyncContract.OccurrenceEntry.COLUMN_SCHEDULE_ID + " TEXT, " +
                     TutorSyncContract.OccurrenceEntry.COLUMN_DATE + " INTEGER NOT NULL, " +
                     TutorSyncContract.OccurrenceEntry.COLUMN_START_TIME_MINUTES + " INTEGER NOT NULL, " +
                     TutorSyncContract.OccurrenceEntry.COLUMN_DURATION_MINUTES + " INTEGER NOT NULL, " +
@@ -107,7 +108,7 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                     TutorSyncContract.AccountEntry.TABLE_NAME + "(" + TutorSyncContract.AccountEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
                     "FOREIGN KEY(" + TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + ") REFERENCES " +
                     TutorSyncContract.OccurrenceEntry.TABLE_NAME + "(" + TutorSyncContract.OccurrenceEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
-                    "UNIQUE(" + TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + "))"; // Prevents duplicate attendance for the same class
+                    "UNIQUE(" + TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + "))";
 
     private static final String SQL_CREATE_LESSONS =
             "CREATE TABLE " + TutorSyncContract.LessonEntry.TABLE_NAME + " (" +
@@ -143,8 +144,6 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         db.execSQL(SQL_CREATE_STUDENTS);
         db.execSQL(SQL_CREATE_SUBJECTS);
         db.execSQL(SQL_CREATE_STUDENT_SUBJECTS);
-
-        // Phase 5 tables
         db.execSQL(SQL_CREATE_SCHEDULES);
         db.execSQL(SQL_CREATE_OCCURRENCES);
         db.execSQL(SQL_CREATE_ATTENDANCE);
@@ -153,6 +152,9 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Handle migrations in future phases
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE " + TutorSyncContract.OccurrenceEntry.TABLE_NAME +
+                    " ADD COLUMN " + TutorSyncContract.OccurrenceEntry.COLUMN_SUBJECT_ID + " TEXT");
+        }
     }
 }

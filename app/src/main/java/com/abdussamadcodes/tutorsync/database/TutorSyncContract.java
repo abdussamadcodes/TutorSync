@@ -6,7 +6,7 @@ public final class TutorSyncContract {
     private TutorSyncContract() {}
 
     public static final String DATABASE_NAME = "tutorsync.db";
-    public static final int DATABASE_VERSION = 1;
+    public static final int DATABASE_VERSION = 2; // Bumped to Version 2
 
     public static class AccountEntry implements BaseColumns {
         public static final String TABLE_NAME = "accounts";
@@ -57,8 +57,6 @@ public final class TutorSyncContract {
         public static final String COLUMN_SUBJECT_ID = "subject_id";
     }
 
-    // --- PHASE 5 TABLES ---
-
     public static class ScheduleEntry implements BaseColumns {
         public static final String TABLE_NAME = "recurring_schedules";
         public static final String COLUMN_ID = "id";
@@ -78,6 +76,7 @@ public final class TutorSyncContract {
         public static final String COLUMN_ID = "id";
         public static final String COLUMN_ACCOUNT_ID = "account_id";
         public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_SUBJECT_ID = "subject_id"; // Added
         public static final String COLUMN_SCHEDULE_ID = "schedule_id";
         public static final String COLUMN_DATE = "date";
         public static final String COLUMN_START_TIME_MINUTES = "start_time_minutes";
