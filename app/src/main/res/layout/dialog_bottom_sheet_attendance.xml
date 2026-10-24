@@ -79,7 +79,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="Tutor Notes (Private)"
-        android:layout_marginBottom="24dp">
+        android:layout_marginBottom="16dp">
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etNotes"
             android:layout_width="match_parent"
@@ -87,6 +87,16 @@
             android:inputType="textMultiLine"
             android:minLines="2"/>
     </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnRemoveClass"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginBottom="8dp"
+        android:textColor="?attr/colorError"
+        app:strokeColor="?attr/colorError"
+        android:text="Remove Class from Dashboard" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnSaveAttendance"

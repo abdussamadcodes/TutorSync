@@ -15,6 +15,7 @@ import com.abdussamadcodes.tutorsync.model.AttendanceRecord;
 import com.abdussamadcodes.tutorsync.model.Lesson;
 import com.abdussamadcodes.tutorsync.repository.local.AttendanceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.LessonRepository;
+import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
 import java.util.UUID;
@@ -33,6 +34,7 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
 
     private AttendanceRepository attendanceRepo;
     private LessonRepository lessonRepo;
+    private OccurrenceRepository occurrenceRepo;
 
     public static AttendanceBottomSheetFragment newInstance(String accountId, String studentId, String occurrenceId) {
         AttendanceBottomSheetFragment fragment = new AttendanceBottomSheetFragment();
@@ -54,6 +56,7 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
         }
         attendanceRepo = new AttendanceRepository();
         lessonRepo = new LessonRepository();
+        occurrenceRepo = new OccurrenceRepository();
     }
 
     @Nullable
@@ -67,10 +70,19 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Pre-select "Present" by default to save the user a click
         binding.toggleGroupStatus.check(R.id.btnStatusPresent);
 
         binding.btnSaveAttendance.setOnClickListener(v -> saveRecord());
+
+        binding.btnRemoveClass.setOnClickListener(v -> {
+            if (occurrenceRepo.deleteOccurrence(occurrenceId)) {
+                Toast.makeText(requireContext(), "Class removed from dashboard", Toast.LENGTH_SHORT).show();
+                notifyDashboardRefresh();
+                dismiss();
+            } else {
+                Toast.makeText(requireContext(), "Failed to remove class", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void saveRecord() {
@@ -91,14 +103,12 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
         String homework = binding.etHomework.getText() != null ? binding.etHomework.getText().toString().trim() : "";
         String notes = binding.etNotes.getText() != null ? binding.etNotes.getText().toString().trim() : "";
 
-        // 1. Save Attendance Record
         AttendanceRecord attendance = new AttendanceRecord(
                 UUID.randomUUID().toString(), accountId, occurrenceId, status
         );
         int result = attendanceRepo.recordAttendance(attendance);
 
         if (result == 1) {
-            // 2. Save Lesson Details (if provided)
             if (!topic.isEmpty() || !homework.isEmpty() || !notes.isEmpty()) {
                 Lesson lesson = new Lesson(
                         UUID.randomUUID().toString(), accountId, studentId, occurrenceId,
@@ -108,21 +118,20 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
                 );
                 lessonRepo.saveLesson(lesson);
             }
-
             Toast.makeText(requireContext(), "Attendance recorded", Toast.LENGTH_SHORT).show();
-
-            // Notify the parent (Dashboard) to refresh the UI via FragmentResult API
-            Bundle resultBundle = new Bundle();
-            resultBundle.putBoolean("attendance_recorded", true);
-            getParentFragmentManager().setFragmentResult("attendance_request_key", resultBundle);
-
+            notifyDashboardRefresh();
             dismiss();
-
         } else if (result == -1) {
             Toast.makeText(requireContext(), "Attendance already recorded for this class!", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(requireContext(), "Failed to record attendance.", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void notifyDashboardRefresh() {
+        Bundle resultBundle = new Bundle();
+        resultBundle.putBoolean("attendance_recorded", true);
+        getParentFragmentManager().setFragmentResult("attendance_request_key", resultBundle);
     }
 
     @Override

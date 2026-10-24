@@ -9,14 +9,16 @@
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@android:color/transparent"
+        app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:title="@string/schedule_title"
-            app:navigationIcon="@drawable/ic_check_circle" /> <!-- We'll use a back arrow normally, using check for now to avoid missing assets -->
+            app:navigationIcon="?attr/homeAsUpIndicator" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -30,31 +32,35 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <TextView
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/schedule_select_student"
-                android:layout_marginBottom="8dp"/>
+                android:layout_marginBottom="16dp"
+                android:hint="@string/schedule_select_student">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etStudentSelection"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:focusable="false"
+                    android:clickable="true"
+                    app:drawableEndCompat="@android:drawable/arrow_down_float" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <Spinner
-                android:id="@+id/spinnerStudent"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:background="@android:drawable/btn_dropdown"
-                android:layout_marginBottom="16dp"/>
-
-            <TextView
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/schedule_select_subject"
-                android:layout_marginBottom="8dp"/>
-
-            <Spinner
-                android:id="@+id/spinnerSubject"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:background="@android:drawable/btn_dropdown"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="24dp"
+                android:hint="@string/schedule_select_subject">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etSubjectSelection"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:focusable="false"
+                    android:clickable="true"
+                    app:drawableEndCompat="@android:drawable/arrow_down_float" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/switchRecurring"
@@ -72,27 +78,37 @@
                 android:textColor="?android:attr/textColorSecondary"
                 android:layout_marginBottom="24dp"/>
 
-            <!-- Visible only when Recurring is ON -->
             <LinearLayout
                 android:id="@+id/layoutRecurringOptions"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/schedule_day_of_week"
-                    android:layout_marginBottom="8dp"/>
-                <Spinner
-                    android:id="@+id/spinnerDayOfWeek"
+                    android:text="@string/schedule_select_days"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp"
+                    android:textColor="?attr/colorPrimary"/>
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/chipGroupDays"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:background="@android:drawable/btn_dropdown"
-                    android:layout_marginBottom="24dp"
-                    android:entries="@array/days_of_week_array"/>
+                    android:layout_height="wrap_content"
+                    app:singleSelection="false"
+                    android:layout_marginBottom="24dp">
+
+                    <com.google.android.material.chip.Chip android:id="@+id/chipSun" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/day_sun"/>
+                    <com.google.android.material.chip.Chip android:id="@+id/chipMon" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/day_mon"/>
+                    <com.google.android.material.chip.Chip android:id="@+id/chipTue" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/day_tue"/>
+                    <com.google.android.material.chip.Chip android:id="@+id/chipWed" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/day_wed"/>
+                    <com.google.android.material.chip.Chip android:id="@+id/chipThu" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/day_thu"/>
+                    <com.google.android.material.chip.Chip android:id="@+id/chipFri" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/day_fri"/>
+                    <com.google.android.material.chip.Chip android:id="@+id/chipSat" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/day_sat"/>
+                </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
 
-            <!-- Visible only when Recurring is OFF -->
             <LinearLayout
                 android:id="@+id/layoutOneOffOptions"
                 android:layout_width="match_parent"
@@ -100,17 +116,18 @@
                 android:orientation="vertical"
                 android:visibility="gone">
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="24dp"
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+                    android:hint="@string/schedule_specific_date">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etSpecificDate"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/schedule_specific_date"
                         android:focusable="false"
-                        android:clickable="true"/>
+                        android:clickable="true"
+                        app:drawableEndCompat="@android:drawable/ic_menu_my_calendar"/>
                 </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
@@ -121,31 +138,33 @@
                 android:baselineAligned="false">
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginEnd="8dp"
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+                    android:hint="@string/schedule_start_time">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etStartTime"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/schedule_start_time"
+                        android:text="04:00 PM"
                         android:focusable="false"
-                        android:clickable="true"/>
+                        android:clickable="true"
+                        app:drawableEndCompat="@android:drawable/ic_menu_recent_history"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="8dp"
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+                    android:hint="@string/schedule_duration_minutes">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etDuration"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/schedule_duration_minutes"
                         android:inputType="number"
                         android:text="60"/>
                 </com.google.android.material.textfield.TextInputLayout>
@@ -153,6 +172,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSaveSchedule"
+                style="@style/Widget.Material3.Button"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:layout_marginTop="32dp"

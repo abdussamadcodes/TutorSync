@@ -30,6 +30,15 @@ public class OccurrenceRepository {
         }
     }
 
+    public boolean deleteOccurrence(@NonNull String occurrenceId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            return db.delete(OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_ID + " = ?", new String[]{occurrenceId}) > 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
     @NonNull
     public List<ClassOccurrence> getOccurrencesForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();

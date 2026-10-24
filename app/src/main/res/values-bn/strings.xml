@@ -129,4 +129,14 @@
     <string name="schedule_err_date">দয়া করে তারিখ নির্বাচন করুন</string>
     <string name="schedule_success">ক্লাসের সময়সূচী সফলভাবে সংরক্ষিত হয়েছে</string>
     <string name="schedule_failed">সময়সূচী সংরক্ষণ করতে ব্যর্থ হয়েছে</string>
+    <!-- Schedule Premium UI Strings -->
+    <string name="day_sun">রবি</string>
+    <string name="day_mon">সোম</string>
+    <string name="day_tue">মঙ্গল</string>
+    <string name="day_wed">বুধ</string>
+    <string name="day_thu">বৃহঃ</string>
+    <string name="day_fri">শুক্র</string>
+    <string name="day_sat">শনি</string>
+    <string name="schedule_select_days">সপ্তাহের দিনগুলো নির্বাচন করুন</string>
+    <string name="schedule_err_select_day">অন্তত একটি দিন নির্বাচন করুন।</string>
 </resources>

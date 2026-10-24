@@ -138,4 +138,14 @@
         <item>Friday</item>
         <item>Saturday</item>
     </string-array>
+    <!-- Schedule Premium UI Strings -->
+    <string name="day_sun">Sun</string>
+    <string name="day_mon">Mon</string>
+    <string name="day_tue">Tue</string>
+    <string name="day_wed">Wed</string>
+    <string name="day_thu">Thu</string>
+    <string name="day_fri">Fri</string>
+    <string name="day_sat">Sat</string>
+    <string name="schedule_select_days">Select Days of the Week</string>
+    <string name="schedule_err_select_day">Please select at least one day.</string>
 </resources>
