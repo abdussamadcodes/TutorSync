@@ -186,6 +186,10 @@ public class MainActivity extends BaseActivity {
                 startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.subject.SubjectListActivity.class))
         );
 
+        binding.cardManageSchedules.setOnClickListener(v ->
+                startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.schedule.ScheduleListActivity.class))
+        );
+
         binding.btnOpenLanguageSettings.setOnClickListener(v -> startActivity(WelcomeActivity.createReopenIntent(this)));
 
         binding.btnCycleTheme.setOnClickListener(v -> {

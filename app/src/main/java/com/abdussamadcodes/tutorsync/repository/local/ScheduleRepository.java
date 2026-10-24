@@ -33,6 +33,16 @@ public class ScheduleRepository {
         }
     }
 
+    public boolean deleteSchedule(@NonNull String scheduleId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            // Because of ON DELETE CASCADE, deleting this will also delete all future occurrences!
+            return db.delete(ScheduleEntry.TABLE_NAME, ScheduleEntry.COLUMN_ID + " = ?", new String[]{scheduleId}) > 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
     @NonNull
     public List<RecurringSchedule> getSchedulesForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
@@ -41,7 +51,7 @@ public class ScheduleRepository {
         String selection = ScheduleEntry.COLUMN_ACCOUNT_ID + " = ?";
         String[] selectionArgs = {accountId};
 
-        try (Cursor cursor = db.query(ScheduleEntry.TABLE_NAME, null, selection, selectionArgs, null, null, ScheduleEntry.COLUMN_START_TIME_MINUTES + " ASC")) {
+        try (Cursor cursor = db.query(ScheduleEntry.TABLE_NAME, null, selection, selectionArgs, null, null, ScheduleEntry.COLUMN_DAY_OF_WEEK + " ASC")) {
             while (cursor.moveToNext()) {
                 schedules.add(new RecurringSchedule(
                         cursor.getString(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_ID)),
