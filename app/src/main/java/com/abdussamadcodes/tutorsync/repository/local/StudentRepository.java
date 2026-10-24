@@ -13,7 +13,6 @@ import java.util.List;
 
 public class StudentRepository {
 
-    // Returns: 1 for Success, -1 for Duplicate ID, 0 for general error
     public int insertStudent(@NonNull Student student) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
@@ -34,9 +33,18 @@ public class StudentRepository {
             long result = db.insertOrThrow(StudentEntry.TABLE_NAME, null, values);
             return result != -1 ? 1 : 0;
         } catch (SQLiteConstraintException e) {
-            return -1; // This triggers when the UNIQUE constraint on (account_id, student_id_display) fails
+            return -1;
         } catch (Exception e) {
             return 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
+    public boolean deleteStudent(@NonNull String studentId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            return db.delete(StudentEntry.TABLE_NAME, StudentEntry.COLUMN_ID + " = ?", new String[]{studentId}) > 0;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
@@ -46,13 +54,8 @@ public class StudentRepository {
     public List<Student> getActiveStudentsForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         List<Student> students = new ArrayList<>();
-
-        String selection = StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                StudentEntry.COLUMN_IS_DELETED + " = 0 AND " +
-                StudentEntry.COLUMN_IS_ACTIVE + " = 1";
-        String[] selectionArgs = {accountId};
-
-        try (Cursor cursor = db.query(StudentEntry.TABLE_NAME, null, selection, selectionArgs, null, null, StudentEntry.COLUMN_NAME + " ASC")) {
+        String selection = StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_IS_DELETED + " = 0 AND " + StudentEntry.COLUMN_IS_ACTIVE + " = 1";
+        try (Cursor cursor = db.query(StudentEntry.TABLE_NAME, null, selection, new String[]{accountId}, null, null, StudentEntry.COLUMN_NAME + " ASC")) {
             while (cursor.moveToNext()) {
                 students.add(new Student(
                         cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ID)),

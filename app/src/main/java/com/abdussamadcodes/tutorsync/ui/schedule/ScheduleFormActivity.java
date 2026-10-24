@@ -4,7 +4,6 @@ import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import com.abdussamadcodes.tutorsync.R;
@@ -33,15 +32,19 @@ public class ScheduleFormActivity extends BaseActivity {
 
     private List<Student> allStudents;
     private List<Student> selectedStudents = new ArrayList<>();
-
     private List<Subject> availableSubjects = new ArrayList<>();
     private List<Subject> selectedSubjects = new ArrayList<>();
 
     private int selectedStartMinute = 960;
     private long selectedDateMillis = -1;
 
-    private String editScheduleId = null;
-    private RecurringSchedule editSchedule = null;
+    private boolean isEditMode = false;
+    private String editStudentId;
+    private ArrayList<String> editSubjectIds;
+    private int editStartTime;
+    private int editDuration;
+    private ArrayList<Integer> editDays;
+    private ArrayList<String> editScheduleIds;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -51,10 +54,22 @@ public class ScheduleFormActivity extends BaseActivity {
         applySystemBarInsets(binding.scheduleFormRoot);
 
         sessionManager = new SessionManager(this);
-        editScheduleId = getIntent().getStringExtra("edit_schedule_id");
+
+        if (getIntent().hasExtra("edit_student_id")) {
+            isEditMode = true;
+            editStudentId = getIntent().getStringExtra("edit_student_id");
+            editSubjectIds = getIntent().getStringArrayListExtra("edit_subject_ids");
+            editStartTime = getIntent().getIntExtra("edit_start_time", 960);
+            editDuration = getIntent().getIntExtra("edit_duration", 60);
+            editDays = getIntent().getIntegerArrayListExtra("edit_days");
+            editScheduleIds = getIntent().getStringArrayListExtra("edit_schedule_ids");
+
+            binding.toolbar.setTitle("Edit Schedule Group");
+            binding.switchRecurring.setChecked(true);
+            binding.switchRecurring.setEnabled(false);
+        }
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
-
         setupToggles();
         setupPickers();
         loadInitialData();
@@ -62,13 +77,6 @@ public class ScheduleFormActivity extends BaseActivity {
         binding.etStudentSelection.setOnClickListener(v -> showStudentMultiSelectDialog());
         binding.etSubjectSelection.setOnClickListener(v -> showSubjectMultiSelectDialog());
         binding.btnSaveSchedule.setOnClickListener(v -> saveSchedule());
-
-        if (editScheduleId != null) {
-            binding.toolbar.setTitle("Edit Schedule");
-            binding.switchRecurring.setChecked(true);
-            binding.switchRecurring.setEnabled(false); // Lock in recurring mode for edits
-            binding.chipGroupDays.setSingleSelection(true); // You can only edit one day rule at a time
-        }
     }
 
     private void setupToggles() {
@@ -105,44 +113,45 @@ public class ScheduleFormActivity extends BaseActivity {
         String accountId = sessionManager.getActiveAccountId();
         allStudents = new StudentRepository().getActiveStudentsForAccount(accountId);
 
-        if (editScheduleId != null) {
-            editSchedule = new ScheduleRepository().getScheduleById(editScheduleId);
-            if (editSchedule != null) {
-                // Pre-fill Student
-                for (Student s : allStudents) {
-                    if (s.getId().equals(editSchedule.getStudentId())) { selectedStudents.add(s); break; }
-                }
-                filterSubjectsBySelectedStudents();
+        if (isEditMode) {
+            for (Student s : allStudents) {
+                if (s.getId().equals(editStudentId)) { selectedStudents.add(s); break; }
+            }
+            filterSubjectsBySelectedStudents();
 
-                // Pre-fill Subject
+            if (editSubjectIds != null) {
                 for (Subject sub : availableSubjects) {
-                    if (sub.getId().equals(editSchedule.getSubjectId())) { selectedSubjects.add(sub); break; }
+                    if (editSubjectIds.contains(sub.getId())) { selectedSubjects.add(sub); }
                 }
+            }
 
-                updateStudentSelectionUI();
-                updateSubjectSelectionUI();
+            updateStudentSelectionUI();
+            updateSubjectSelectionUI();
 
-                // Pre-fill time and duration
-                selectedStartMinute = editSchedule.getStartTimeMinutes();
-                int h = selectedStartMinute / 60;
-                int m = selectedStartMinute % 60;
-                int dh = h % 12; if (dh == 0) dh = 12;
-                binding.etStartTime.setText(String.format(Locale.getDefault(), "%02d:%02d %s", dh, m, h >= 12 ? "PM" : "AM"));
-                binding.etDuration.setText(String.valueOf(editSchedule.getDurationMinutes()));
+            selectedStartMinute = editStartTime;
+            int h = selectedStartMinute / 60;
+            int m = selectedStartMinute % 60;
+            int dh = h % 12; if (dh == 0) dh = 12;
+            binding.etStartTime.setText(String.format(Locale.getDefault(), "%02d:%02d %s", dh, m, h >= 12 ? "PM" : "AM"));
+            binding.etDuration.setText(String.valueOf(editDuration));
 
-                // Pre-fill day chip
-                int day = editSchedule.getDayOfWeek();
-                binding.chipSun.setChecked(day == 1);
-                binding.chipMon.setChecked(day == 2);
-                binding.chipTue.setChecked(day == 3);
-                binding.chipWed.setChecked(day == 4);
-                binding.chipThu.setChecked(day == 5);
-                binding.chipFri.setChecked(day == 6);
-                binding.chipSat.setChecked(day == 7);
+            if (editDays != null) {
+                binding.chipSun.setChecked(editDays.contains(1));
+                binding.chipMon.setChecked(editDays.contains(2));
+                binding.chipTue.setChecked(editDays.contains(3));
+                binding.chipWed.setChecked(editDays.contains(4));
+                binding.chipThu.setChecked(editDays.contains(5));
+                binding.chipFri.setChecked(editDays.contains(6));
+                binding.chipSat.setChecked(editDays.contains(7));
             }
         } else {
             filterSubjectsBySelectedStudents();
         }
+    }
+
+    private String getStudentDisplayName(Student s) {
+        String displayId = s.getStudentIdDisplay() != null && !s.getStudentIdDisplay().isEmpty() ? s.getStudentIdDisplay() : "N/A";
+        return s.getName() + " (ID: " + displayId + ")";
     }
 
     private void showStudentMultiSelectDialog() {
@@ -154,12 +163,11 @@ public class ScheduleFormActivity extends BaseActivity {
         String[] studentNames = new String[allStudents.size()];
         boolean[] checkedItems = new boolean[allStudents.size()];
         for (int i = 0; i < allStudents.size(); i++) {
-            studentNames[i] = allStudents.get(i).getName();
+            studentNames[i] = getStudentDisplayName(allStudents.get(i));
             checkedItems[i] = selectedStudents.contains(allStudents.get(i));
         }
 
-        // Single select in Edit mode, Multi select in Create mode
-        if (editScheduleId != null) {
+        if (isEditMode) {
             int checkedItem = -1;
             if (!selectedStudents.isEmpty()) {
                 checkedItem = allStudents.indexOf(selectedStudents.get(0));
@@ -195,7 +203,7 @@ public class ScheduleFormActivity extends BaseActivity {
         if (selectedStudents.isEmpty()) {
             binding.etStudentSelection.setText("");
         } else if (selectedStudents.size() == 1) {
-            binding.etStudentSelection.setText(selectedStudents.get(0).getName());
+            binding.etStudentSelection.setText(getStudentDisplayName(selectedStudents.get(0)));
         } else {
             binding.etStudentSelection.setText(selectedStudents.size() + " Students Selected");
         }
@@ -228,8 +236,10 @@ public class ScheduleFormActivity extends BaseActivity {
             }
         }
 
-        selectedSubjects.clear();
-        updateSubjectSelectionUI();
+        if (!isEditMode) {
+            selectedSubjects.clear();
+            updateSubjectSelectionUI();
+        }
     }
 
     private void showSubjectMultiSelectDialog() {
@@ -245,30 +255,16 @@ public class ScheduleFormActivity extends BaseActivity {
             checkedItems[i] = selectedSubjects.contains(availableSubjects.get(i));
         }
 
-        if (editScheduleId != null) {
-            int checkedItem = -1;
-            if (!selectedSubjects.isEmpty()) {
-                checkedItem = availableSubjects.indexOf(selectedSubjects.get(0));
-            }
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.schedule_select_subject)
-                    .setSingleChoiceItems(subjectTitles, checkedItem, (dialog, which) -> {
-                        selectedSubjects.clear();
-                        selectedSubjects.add(availableSubjects.get(which));
-                    })
-                    .setPositiveButton(android.R.string.ok, (dialog, which) -> updateSubjectSelectionUI()).show();
-        } else {
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.schedule_select_subject)
-                    .setMultiChoiceItems(subjectTitles, checkedItems, (dialog, which, isChecked) -> {
-                        if (isChecked) {
-                            if (!selectedSubjects.contains(availableSubjects.get(which))) selectedSubjects.add(availableSubjects.get(which));
-                        } else {
-                            selectedSubjects.remove(availableSubjects.get(which));
-                        }
-                    })
-                    .setPositiveButton(android.R.string.ok, (dialog, which) -> updateSubjectSelectionUI()).show();
-        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.schedule_select_subject)
+                .setMultiChoiceItems(subjectTitles, checkedItems, (dialog, which, isChecked) -> {
+                    if (isChecked) {
+                        if (!selectedSubjects.contains(availableSubjects.get(which))) selectedSubjects.add(availableSubjects.get(which));
+                    } else {
+                        selectedSubjects.remove(availableSubjects.get(which));
+                    }
+                })
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> updateSubjectSelectionUI()).show();
     }
 
     private void updateSubjectSelectionUI() {
@@ -282,12 +278,8 @@ public class ScheduleFormActivity extends BaseActivity {
     }
 
     private void saveSchedule() {
-        if (selectedStudents.isEmpty()) {
-            showMessage(binding.getRoot(), getString(R.string.schedule_err_select_student));
-            return;
-        }
-        if (selectedSubjects.isEmpty()) {
-            showMessage(binding.getRoot(), getString(R.string.schedule_err_select_subject));
+        if (selectedStudents.isEmpty() || selectedSubjects.isEmpty()) {
+            showMessage(binding.getRoot(), "Please select students and subjects");
             return;
         }
 
@@ -296,46 +288,18 @@ public class ScheduleFormActivity extends BaseActivity {
         int duration = Integer.parseInt(durationStr.isEmpty() ? "60" : durationStr);
 
         boolean isRecurring = binding.switchRecurring.isChecked();
-        boolean success = true;
-
         ScheduleRepository scheduleRepo = new ScheduleRepository();
         OccurrenceRepository occurrenceRepo = new OccurrenceRepository();
 
-        if (editScheduleId != null) {
-            // EDIT MODE
-            int dayOfWeek = -1;
-            if (binding.chipSun.isChecked()) dayOfWeek = 1;
-            else if (binding.chipMon.isChecked()) dayOfWeek = 2;
-            else if (binding.chipTue.isChecked()) dayOfWeek = 3;
-            else if (binding.chipWed.isChecked()) dayOfWeek = 4;
-            else if (binding.chipThu.isChecked()) dayOfWeek = 5;
-            else if (binding.chipFri.isChecked()) dayOfWeek = 6;
-            else if (binding.chipSat.isChecked()) dayOfWeek = 7;
-
-            if (dayOfWeek == -1) {
-                showMessage(binding.getRoot(), getString(R.string.schedule_err_select_day));
-                return;
+        if (isEditMode) {
+            for (String oldId : editScheduleIds) {
+                scheduleRepo.deleteScheduleSafely(oldId);
+                occurrenceRepo.deleteFutureOccurrencesByScheduleId(oldId);
             }
-
-            RecurringSchedule updatedSchedule = new RecurringSchedule(
-                    editScheduleId, accountId, selectedStudents.get(0).getId(),
-                    selectedSubjects.get(0).getId(), dayOfWeek, selectedStartMinute, duration,
-                    editSchedule.getStartDate(), editSchedule.getEndDate()
-            );
-
-            if (scheduleRepo.updateSchedule(updatedSchedule)) {
-                // Delete old future occurrences and make new ones
-                occurrenceRepo.deleteOccurrencesByScheduleId(editScheduleId);
-                generateOccurrences(updatedSchedule, occurrenceRepo);
-                showMessage(binding.getRoot(), "Schedule Updated!");
-                finish();
-            } else {
-                showMessage(binding.getRoot(), "Update failed.");
-            }
-            return;
         }
 
-        // CREATE MODE (Batch logic)
+        boolean success = true;
+
         for (Student student : selectedStudents) {
             for (Subject subject : selectedSubjects) {
                 if (isRecurring) {

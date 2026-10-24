@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import com.abdussamadcodes.tutorsync.databinding.ActivitySubjectListBinding;
 import com.abdussamadcodes.tutorsync.model.Subject;
@@ -31,15 +32,24 @@ public class SubjectListActivity extends BaseActivity {
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        // FIX IS HERE: Null listener because we handle the clicks differently based on EnrollmentMode
-        adapter = new SubjectAdapter(null);
+        adapter = new SubjectAdapter(subject -> {
+            new AlertDialog.Builder(this)
+                    .setTitle("Delete Subject?")
+                    .setMessage("Are you sure you want to delete " + subject.getTitle() + "?")
+                    .setPositiveButton("Delete", (dialog, which) -> {
+                        if (repository.deleteSubject(subject.getId())) {
+                            showMessage(binding.getRoot(), "Subject deleted");
+                            loadSubjects();
+                        }
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        });
 
         binding.rvSubjects.setLayoutManager(new LinearLayoutManager(this));
         binding.rvSubjects.setAdapter(adapter);
 
-        binding.fabAddSubject.setOnClickListener(v ->
-                startActivity(new Intent(this, SubjectFormActivity.class))
-        );
+        binding.fabAddSubject.setOnClickListener(v -> startActivity(new Intent(this, SubjectFormActivity.class)));
     }
 
     @Override

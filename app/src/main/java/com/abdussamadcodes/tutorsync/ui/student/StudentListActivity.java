@@ -42,14 +42,11 @@ public class StudentListActivity extends BaseActivity {
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        adapter = new StudentAdapter(student -> showEnrollmentDialog(student));
-
+        adapter = new StudentAdapter(this::showStudentOptionsDialog);
         binding.rvStudents.setLayoutManager(new LinearLayoutManager(this));
         binding.rvStudents.setAdapter(adapter);
 
-        binding.fabAddStudent.setOnClickListener(v ->
-                startActivity(new Intent(this, StudentFormActivity.class))
-        );
+        binding.fabAddStudent.setOnClickListener(v -> startActivity(new Intent(this, StudentFormActivity.class)));
     }
 
     @Override
@@ -61,10 +58,8 @@ public class StudentListActivity extends BaseActivity {
     private void loadStudents() {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
-
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
         adapter.setStudents(students);
-
         if (students.isEmpty()) {
             binding.tvEmptyState.setVisibility(View.VISIBLE);
             binding.rvStudents.setVisibility(View.GONE);
@@ -74,16 +69,36 @@ public class StudentListActivity extends BaseActivity {
         }
     }
 
+    private void showStudentOptionsDialog(Student student) {
+        String[] options = {"Manage Enrollments", "Delete Student"};
+        new AlertDialog.Builder(this)
+                .setTitle(student.getName())
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        showEnrollmentDialog(student);
+                    } else {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Delete Student?")
+                                .setMessage("Are you sure? This will delete all their schedules and data permanently.")
+                                .setPositiveButton("Delete", (d, w) -> {
+                                    if (studentRepo.deleteStudent(student.getId())) {
+                                        showMessage(binding.getRoot(), "Student deleted");
+                                        loadStudents();
+                                    }
+                                })
+                                .setNegativeButton("Cancel", null)
+                                .show();
+                    }
+                }).show();
+    }
+
     private void showEnrollmentDialog(Student student) {
         String accountId = sessionManager.getActiveAccountId();
         List<Subject> availableSubjects = subjectRepo.getActiveSubjectsForAccount(accountId);
         List<String> enrolledIds = enrollmentRepo.getEnrolledSubjectIdsForStudent(student.getId());
 
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_enroll_subject, null);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setView(dialogView)
-                .create();
-
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(dialogView).create();
         dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
         RecyclerView rvAvailableSubjects = dialogView.findViewById(R.id.rvAvailableSubjects);
@@ -96,25 +111,20 @@ public class StudentListActivity extends BaseActivity {
             rvAvailableSubjects.setVisibility(View.GONE);
             btnSave.setVisibility(View.GONE);
         } else {
-            // Null listener because adapter handles internal toggle in EnrollmentMode
             SubjectAdapter subjectAdapter = new SubjectAdapter(null);
             subjectAdapter.setSubjects(availableSubjects);
             subjectAdapter.setEnrollmentMode(enrolledIds);
-
             rvAvailableSubjects.setLayoutManager(new LinearLayoutManager(this));
             rvAvailableSubjects.setAdapter(subjectAdapter);
 
             btnSave.setOnClickListener(v -> {
                 java.util.Set<String> finalSelectedIds = subjectAdapter.getSelectedSubjectIds();
                 if (enrollmentRepo.syncStudentEnrollments(student.getId(), finalSelectedIds)) {
-                    showMessage(binding.getRoot(), "Enrollments updated for " + student.getName());
-                } else {
-                    showMessage(binding.getRoot(), "Failed to update enrollments.");
+                    showMessage(binding.getRoot(), "Enrollments updated");
                 }
                 dialog.dismiss();
             });
         }
-
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         dialog.show();
     }

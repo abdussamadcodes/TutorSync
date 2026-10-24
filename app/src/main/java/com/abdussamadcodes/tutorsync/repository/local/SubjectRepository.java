@@ -20,7 +20,6 @@ public class SubjectRepository {
             values.put(SubjectEntry.COLUMN_ACCOUNT_ID, subject.getAccountId());
             values.put(SubjectEntry.COLUMN_TITLE, subject.getTitle());
             values.put(SubjectEntry.COLUMN_LEVEL, subject.getLevel());
-            // Intentionally omitting COLUMN_COLOR_TAG to leave it null in DB
             values.put(SubjectEntry.COLUMN_IS_ACTIVE, subject.isActive() ? 1 : 0);
             values.put(SubjectEntry.COLUMN_IS_DELETED, 0);
             values.put(SubjectEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
@@ -31,18 +30,21 @@ public class SubjectRepository {
         }
     }
 
+    public boolean deleteSubject(@NonNull String subjectId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            return db.delete(SubjectEntry.TABLE_NAME, SubjectEntry.COLUMN_ID + " = ?", new String[]{subjectId}) > 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
     @NonNull
     public List<Subject> getActiveSubjectsForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         List<Subject> subjects = new ArrayList<>();
-
-        // Data Isolation: Strict account_id filtering
-        String selection = SubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                SubjectEntry.COLUMN_IS_DELETED + " = 0 AND " +
-                SubjectEntry.COLUMN_IS_ACTIVE + " = 1";
-        String[] selectionArgs = {accountId};
-
-        try (Cursor cursor = db.query(SubjectEntry.TABLE_NAME, null, selection, selectionArgs, null, null, SubjectEntry.COLUMN_TITLE + " ASC")) {
+        String selection = SubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " + SubjectEntry.COLUMN_IS_DELETED + " = 0 AND " + SubjectEntry.COLUMN_IS_ACTIVE + " = 1";
+        try (Cursor cursor = db.query(SubjectEntry.TABLE_NAME, null, selection, new String[]{accountId}, null, null, SubjectEntry.COLUMN_TITLE + " ASC")) {
             while (cursor.moveToNext()) {
                 subjects.add(new Subject(
                         cursor.getString(cursor.getColumnIndexOrThrow(SubjectEntry.COLUMN_ID)),

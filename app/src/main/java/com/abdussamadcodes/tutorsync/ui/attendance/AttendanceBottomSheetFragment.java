@@ -18,6 +18,7 @@ import com.abdussamadcodes.tutorsync.repository.local.LessonRepository;
 import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
+import java.util.ArrayList;
 import java.util.UUID;
 
 public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
@@ -25,23 +26,23 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
     public static final String TAG = "AttendanceBottomSheet";
     private static final String ARG_ACCOUNT_ID = "arg_account_id";
     private static final String ARG_STUDENT_ID = "arg_student_id";
-    private static final String ARG_OCCURRENCE_ID = "arg_occurrence_id";
+    private static final String ARG_OCCURRENCE_IDS = "arg_occurrence_ids";
 
     private DialogBottomSheetAttendanceBinding binding;
     private String accountId;
     private String studentId;
-    private String occurrenceId;
+    private ArrayList<String> occurrenceIds;
 
     private AttendanceRepository attendanceRepo;
     private LessonRepository lessonRepo;
     private OccurrenceRepository occurrenceRepo;
 
-    public static AttendanceBottomSheetFragment newInstance(String accountId, String studentId, String occurrenceId) {
+    public static AttendanceBottomSheetFragment newInstance(String accountId, String studentId, ArrayList<String> occurrenceIds) {
         AttendanceBottomSheetFragment fragment = new AttendanceBottomSheetFragment();
         Bundle args = new Bundle();
         args.putString(ARG_ACCOUNT_ID, accountId);
         args.putString(ARG_STUDENT_ID, studentId);
-        args.putString(ARG_OCCURRENCE_ID, occurrenceId);
+        args.putStringArrayList(ARG_OCCURRENCE_IDS, occurrenceIds);
         fragment.setArguments(args);
         return fragment;
     }
@@ -52,7 +53,7 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
         if (getArguments() != null) {
             accountId = getArguments().getString(ARG_ACCOUNT_ID);
             studentId = getArguments().getString(ARG_STUDENT_ID);
-            occurrenceId = getArguments().getString(ARG_OCCURRENCE_ID);
+            occurrenceIds = getArguments().getStringArrayList(ARG_OCCURRENCE_IDS);
         }
         attendanceRepo = new AttendanceRepository();
         lessonRepo = new LessonRepository();
@@ -75,13 +76,12 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
         binding.btnSaveAttendance.setOnClickListener(v -> saveRecord());
 
         binding.btnRemoveClass.setOnClickListener(v -> {
-            if (occurrenceRepo.deleteOccurrence(occurrenceId)) {
-                Toast.makeText(requireContext(), "Class removed from dashboard", Toast.LENGTH_SHORT).show();
-                notifyDashboardRefresh();
-                dismiss();
-            } else {
-                Toast.makeText(requireContext(), "Failed to remove class", Toast.LENGTH_SHORT).show();
+            for (String occId : occurrenceIds) {
+                occurrenceRepo.deleteOccurrence(occId);
             }
+            Toast.makeText(requireContext(), "Class removed from dashboard", Toast.LENGTH_SHORT).show();
+            notifyDashboardRefresh();
+            dismiss();
         });
     }
 
@@ -103,29 +103,26 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
         String homework = binding.etHomework.getText() != null ? binding.etHomework.getText().toString().trim() : "";
         String notes = binding.etNotes.getText() != null ? binding.etNotes.getText().toString().trim() : "";
 
-        AttendanceRecord attendance = new AttendanceRecord(
-                UUID.randomUUID().toString(), accountId, occurrenceId, status
-        );
-        int result = attendanceRepo.recordAttendance(attendance);
+        for (String occId : occurrenceIds) {
+            AttendanceRecord attendance = new AttendanceRecord(
+                    UUID.randomUUID().toString(), accountId, occId, status
+            );
+            attendanceRepo.recordAttendance(attendance);
 
-        if (result == 1) {
             if (!topic.isEmpty() || !homework.isEmpty() || !notes.isEmpty()) {
                 Lesson lesson = new Lesson(
-                        UUID.randomUUID().toString(), accountId, studentId, occurrenceId,
+                        UUID.randomUUID().toString(), accountId, studentId, occId,
                         topic.isEmpty() ? null : topic,
                         homework.isEmpty() ? null : homework,
                         notes.isEmpty() ? null : notes
                 );
                 lessonRepo.saveLesson(lesson);
             }
-            Toast.makeText(requireContext(), "Attendance recorded", Toast.LENGTH_SHORT).show();
-            notifyDashboardRefresh();
-            dismiss();
-        } else if (result == -1) {
-            Toast.makeText(requireContext(), "Attendance already recorded for this class!", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(requireContext(), "Failed to record attendance.", Toast.LENGTH_SHORT).show();
         }
+
+        Toast.makeText(requireContext(), "Attendance recorded", Toast.LENGTH_SHORT).show();
+        notifyDashboardRefresh();
+        dismiss();
     }
 
     private void notifyDashboardRefresh() {

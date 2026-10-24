@@ -5,6 +5,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import androidx.annotation.NonNull;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import java.util.ArrayList;
@@ -41,10 +42,22 @@ public class OccurrenceRepository {
         }
     }
 
-    public void deleteOccurrencesByScheduleId(@NonNull String scheduleId) {
+    public void deleteFutureOccurrencesByScheduleId(@NonNull String scheduleId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
-            db.delete(OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ?", new String[]{scheduleId});
+            Calendar cal = Calendar.getInstance();
+            cal.set(Calendar.HOUR_OF_DAY, 0);
+            cal.set(Calendar.MINUTE, 0);
+            cal.set(Calendar.SECOND, 0);
+            cal.set(Calendar.MILLISECOND, 0);
+
+            String where = OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ? AND " +
+                    OccurrenceEntry.COLUMN_DATE + " >= ? AND " +
+                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +
+                    TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
+                    TutorSyncContract.AttendanceEntry.TABLE_NAME + ")";
+
+            db.delete(OccurrenceEntry.TABLE_NAME, where, new String[]{scheduleId, String.valueOf(cal.getTimeInMillis())});
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
@@ -62,7 +75,12 @@ public class OccurrenceRepository {
         cal.set(Calendar.MILLISECOND, 0);
         long todayMillis = cal.getTimeInMillis();
 
-        String selection = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_DATE + " = ?";
+        // Filters out classes that ALREADY have an attendance record
+        String selection = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                OccurrenceEntry.COLUMN_DATE + " = ? AND " +
+                OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +
+                TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
+                TutorSyncContract.AttendanceEntry.TABLE_NAME + ")";
         String[] selectionArgs = {accountId, String.valueOf(todayMillis)};
 
         try (Cursor cursor = db.query(OccurrenceEntry.TABLE_NAME, null, selection, selectionArgs, null, null, OccurrenceEntry.COLUMN_START_TIME_MINUTES + " ASC")) {

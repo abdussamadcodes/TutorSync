@@ -8,6 +8,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import com.abdussamadcodes.tutorsync.databinding.ActivityScheduleListBinding;
 import com.abdussamadcodes.tutorsync.model.RecurringSchedule;
+import com.abdussamadcodes.tutorsync.model.ScheduleGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import com.abdussamadcodes.tutorsync.repository.local.ScheduleRepository;
@@ -15,6 +16,8 @@ import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class ScheduleListActivity extends BaseActivity {
@@ -59,9 +62,35 @@ public class ScheduleListActivity extends BaseActivity {
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
         List<Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
 
-        adapter.setData(schedules, students, subjects);
+        List<ScheduleGroup> groups = new ArrayList<>();
+        for (RecurringSchedule rs : schedules) {
+            boolean found = false;
+            for (ScheduleGroup g : groups) {
+                if (g.getStudentId().equals(rs.getStudentId()) &&
+                        g.getStartTimeMinutes() == rs.getStartTimeMinutes() &&
+                        g.getDurationMinutes() == rs.getDurationMinutes()) {
 
-        if (schedules.isEmpty()) {
+                    if (!g.getDaysOfWeek().contains(rs.getDayOfWeek())) g.getDaysOfWeek().add(rs.getDayOfWeek());
+                    if (!g.getSubjectIds().contains(rs.getSubjectId())) g.getSubjectIds().add(rs.getSubjectId());
+                    if (!g.getScheduleIds().contains(rs.getId())) g.getScheduleIds().add(rs.getId());
+
+                    Collections.sort(g.getDaysOfWeek());
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                ScheduleGroup newGroup = new ScheduleGroup(rs.getStudentId(), rs.getStartTimeMinutes(), rs.getDurationMinutes());
+                newGroup.getDaysOfWeek().add(rs.getDayOfWeek());
+                newGroup.getSubjectIds().add(rs.getSubjectId());
+                newGroup.getScheduleIds().add(rs.getId());
+                groups.add(newGroup);
+            }
+        }
+
+        adapter.setData(groups, students, subjects);
+
+        if (groups.isEmpty()) {
             binding.tvEmptyState.setVisibility(View.VISIBLE);
             binding.rvSchedules.setVisibility(View.GONE);
         } else {
@@ -70,32 +99,36 @@ public class ScheduleListActivity extends BaseActivity {
         }
     }
 
-    private void showOptionsDialog(RecurringSchedule schedule) {
-        String[] options = {"Edit Schedule", "Delete Schedule"};
+    private void showOptionsDialog(ScheduleGroup group) {
+        String[] options = {"Edit Schedule Group", "Delete Entire Group"};
         new AlertDialog.Builder(this)
                 .setTitle("Manage Schedule")
                 .setItems(options, (dialog, which) -> {
                     if (which == 0) {
                         Intent intent = new Intent(this, ScheduleFormActivity.class);
-                        intent.putExtra("edit_schedule_id", schedule.getId());
+                        intent.putExtra("edit_student_id", group.getStudentId());
+                        intent.putStringArrayListExtra("edit_subject_ids", new ArrayList<>(group.getSubjectIds()));
+                        intent.putExtra("edit_start_time", group.getStartTimeMinutes());
+                        intent.putExtra("edit_duration", group.getDurationMinutes());
+                        intent.putIntegerArrayListExtra("edit_days", new ArrayList<>(group.getDaysOfWeek()));
+                        intent.putStringArrayListExtra("edit_schedule_ids", new ArrayList<>(group.getScheduleIds()));
                         startActivity(intent);
                     } else {
-                        showDeleteDialog(schedule);
+                        showDeleteDialog(group);
                     }
                 }).show();
     }
 
-    private void showDeleteDialog(RecurringSchedule schedule) {
+    private void showDeleteDialog(ScheduleGroup group) {
         new AlertDialog.Builder(this)
-                .setTitle("Delete Schedule?")
-                .setMessage("Are you sure you want to delete this recurring schedule? This will also remove all upcoming un-recorded classes for this rule from your dashboard.")
+                .setTitle("Delete Group?")
+                .setMessage("Are you sure you want to delete all days in this recurring schedule?")
                 .setPositiveButton("Delete", (dialog, which) -> {
-                    if (scheduleRepo.deleteSchedule(schedule.getId())) {
-                        showMessage(binding.getRoot(), "Schedule deleted");
-                        loadData();
-                    } else {
-                        showMessage(binding.getRoot(), "Failed to delete schedule");
+                    for (String id : group.getScheduleIds()) {
+                        scheduleRepo.deleteScheduleSafely(id);
                     }
+                    showMessage(binding.getRoot(), "Schedule group deleted");
+                    loadData();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();

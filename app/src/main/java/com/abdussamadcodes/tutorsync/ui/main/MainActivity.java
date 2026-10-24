@@ -10,6 +10,7 @@ import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.databinding.ActivityMainBinding;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
+import com.abdussamadcodes.tutorsync.model.OccurrenceGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
@@ -23,6 +24,7 @@ import com.abdussamadcodes.tutorsync.ui.onboarding.WelcomeActivity;
 import com.abdussamadcodes.tutorsync.ui.schedule.OccurrenceAdapter;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends BaseActivity {
@@ -86,11 +88,11 @@ public class MainActivity extends BaseActivity {
     }
 
     private void setupUI() {
-        occurrenceAdapter = new OccurrenceAdapter(occurrence -> {
+        occurrenceAdapter = new OccurrenceAdapter(group -> {
             AttendanceBottomSheetFragment bottomSheet = AttendanceBottomSheetFragment.newInstance(
                     sessionManager.getActiveAccountId(),
-                    occurrence.getStudentId(),
-                    occurrence.getId()
+                    group.getStudentId(),
+                    new ArrayList<>(group.getOccurrenceIds())
             );
             bottomSheet.show(getSupportFragmentManager(), AttendanceBottomSheetFragment.TAG);
         });
@@ -130,17 +132,42 @@ public class MainActivity extends BaseActivity {
 
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
         List<com.abdussamadcodes.tutorsync.model.Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
-        int studentCount = students.size();
-        int subjectCount = subjects.size();
 
-        binding.tvStudentCount.setText(String.valueOf(studentCount));
-        binding.tvSubjectCount.setText(String.valueOf(subjectCount));
+        binding.tvStudentCount.setText(String.valueOf(students.size()));
+        binding.tvSubjectCount.setText(String.valueOf(subjects.size()));
 
-        // Now we only fetch TODAY's occurrences!
         List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
-        occurrenceAdapter.setData(occurrences, students, subjects);
 
-        if (occurrences.isEmpty()) {
+        // Group occurrences by student, start time, and duration
+        List<OccurrenceGroup> groups = new ArrayList<>();
+        for (ClassOccurrence occ : occurrences) {
+            boolean found = false;
+            for (OccurrenceGroup g : groups) {
+                if (g.getStudentId().equals(occ.getStudentId()) &&
+                        g.getStartTimeMinutes() == occ.getStartTimeMinutes() &&
+                        g.getDurationMinutes() == occ.getDurationMinutes()) {
+
+                    if (occ.getSubjectId() != null && !g.getSubjectIds().contains(occ.getSubjectId())) {
+                        g.getSubjectIds().add(occ.getSubjectId());
+                    }
+                    if (!g.getOccurrenceIds().contains(occ.getId())) {
+                        g.getOccurrenceIds().add(occ.getId());
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                OccurrenceGroup newGroup = new OccurrenceGroup(occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
+                if (occ.getSubjectId() != null) newGroup.getSubjectIds().add(occ.getSubjectId());
+                newGroup.getOccurrenceIds().add(occ.getId());
+                groups.add(newGroup);
+            }
+        }
+
+        occurrenceAdapter.setData(groups, students, subjects);
+
+        if (groups.isEmpty()) {
             binding.tvEmptyUpcoming.setVisibility(View.VISIBLE);
             binding.rvOccurrences.setVisibility(View.GONE);
         } else {

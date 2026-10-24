@@ -1,11 +1,12 @@
 package com.abdussamadcodes.tutorsync.ui.schedule;
 
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.abdussamadcodes.tutorsync.databinding.ItemOccurrenceBinding;
-import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
+import com.abdussamadcodes.tutorsync.model.OccurrenceGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import java.util.ArrayList;
@@ -14,22 +15,22 @@ import java.util.Locale;
 
 public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.ViewHolder> {
 
-    private final List<ClassOccurrence> occurrences = new ArrayList<>();
+    private final List<OccurrenceGroup> groups = new ArrayList<>();
     private final List<Student> students = new ArrayList<>();
     private final List<Subject> subjects = new ArrayList<>();
     private final OnOccurrenceClickListener listener;
 
     public interface OnOccurrenceClickListener {
-        void onOccurrenceClick(ClassOccurrence occurrence);
+        void onOccurrenceClick(OccurrenceGroup group);
     }
 
     public OccurrenceAdapter(OnOccurrenceClickListener listener) {
         this.listener = listener;
     }
 
-    public void setData(List<ClassOccurrence> newOccurrences, List<Student> newStudents, List<Subject> newSubjects) {
-        occurrences.clear();
-        occurrences.addAll(newOccurrences);
+    public void setData(List<OccurrenceGroup> newGroups, List<Student> newStudents, List<Subject> newSubjects) {
+        groups.clear();
+        groups.addAll(newGroups);
         students.clear();
         students.addAll(newStudents);
         subjects.clear();
@@ -47,12 +48,12 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        holder.bind(occurrences.get(position));
+        holder.bind(groups.get(position));
     }
 
     @Override
     public int getItemCount() {
-        return occurrences.size();
+        return groups.size();
     }
 
     class ViewHolder extends RecyclerView.ViewHolder {
@@ -64,37 +65,41 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
             binding.getRoot().setOnClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && listener != null) {
-                    listener.onOccurrenceClick(occurrences.get(pos));
+                    listener.onOccurrenceClick(groups.get(pos));
                 }
             });
         }
 
-        void bind(ClassOccurrence occurrence) {
+        void bind(OccurrenceGroup group) {
             String studentName = "Unknown Student";
             for (Student s : students) {
-                if (s.getId().equals(occurrence.getStudentId())) {
-                    studentName = s.getName();
+                if (s.getId().equals(group.getStudentId())) {
+                    String displayId = s.getStudentIdDisplay() != null && !s.getStudentIdDisplay().isEmpty() ? s.getStudentIdDisplay() : "N/A";
+                    studentName = s.getName() + " (ID: " + displayId + ")";
                     break;
                 }
             }
             binding.tvStudentName.setText(studentName);
 
-            String subjectName = "Unknown Subject";
-            for (Subject s : subjects) {
-                if (s.getId().equals(occurrence.getSubjectId())) {
-                    subjectName = s.getTitle();
-                    break;
+            List<String> subjectNamesList = new ArrayList<>();
+            for (String subId : group.getSubjectIds()) {
+                for (Subject s : subjects) {
+                    if (s.getId().equals(subId)) {
+                        subjectNamesList.add(s.getTitle());
+                        break;
+                    }
                 }
             }
+            String subjectName = subjectNamesList.isEmpty() ? "General" : TextUtils.join(", ", subjectNamesList);
             binding.tvSubjectName.setText(subjectName);
 
-            int hours = occurrence.getStartTimeMinutes() / 60;
-            int mins = occurrence.getStartTimeMinutes() % 60;
+            int hours = group.getStartTimeMinutes() / 60;
+            int mins = group.getStartTimeMinutes() % 60;
             String ampm = hours >= 12 ? "PM" : "AM";
             hours = hours % 12;
             if (hours == 0) hours = 12;
 
-            binding.tvDateTime.setText(String.format(Locale.getDefault(), "Today at %02d:%02d %s (%d mins)", hours, mins, ampm, occurrence.getDurationMinutes()));
+            binding.tvDateTime.setText(String.format(Locale.getDefault(), "Today at %02d:%02d %s (%d mins)", hours, mins, ampm, group.getDurationMinutes()));
         }
     }
 }
