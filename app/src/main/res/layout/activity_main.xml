@@ -62,7 +62,6 @@
         </androidx.appcompat.widget.Toolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Content Container -->
     <FrameLayout
         android:id="@+id/fragmentContainer"
         android:layout_width="match_parent"
@@ -70,7 +69,6 @@
         app:layout_behavior="@string/appbar_scrolling_view_behavior"
         android:layout_marginBottom="80dp">
 
-        <!-- HOME TAB (Dashboard) -->
         <androidx.core.widget.NestedScrollView
             android:id="@+id/tabHome"
             android:layout_width="match_parent"
@@ -85,7 +83,6 @@
                 android:orientation="vertical"
                 android:paddingHorizontal="16dp">
 
-                <!-- Metrics Bar -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -154,7 +151,6 @@
                     </com.google.android.material.card.MaterialCardView>
                 </LinearLayout>
 
-                <!-- Revenue Mock -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -200,7 +196,6 @@
                     </androidx.constraintlayout.widget.ConstraintLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Quick Actions -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -214,38 +209,38 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:weightSum="3">
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/btnQuickAddStudent"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginEnd="6dp"
+                        android:layout_marginEnd="4dp"
                         android:clickable="true"
                         android:focusable="true"
                         app:strokeWidth="1dp"
                         app:strokeColor="?attr/colorOutlineVariant"
                         app:cardElevation="0dp"
                         app:cardBackgroundColor="@android:color/transparent">
-
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
                             android:gravity="center"
-                            android:paddingVertical="16dp">
-
+                            android:paddingVertical="12dp">
                             <ImageView
-                                android:layout_width="32dp"
-                                android:layout_height="32dp"
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
                                 android:src="@drawable/ic_add_student"
                                 app:tint="?attr/colorPrimary"/>
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:text="@string/dashboard_action_new_student"
+                                android:layout_marginTop="4dp"
+                                android:text="Student"
+                                android:textSize="12sp"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorPrimary"/>
                         </LinearLayout>
@@ -256,38 +251,70 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="6dp"
+                        android:layout_marginHorizontal="2dp"
                         android:clickable="true"
                         android:focusable="true"
                         app:strokeWidth="1dp"
                         app:strokeColor="?attr/colorOutlineVariant"
                         app:cardElevation="0dp"
                         app:cardBackgroundColor="@android:color/transparent">
-
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
                             android:gravity="center"
-                            android:paddingVertical="16dp">
-
+                            android:paddingVertical="12dp">
                             <ImageView
-                                android:layout_width="32dp"
-                                android:layout_height="32dp"
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
                                 android:src="@drawable/ic_add_subject"
                                 app:tint="?attr/colorSecondary"/>
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:text="@string/dashboard_action_new_subject"
+                                android:layout_marginTop="4dp"
+                                android:text="Subject"
+                                android:textSize="12sp"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorSecondary"/>
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/btnQuickAddSchedule"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        app:strokeWidth="1dp"
+                        app:strokeColor="?attr/colorOutlineVariant"
+                        app:cardElevation="0dp"
+                        app:cardBackgroundColor="@android:color/transparent">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:paddingVertical="12dp">
+                            <ImageView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:src="@android:drawable/ic_menu_recent_history"
+                                app:tint="?attr/colorPrimary"/>
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:text="Schedule"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                android:textColor="?attr/colorPrimary"/>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
                 </LinearLayout>
 
-                <!-- Recent Activity Placeholder -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -298,7 +325,14 @@
                     android:layout_marginBottom="12dp"
                     android:textColor="?attr/colorOnBackground"/>
 
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvOccurrences"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
                 <TextView
+                    android:id="@+id/tvEmptyUpcoming"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/dashboard_upcoming_empty"
@@ -310,7 +344,6 @@
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
 
-        <!-- DIRECTORY TAB -->
         <androidx.core.widget.NestedScrollView
             android:id="@+id/tabDirectory"
             android:layout_width="match_parent"
@@ -424,7 +457,6 @@
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
 
-        <!-- SETTINGS TAB -->
         <androidx.core.widget.NestedScrollView
             android:id="@+id/tabSettings"
             android:layout_width="match_parent"
@@ -455,7 +487,6 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
 
-                        <!-- Account Section -->
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -477,7 +508,6 @@
 
                         <View android:layout_width="match_parent" android:layout_height="1dp" android:background="?attr/colorOutlineVariant" android:layout_marginHorizontal="16dp"/>
 
-                        <!-- Preferences Section -->
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"

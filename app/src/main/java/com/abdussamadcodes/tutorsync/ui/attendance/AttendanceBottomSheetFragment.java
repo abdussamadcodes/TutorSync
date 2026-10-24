@@ -1,0 +1,133 @@
+package com.abdussamadcodes.tutorsync.ui.attendance;
+
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.abdussamadcodes.tutorsync.R;
+import com.abdussamadcodes.tutorsync.databinding.DialogBottomSheetAttendanceBinding;
+import com.abdussamadcodes.tutorsync.model.AttendanceRecord;
+import com.abdussamadcodes.tutorsync.model.Lesson;
+import com.abdussamadcodes.tutorsync.repository.local.AttendanceRepository;
+import com.abdussamadcodes.tutorsync.repository.local.LessonRepository;
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+
+import java.util.UUID;
+
+public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
+
+    public static final String TAG = "AttendanceBottomSheet";
+    private static final String ARG_ACCOUNT_ID = "arg_account_id";
+    private static final String ARG_STUDENT_ID = "arg_student_id";
+    private static final String ARG_OCCURRENCE_ID = "arg_occurrence_id";
+
+    private DialogBottomSheetAttendanceBinding binding;
+    private String accountId;
+    private String studentId;
+    private String occurrenceId;
+
+    private AttendanceRepository attendanceRepo;
+    private LessonRepository lessonRepo;
+
+    public static AttendanceBottomSheetFragment newInstance(String accountId, String studentId, String occurrenceId) {
+        AttendanceBottomSheetFragment fragment = new AttendanceBottomSheetFragment();
+        Bundle args = new Bundle();
+        args.putString(ARG_ACCOUNT_ID, accountId);
+        args.putString(ARG_STUDENT_ID, studentId);
+        args.putString(ARG_OCCURRENCE_ID, occurrenceId);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if (getArguments() != null) {
+            accountId = getArguments().getString(ARG_ACCOUNT_ID);
+            studentId = getArguments().getString(ARG_STUDENT_ID);
+            occurrenceId = getArguments().getString(ARG_OCCURRENCE_ID);
+        }
+        attendanceRepo = new AttendanceRepository();
+        lessonRepo = new LessonRepository();
+    }
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        binding = DialogBottomSheetAttendanceBinding.inflate(inflater, container, false);
+        return binding.getRoot();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        // Pre-select "Present" by default to save the user a click
+        binding.toggleGroupStatus.check(R.id.btnStatusPresent);
+
+        binding.btnSaveAttendance.setOnClickListener(v -> saveRecord());
+    }
+
+    private void saveRecord() {
+        int checkedId = binding.toggleGroupStatus.getCheckedButtonId();
+        if (checkedId == View.NO_ID) {
+            Toast.makeText(requireContext(), "Please select an attendance status", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String status = "PRESENT";
+        if (checkedId == R.id.btnStatusAbsent) {
+            status = "ABSENT";
+        } else if (checkedId == R.id.btnStatusCancelled) {
+            status = "CANCELLED";
+        }
+
+        String topic = binding.etTopic.getText() != null ? binding.etTopic.getText().toString().trim() : "";
+        String homework = binding.etHomework.getText() != null ? binding.etHomework.getText().toString().trim() : "";
+        String notes = binding.etNotes.getText() != null ? binding.etNotes.getText().toString().trim() : "";
+
+        // 1. Save Attendance Record
+        AttendanceRecord attendance = new AttendanceRecord(
+                UUID.randomUUID().toString(), accountId, occurrenceId, status
+        );
+        int result = attendanceRepo.recordAttendance(attendance);
+
+        if (result == 1) {
+            // 2. Save Lesson Details (if provided)
+            if (!topic.isEmpty() || !homework.isEmpty() || !notes.isEmpty()) {
+                Lesson lesson = new Lesson(
+                        UUID.randomUUID().toString(), accountId, studentId, occurrenceId,
+                        topic.isEmpty() ? null : topic,
+                        homework.isEmpty() ? null : homework,
+                        notes.isEmpty() ? null : notes
+                );
+                lessonRepo.saveLesson(lesson);
+            }
+
+            Toast.makeText(requireContext(), "Attendance recorded", Toast.LENGTH_SHORT).show();
+
+            // Notify the parent (Dashboard) to refresh the UI via FragmentResult API
+            Bundle resultBundle = new Bundle();
+            resultBundle.putBoolean("attendance_recorded", true);
+            getParentFragmentManager().setFragmentResult("attendance_request_key", resultBundle);
+
+            dismiss();
+
+        } else if (result == -1) {
+            Toast.makeText(requireContext(), "Attendance already recorded for this class!", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(requireContext(), "Failed to record attendance.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
+    }
+}

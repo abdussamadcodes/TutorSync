@@ -5,19 +5,25 @@ import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.databinding.ActivityMainBinding;
-import com.abdussamadcodes.tutorsync.model.Account;
+import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
+import com.abdussamadcodes.tutorsync.model.Student;
+import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
+import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
+import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.account.PinLockActivity;
 import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
+import com.abdussamadcodes.tutorsync.ui.attendance.AttendanceBottomSheetFragment;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.onboarding.WelcomeActivity;
+import com.abdussamadcodes.tutorsync.ui.schedule.OccurrenceAdapter;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
-import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
-import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
+import java.util.List;
 
 public class MainActivity extends BaseActivity {
     private ActivityMainBinding binding;
@@ -25,6 +31,8 @@ public class MainActivity extends BaseActivity {
     private LocalAccountStore accountStore;
     private StudentRepository studentRepo;
     private SubjectRepository subjectRepo;
+    private OccurrenceRepository occurrenceRepo;
+    private OccurrenceAdapter occurrenceAdapter;
     private boolean isPinVerifiedThisSession = false;
     private static final String STATE_PIN_VERIFIED = "state_pin_verified";
 
@@ -40,6 +48,7 @@ public class MainActivity extends BaseActivity {
         accountStore = new LocalAccountStore(this);
         studentRepo = new StudentRepository();
         subjectRepo = new SubjectRepository();
+        occurrenceRepo = new OccurrenceRepository();
 
         if (!sessionManager.hasActiveSession()) {
             startActivity(new Intent(this, SignInActivity.class));
@@ -77,12 +86,24 @@ public class MainActivity extends BaseActivity {
     }
 
     private void setupUI() {
-        // Load User Name
-        String accId = sessionManager.getActiveAccountId();
-        // Since our LocalAccountStore fetches by username, this is slightly tricky.
-        // For now, we will set a generic greeting, we can fetch the actual name in Phase 12 if needed.
+        occurrenceAdapter = new OccurrenceAdapter(occurrence -> {
+            AttendanceBottomSheetFragment bottomSheet = AttendanceBottomSheetFragment.newInstance(
+                    sessionManager.getActiveAccountId(),
+                    occurrence.getStudentId(),
+                    occurrence.getId()
+            );
+            bottomSheet.show(getSupportFragmentManager(), AttendanceBottomSheetFragment.TAG);
+        });
 
-        // Setup Bottom Navigation
+        binding.rvOccurrences.setLayoutManager(new LinearLayoutManager(this));
+        binding.rvOccurrences.setAdapter(occurrenceAdapter);
+
+        getSupportFragmentManager().setFragmentResultListener("attendance_request_key", this, (requestKey, result) -> {
+            if (result.getBoolean("attendance_recorded", false)) {
+                loadDashboardData();
+            }
+        });
+
         binding.bottomNavigation.setOnItemSelectedListener(item -> {
             binding.tabHome.setVisibility(View.GONE);
             binding.tabDirectory.setVisibility(View.GONE);
@@ -107,18 +128,29 @@ public class MainActivity extends BaseActivity {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
-        // Fetch actual counts from SQLite!
-        int studentCount = studentRepo.getActiveStudentsForAccount(accountId).size();
+        List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
+        int studentCount = students.size();
         int subjectCount = subjectRepo.getActiveSubjectsForAccount(accountId).size();
 
         binding.tvStudentCount.setText(String.valueOf(studentCount));
         binding.tvSubjectCount.setText(String.valueOf(subjectCount));
+
+        List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForAccount(accountId);
+        occurrenceAdapter.setData(occurrences, students);
+
+        if (occurrences.isEmpty()) {
+            binding.tvEmptyUpcoming.setVisibility(View.VISIBLE);
+            binding.rvOccurrences.setVisibility(View.GONE);
+        } else {
+            binding.tvEmptyUpcoming.setVisibility(View.GONE);
+            binding.rvOccurrences.setVisibility(View.VISIBLE);
+        }
     }
 
     private void refreshStatusLabels() {
         String currentLang = appPreferences.getLanguageCode();
         if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
-            binding.tvActiveLanguageValue.setText("বাংলা");
+            binding.tvActiveLanguageValue.setText("‡¶¨‡¶æ‡¶Ç‡¶≤‡¶æ");
         } else {
             binding.tvActiveLanguageValue.setText("English");
         }
@@ -134,7 +166,6 @@ public class MainActivity extends BaseActivity {
     }
 
     private void setupListeners() {
-        // Dashboard Quick Actions
         binding.btnQuickAddStudent.setOnClickListener(v ->
                 startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.student.StudentFormActivity.class))
         );
@@ -143,7 +174,10 @@ public class MainActivity extends BaseActivity {
                 startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.subject.SubjectFormActivity.class))
         );
 
-        // Directory Tab
+        binding.btnQuickAddSchedule.setOnClickListener(v ->
+                startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.schedule.ScheduleFormActivity.class))
+        );
+
         binding.cardManageStudents.setOnClickListener(v ->
                 startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.student.StudentListActivity.class))
         );
@@ -152,7 +186,6 @@ public class MainActivity extends BaseActivity {
                 startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.subject.SubjectListActivity.class))
         );
 
-        // Settings Tab
         binding.btnOpenLanguageSettings.setOnClickListener(v -> startActivity(WelcomeActivity.createReopenIntent(this)));
 
         binding.btnCycleTheme.setOnClickListener(v -> {
