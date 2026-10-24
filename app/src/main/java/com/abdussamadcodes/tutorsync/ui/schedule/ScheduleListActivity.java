@@ -6,6 +6,7 @@ import android.view.View;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivityScheduleListBinding;
 import com.abdussamadcodes.tutorsync.model.RecurringSchedule;
 import com.abdussamadcodes.tutorsync.model.ScheduleGroup;
@@ -100,9 +101,12 @@ public class ScheduleListActivity extends BaseActivity {
     }
 
     private void showOptionsDialog(ScheduleGroup group) {
-        String[] options = {"Edit Schedule Group", "Delete Entire Group"};
+        String[] options = {
+                getString(R.string.dialog_edit_schedule_group),
+                getString(R.string.dialog_delete_entire_group)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("Manage Schedule")
+                .setTitle(R.string.dialog_manage_schedule)
                 .setItems(options, (dialog, which) -> {
                     if (which == 0) {
                         Intent intent = new Intent(this, ScheduleFormActivity.class);
@@ -121,16 +125,15 @@ public class ScheduleListActivity extends BaseActivity {
 
     private void showDeleteDialog(ScheduleGroup group) {
         new AlertDialog.Builder(this)
-                .setTitle("Delete Group?")
-                .setMessage("Are you sure you want to delete all days in this recurring schedule?")
-                .setPositiveButton("Delete", (dialog, which) -> {
+                .setTitle(R.string.dialog_delete_group_title)
+                .setMessage(R.string.dialog_delete_group_msg)
+                .setPositiveButton(R.string.dialog_delete, (dialog, which) -> {
                     for (String id : group.getScheduleIds()) {
                         scheduleRepo.deleteScheduleSafely(id);
                     }
-                    showMessage(binding.getRoot(), "Schedule group deleted");
                     loadData();
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.action_cancel, null)
                 .show();
     }
 }

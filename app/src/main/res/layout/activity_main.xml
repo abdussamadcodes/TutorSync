@@ -239,7 +239,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="4dp"
-                                android:text="Student"
+                                android:text="@string/dashboard_action_new_student"
                                 android:textSize="12sp"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorPrimary"/>
@@ -273,7 +273,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="4dp"
-                                android:text="Subject"
+                                android:text="@string/dashboard_action_new_subject"
                                 android:textSize="12sp"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorSecondary"/>
@@ -307,7 +307,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="4dp"
-                                android:text="Schedule"
+                                android:text="@string/dashboard_action_new_schedule"
                                 android:textSize="12sp"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorPrimary"/>
@@ -483,13 +483,13 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Manage Schedules"
+                                android:text="@string/directory_manage_schedules"
                                 android:textSize="16sp"
                                 android:textStyle="bold"/>
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="View and delete recurring classes"
+                                android:text="@string/directory_manage_schedules_sub"
                                 android:textSize="13sp"
                                 android:textColor="?attr/colorOnSurfaceVariant"/>
                         </LinearLayout>

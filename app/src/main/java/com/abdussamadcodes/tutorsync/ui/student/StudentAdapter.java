@@ -1,10 +1,12 @@
 package com.abdussamadcodes.tutorsync.ui.student;
 
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ItemStudentBinding;
 import com.abdussamadcodes.tutorsync.model.Student;
 import java.util.ArrayList;
@@ -61,6 +63,7 @@ public class StudentAdapter extends RecyclerView.Adapter<StudentAdapter.StudentV
         }
 
         void bind(Student student) {
+            Context context = binding.getRoot().getContext();
             String displayName = student.getName();
             if (student.getStudentIdDisplay() != null && !student.getStudentIdDisplay().isEmpty()) {
                 displayName = displayName + " (ID: " + student.getStudentIdDisplay() + ")";
@@ -77,7 +80,7 @@ public class StudentAdapter extends RecyclerView.Adapter<StudentAdapter.StudentV
                 subtitle = school;
             }
 
-            binding.tvGradeSchool.setText(subtitle.isEmpty() ? "No details added" : subtitle);
+            binding.tvGradeSchool.setText(subtitle.isEmpty() ? context.getString(R.string.student_no_details) : subtitle);
             binding.ivActiveStatus.setVisibility(student.isActive() ? View.VISIBLE : View.GONE);
         }
     }

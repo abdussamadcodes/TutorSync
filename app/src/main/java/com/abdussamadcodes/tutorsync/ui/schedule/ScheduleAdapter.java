@@ -1,10 +1,12 @@
 package com.abdussamadcodes.tutorsync.ui.schedule;
 
+import android.content.Context;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ItemScheduleBinding;
 import com.abdussamadcodes.tutorsync.model.ScheduleGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -70,7 +72,8 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
         }
 
         void bind(ScheduleGroup group) {
-            String studentName = "Unknown Student";
+            Context context = binding.getRoot().getContext();
+            String studentName = context.getString(R.string.unknown_student);
             for (Student s : students) {
                 if (s.getId().equals(group.getStudentId())) {
                     String displayId = s.getStudentIdDisplay() != null && !s.getStudentIdDisplay().isEmpty() ? s.getStudentIdDisplay() : "N/A";
@@ -89,7 +92,7 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
                     }
                 }
             }
-            String subjectName = subjectNamesList.isEmpty() ? "General" : TextUtils.join(", ", subjectNamesList);
+            String subjectName = subjectNamesList.isEmpty() ? context.getString(R.string.subject_level_general) : TextUtils.join(", ", subjectNamesList);
             binding.tvSubjectName.setText(subjectName);
 
             int hours = group.getStartTimeMinutes() / 60;
@@ -99,28 +102,30 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
             if (hours == 0) hours = 12;
             String timeStr = String.format(Locale.getDefault(), "%02d:%02d %s", hours, mins, ampm);
 
-            StringBuilder daysStr = new StringBuilder();
+            String daysStr;
             if (group.getDaysOfWeek().size() == 7) {
-                daysStr.append("Everyday");
+                daysStr = context.getString(R.string.schedule_rule_everyday);
             } else {
+                StringBuilder builder = new StringBuilder();
                 for (int i = 0; i < group.getDaysOfWeek().size(); i++) {
-                    daysStr.append(getDayShortName(group.getDaysOfWeek().get(i)));
-                    if (i < group.getDaysOfWeek().size() - 1) daysStr.append(", ");
+                    builder.append(getDayShortName(context, group.getDaysOfWeek().get(i)));
+                    if (i < group.getDaysOfWeek().size() - 1) builder.append(", ");
                 }
+                daysStr = builder.toString();
             }
 
-            binding.tvRule.setText("Every " + daysStr.toString() + " at " + timeStr + " (" + group.getDurationMinutes() + "m)");
+            binding.tvRule.setText(context.getString(R.string.schedule_rule_every, daysStr, timeStr, group.getDurationMinutes()));
         }
 
-        private String getDayShortName(int dayOfWeek) {
+        private String getDayShortName(Context context, int dayOfWeek) {
             switch (dayOfWeek) {
-                case 1: return "Sun";
-                case 2: return "Mon";
-                case 3: return "Tue";
-                case 4: return "Wed";
-                case 5: return "Thu";
-                case 6: return "Fri";
-                case 7: return "Sat";
+                case 1: return context.getString(R.string.day_sun);
+                case 2: return context.getString(R.string.day_mon);
+                case 3: return context.getString(R.string.day_tue);
+                case 4: return context.getString(R.string.day_wed);
+                case 5: return context.getString(R.string.day_thu);
+                case 6: return context.getString(R.string.day_fri);
+                case 7: return context.getString(R.string.day_sat);
                 default: return "";
             }
         }

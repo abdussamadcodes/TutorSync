@@ -14,7 +14,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="Manage Schedules"
+            app:title="@string/schedule_list_title"
             app:navigationIcon="?attr/homeAsUpIndicator"/>
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -31,7 +31,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:text="No recurring schedules found."
+        android:text="@string/schedule_list_empty"
         android:textAlignment="center"
         android:textColor="?android:attr/textColorSecondary"
         android:visibility="gone"/>

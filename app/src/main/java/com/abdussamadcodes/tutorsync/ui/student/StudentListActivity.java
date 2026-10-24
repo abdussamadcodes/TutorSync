@@ -70,7 +70,10 @@ public class StudentListActivity extends BaseActivity {
     }
 
     private void showStudentOptionsDialog(Student student) {
-        String[] options = {"Manage Enrollments", "Delete Student"};
+        String[] options = {
+                getString(R.string.dialog_manage_enrollments),
+                getString(R.string.dialog_delete_student)
+        };
         new AlertDialog.Builder(this)
                 .setTitle(student.getName())
                 .setItems(options, (dialog, which) -> {
@@ -78,15 +81,14 @@ public class StudentListActivity extends BaseActivity {
                         showEnrollmentDialog(student);
                     } else {
                         new AlertDialog.Builder(this)
-                                .setTitle("Delete Student?")
-                                .setMessage("Are you sure? This will delete all their schedules and data permanently.")
-                                .setPositiveButton("Delete", (d, w) -> {
+                                .setTitle(R.string.dialog_delete_student_title)
+                                .setMessage(R.string.dialog_delete_student_msg)
+                                .setPositiveButton(R.string.dialog_delete, (d, w) -> {
                                     if (studentRepo.deleteStudent(student.getId())) {
-                                        showMessage(binding.getRoot(), "Student deleted");
                                         loadStudents();
                                     }
                                 })
-                                .setNegativeButton("Cancel", null)
+                                .setNegativeButton(R.string.action_cancel, null)
                                 .show();
                     }
                 }).show();
@@ -119,9 +121,7 @@ public class StudentListActivity extends BaseActivity {
 
             btnSave.setOnClickListener(v -> {
                 java.util.Set<String> finalSelectedIds = subjectAdapter.getSelectedSubjectIds();
-                if (enrollmentRepo.syncStudentEnrollments(student.getId(), finalSelectedIds)) {
-                    showMessage(binding.getRoot(), "Enrollments updated");
-                }
+                enrollmentRepo.syncStudentEnrollments(student.getId(), finalSelectedIds);
                 dialog.dismiss();
             });
         }

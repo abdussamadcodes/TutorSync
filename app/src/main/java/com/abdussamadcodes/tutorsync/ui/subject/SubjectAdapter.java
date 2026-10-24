@@ -1,11 +1,13 @@
 package com.abdussamadcodes.tutorsync.ui.subject;
 
+import android.content.Context;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ItemSubjectBinding;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import java.util.ArrayList;
@@ -21,10 +23,9 @@ public class SubjectAdapter extends RecyclerView.Adapter<SubjectAdapter.SubjectV
     private boolean isEnrollmentMode = false;
 
     public interface OnSubjectClickListener {
-        void onSubjectClick(Subject subject); // Used only in normal mode
+        void onSubjectClick(Subject subject);
     }
 
-    // Constructor for normal Subject List (Phase 4E)
     public SubjectAdapter(OnSubjectClickListener listener) {
         this.listener = listener;
     }
@@ -35,7 +36,6 @@ public class SubjectAdapter extends RecyclerView.Adapter<SubjectAdapter.SubjectV
         notifyDataSetChanged();
     }
 
-    // Enables multi-selection checkmarks for the Enrollment Dialog (Phase 4F)
     public void setEnrollmentMode(List<String> currentlyEnrolledIds) {
         this.isEnrollmentMode = true;
         this.selectedSubjectIds.clear();
@@ -77,13 +77,12 @@ public class SubjectAdapter extends RecyclerView.Adapter<SubjectAdapter.SubjectV
                 Subject subject = subjects.get(position);
 
                 if (isEnrollmentMode) {
-                    // Toggle selection locally
                     if (selectedSubjectIds.contains(subject.getId())) {
                         selectedSubjectIds.remove(subject.getId());
                     } else {
                         selectedSubjectIds.add(subject.getId());
                     }
-                    notifyItemChanged(position); // Update just this item visually
+                    notifyItemChanged(position);
                 } else if (listener != null) {
                     listener.onSubjectClick(subject);
                 }
@@ -91,8 +90,9 @@ public class SubjectAdapter extends RecyclerView.Adapter<SubjectAdapter.SubjectV
         }
 
         void bind(Subject subject) {
+            Context context = binding.getRoot().getContext();
             binding.tvSubjectTitle.setText(subject.getTitle());
-            binding.tvSubjectLevel.setText(subject.getLevel() != null && !subject.getLevel().isEmpty() ? subject.getLevel() : "General");
+            binding.tvSubjectLevel.setText(subject.getLevel() != null && !subject.getLevel().isEmpty() ? subject.getLevel() : context.getString(R.string.subject_level_general));
             binding.cardColorTag.setVisibility(View.GONE);
 
             if (isEnrollmentMode) {

@@ -1,135 +1,108 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">টিউটরসিঙ্ক (TutorSync)</string>
-    <string name="app_tagline">স্মার্ট অফলাইন টিউশন, উপস্থিতি ও ফি ব্যবস্থাপনা</string>
+    <string name="app_name">TutorSync</string>
 
-    <string name="welcome_badge">অফলাইন-ফার্স্ট টিউটর প্ল্যাটফর্ম</string>
-    <string name="welcome_title">টিউটরসিঙ্কে স্বাগতম</string>
-    <string name="welcome_subtitle">আপনার শিক্ষার্থী, ক্লাসের রুটিন, উপস্থিতি, মাসিক বেতন এবং পিডিএফ ইনভয়েস—সবকিছু এক জায়গায় নিরাপদে পরিচালনা করুন।</string>
-    <string name="welcome_select_language_label">আপনার ভাষা নির্বাচন করুন / Choose Language</string>
+    <string name="action_save">সেভ করুন</string>
+    <string name="action_cancel">বাতিল</string>
+    <string name="action_continue">চালিয়ে যান</string>
+    <string name="action_save_and_close">সেভ ও বন্ধ করুন</string>
+
+    <string name="welcome_badge">সেটআপ</string>
+    <string name="welcome_title">TutorSync-এ স্বাগতম</string>
+    <string name="welcome_subtitle">চলুন শুরু করি।\nআপনার পছন্দের ভাষা এবং থিম নির্বাচন করুন।</string>
+    <string name="welcome_select_language_label">ভাষা নির্বাচন করুন</string>
     <string name="welcome_lang_english_title">English</string>
-    <string name="welcome_lang_english_subtitle">ইংরেজি ভাষায় ব্যবহার করুন</string>
-    <string name="welcome_lang_bangla_title">বাংলা (Bangla)</string>
-    <string name="welcome_lang_bangla_subtitle">সম্পূর্ণ অ্যাপ বাংলায় ব্যবহার করুন</string>
+    <string name="welcome_lang_english_subtitle">Set app language to English</string>
+    <string name="welcome_lang_bangla_title">বাংলা</string>
+    <string name="welcome_lang_bangla_subtitle">অ্যাপের ভাষা বাংলা করুন</string>
+    <string name="welcome_select_theme_label">থিম নির্বাচন করুন</string>
+    <string name="theme_system">সিস্টেম ডিফল্ট</string>
+    <string name="theme_light">লাইট মোড</string>
+    <string name="theme_dark">ডার্ক মোড</string>
 
-    <string name="welcome_select_theme_label">অ্যাপের থিম (Appearance)</string>
-    <string name="theme_system">সিস্টেম</string>
-    <string name="theme_light">লাইট</string>
-    <string name="theme_dark">ডার্ক</string>
-
-    <string name="action_continue">এগিয়ে যান</string>
-    <string name="action_save_and_close">পছন্দ সংরক্ষণ করুন</string>
-
-    <string name="main_foundation_header">টিউটরসিঙ্ক ফাউন্ডেশন প্রস্তুত</string>
-    <string name="main_foundation_description">আপনার বাংলা ও ইংরেজি ভাষা ইঞ্জিন, রেসপনসিভ ম্যাটেরিয়াল ৩ ডিজাইন সিস্টেম এবং স্ক্রিন ইনসেট হ্যান্ডলার সচল রয়েছে।</string>
-    <string name="main_current_language_label">বর্তমান ভাষা</string>
-    <string name="main_current_language_value">বাংলা (bn)</string>
-    <string name="main_current_theme_label">বর্তমান থিম মোড</string>
-    <string name="main_action_change_language">ভাষা পরিবর্তন করুন / Change Language</string>
-    <string name="main_action_cycle_theme">থিম মোড পরিবর্তন করুন</string>
-    <string name="main_status_offline_ready">অফলাইন স্টোরেজ মোড: সচল (ডিফল্ট মুদ্রা: BDT ৳)</string>
-
-    <string name="cd_app_logo">টিউটরসিঙ্ক অ্যাপ লোগো</string>
-    <string name="cd_selected_indicator">নির্বাচিত অপশন</string>
-    <string name="msg_language_updated">ভাষা বাংলায় পরিবর্তন করা হয়েছে</string>
-    <string name="msg_theme_updated">থিম মোড পরিবর্তন করা হয়েছে</string>
-
-    <!-- Phase 2: Account & Auth -->
-    <string name="auth_sign_in_title">টিউটরসিঙ্কে সাইন ইন করুন</string>
-    <string name="auth_sign_up_title">অ্যাকাউন্ট তৈরি করুন</string>
+    <string name="auth_sign_in_title">স্বাগতম!</string>
+    <string name="auth_sign_up_title">অ্যাকাউন্ট খুলুন</string>
     <string name="auth_full_name">পুরো নাম</string>
-    <string name="auth_username">ইউজারনেম (শুধুমাত্র অক্ষর ও সংখ্যা)</string>
+    <string name="auth_username">ইউজারনেম</string>
     <string name="auth_password">পাসওয়ার্ড</string>
     <string name="auth_confirm_password">পাসওয়ার্ড নিশ্চিত করুন</string>
-    <string name="auth_action_sign_in">সাইন ইন</string>
-    <string name="auth_action_sign_up">অ্যাকাউন্ট তৈরি করুন</string>
+    <string name="auth_action_sign_in">লগ ইন করুন</string>
+    <string name="auth_action_sign_up">সাইন আপ করুন</string>
     <string name="auth_prompt_no_account">অ্যাকাউন্ট নেই? সাইন আপ করুন</string>
-    <string name="auth_prompt_have_account">আগে থেকেই অ্যাকাউন্ট আছে? সাইন ইন করুন</string>
+    <string name="auth_prompt_have_account">অ্যাকাউন্ট আছে? লগ ইন করুন</string>
 
-    <string name="auth_err_empty">ঘরগুলো খালি রাখা যাবে না</string>
-    <string name="auth_err_password_mismatch">পাসওয়ার্ড মিলেনি</string>
+    <string name="auth_err_empty">সবগুলো ঘর পূরণ করা আবশ্যক</string>
+    <string name="auth_err_invalid_username">ইউজারনেমে শুধুমাত্র অক্ষর ও সংখ্যা থাকতে পারবে</string>
+    <string name="auth_err_pass_length">পাসওয়ার্ড অন্তত ৮ অক্ষরের হতে হবে</string>
+    <string name="auth_err_pass_upper">পাসওয়ার্ডে একটি বড় হাতের অক্ষর থাকতে হবে</string>
+    <string name="auth_err_pass_lower">পাসওয়ার্ডে একটি ছোট হাতের অক্ষর থাকতে হবে</string>
+    <string name="auth_err_pass_digit">পাসওয়ার্ডে একটি সংখ্যা থাকতে হবে</string>
+    <string name="auth_err_pass_special">পাসওয়ার্ডে একটি স্পেশাল ক্যারেক্টার থাকতে হবে</string>
+    <string name="auth_err_password_mismatch">পাসওয়ার্ড মিলছে না</string>
     <string name="auth_err_user_exists">এই ইউজারনেমটি আগে থেকেই ব্যবহৃত হচ্ছে</string>
     <string name="auth_err_invalid_credentials">ভুল ইউজারনেম বা পাসওয়ার্ড</string>
-    <string name="auth_err_hashing">পাসওয়ার্ড প্রক্রিয়াকরণে নিরাপত্তা ত্রুটি</string>
-    <string name="auth_err_invalid_username">ইউজারনেমে শুধুমাত্র অক্ষর এবং সংখ্যা ব্যবহার করা যাবে (কোনো স্পেস বা চিহ্ন নয়)</string>
+    <string name="auth_err_hashing">নিরাপত্তা ত্রুটি। আবার চেষ্টা করুন।</string>
 
-    <!-- Dynamic Password Strength Errors -->
-    <string name="auth_err_pass_length">পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে</string>
-    <string name="auth_err_pass_upper">পাসওয়ার্ডে অন্তত একটি বড় হাতের অক্ষর (A-Z) থাকতে হবে</string>
-    <string name="auth_err_pass_lower">পাসওয়ার্ডে অন্তত একটি ছোট হাতের অক্ষর (a-z) থাকতে হবে</string>
-    <string name="auth_err_pass_digit">পাসওয়ার্ডে অন্তত একটি সংখ্যা (0-9) থাকতে হবে</string>
-    <string name="auth_err_pass_special">পাসওয়ার্ডে অন্তত একটি বিশেষ চিহ্ন (@#$%^&amp;+=!*()~_-) থাকতে হবে</string>
-
-    <string name="action_sign_out">সাইন আউট</string>
-    <!-- Phase 4: Dashboard & Directory -->
+    <string name="dashboard_title">ড্যাশবোর্ড</string>
     <string name="dashboard_greeting">হ্যালো, টিউটর!</string>
     <string name="dashboard_greeting_sub">আজকের ক্লাসের জন্য প্রস্তুত?</string>
-    <string name="dashboard_title">ড্যাশবোর্ড</string>
-    <string name="dashboard_section_management">ব্যবস্থাপনা</string>
-    <string name="dashboard_section_settings">সেটিংস</string>
-    <string name="dashboard_metric_students">শিক্ষার্থী</string>
-    <string name="dashboard_metric_subjects">বিষয়</string>
-    <string name="dashboard_revenue_title">এই মাসের আয়</string>
+    <string name="dashboard_metric_students">মোট শিক্ষার্থী</string>
+    <string name="dashboard_metric_subjects">সক্রিয় বিষয়</string>
+    <string name="dashboard_revenue_title">আনুমানিক আয়</string>
     <string name="dashboard_quick_actions">কুইক অ্যাকশন</string>
-    <string name="dashboard_action_new_student">নতুন শিক্ষার্থী</string>
-    <string name="dashboard_action_new_subject">নতুন বিষয়</string>
-    <string name="dashboard_upcoming_title">আসন্ন ক্লাস</string>
-    <string name="dashboard_upcoming_empty">আজ কোনো ক্লাস নির্ধারিত নেই।\nদিনটি উপভোগ করুন!</string>
+    <string name="dashboard_action_new_student">শিক্ষার্থী</string>
+    <string name="dashboard_action_new_subject">বিষয়</string>
+    <string name="dashboard_action_new_schedule">রুটিন</string>
+    <string name="dashboard_upcoming_title">আজকের ক্লাস</string>
+    <string name="dashboard_upcoming_empty">আজকের জন্য কোনো ক্লাস নেই।</string>
 
     <string name="directory_title">ডিরেক্টরি</string>
     <string name="directory_manage_students">শিক্ষার্থী পরিচালনা</string>
-    <string name="directory_manage_students_sub">প্রোফাইল, ভর্তি এবং বিস্তারিত দেখুন</string>
-    <string name="directory_manage_subjects">বিষয় পরিচালনা</string>
-    <string name="directory_manage_subjects_sub">কোর্সের বিষয় এবং লেভেল</string>
+    <string name="directory_manage_students_sub">শিক্ষার্থী যোগ, আপডেট ও এনরোল করুন</string>
+    <string name="directory_manage_subjects">বিষয় পরিচালনা</string>
+    <string name="directory_manage_subjects_sub">পড়ানোর বিষয়গুলোর তালিকা দেখুন</string>
+    <string name="directory_manage_schedules">রুটিন পরিচালনা</string>
+    <string name="directory_manage_schedules_sub">নিয়মিত ক্লাসগুলো দেখুন এবং মুছুন</string>
 
     <string name="settings_title">সেটিংস</string>
     <string name="settings_section_account">অ্যাকাউন্ট</string>
     <string name="settings_section_preferences">পছন্দসমূহ</string>
-    <string name="settings_language">ভাষা</string>
+    <string name="action_sign_out">সাইন আউট</string>
+    <string name="settings_language">Language / ভাষা</string>
     <string name="settings_theme_mode">থিম মোড</string>
-    <!-- Phase 4: Students & Subjects -->
-    <string name="student_list_title">শিক্ষার্থী তালিকা</string>
-    <string name="student_list_empty">কোনো শিক্ষার্থী পাওয়া যায়নি।\nনতুন যোগ করতে + চাপুন।</string>
+    <string name="main_current_language_value">বাংলা</string>
+    <string name="msg_theme_updated">থিম আপডেট হয়েছে</string>
+
+    <string name="student_list_title">শিক্ষার্থীবৃন্দ</string>
+    <string name="student_list_empty">কোনো শিক্ষার্থী নেই। + বাটনে চাপুন।</string>
     <string name="student_add_button">শিক্ষার্থী যোগ করুন</string>
     <string name="student_form_title">শিক্ষার্থী যোগ করুন</string>
-    <string name="student_form_id_hint">স্টুডেন্ট আইডি (অ্যাকাউন্টে অবশ্যই অনন্য হতে হবে)</string>
-    <string name="student_form_name_hint">শিক্ষার্থীর নাম *</string>
+    <string name="student_form_id_hint">স্টুডেন্ট আইডি (যেমন 001)</string>
+    <string name="student_form_name_hint">পুরো নাম</string>
     <string name="student_form_grade_hint">শ্রেণী / ক্লাস</string>
     <string name="student_form_school_hint">স্কুল / প্রতিষ্ঠান</string>
     <string name="student_form_guardian_name_hint">অভিভাবকের নাম</string>
-    <string name="student_form_guardian_phone_hint">অভিভাবকের ফোন</string>
-    <string name="student_form_save_button">সংরক্ষণ করুন</string>
+    <string name="student_form_guardian_phone_hint">অভিভাবকের ফোন নম্বর</string>
+    <string name="student_form_save_button">শিক্ষার্থী সেভ করুন</string>
 
-    <string name="subject_list_title">বিষয় তালিকা</string>
-    <string name="subject_list_empty">কোনো বিষয় পাওয়া যায়নি।\nনতুন যোগ করতে + চাপুন।</string>
-    <string name="subject_add_button">বিষয় যোগ করুন</string>
-    <string name="subject_form_title">বিষয় যোগ করুন</string>
-    <string name="subject_form_title_hint">বিষয়ের নাম * (যেমন: গণিত)</string>
-    <string name="subject_form_level_hint">লেভেল (যেমন: ও-লেভেল, ১০ম শ্রেণী)</string>
-    <string name="subject_form_save_button">সংরক্ষণ করুন</string>
+    <string name="subject_list_title">বিষয়সমূহ</string>
+    <string name="subject_list_empty">কোনো বিষয় নেই। + বাটনে চাপুন।</string>
+    <string name="subject_add_button">বিষয় যোগ করুন</string>
+    <string name="subject_form_title">বিষয় যোগ করুন</string>
+    <string name="subject_form_title_hint">বিষয়ের নাম (যেমন Physics)</string>
+    <string name="subject_form_level_hint">স্তর (যেমন O-Level, HSC)</string>
+    <string name="subject_form_save_button">বিষয় সেভ করুন</string>
 
-    <string name="enrollment_dialog_title">ভর্তি পরিচালনা</string>
-    <string name="enrollment_dialog_empty">কোনো বিষয় পাওয়া যায়নি।</string>
-    <string name="action_cancel">বাতিল</string>
-    <string name="action_save">সংরক্ষণ</string>
-    <!-- Phase 5: Calendar, Attendance, and Lessons -->
-    <string name="schedule_title">ক্লাসের সময়সূচী</string>
+    <string name="enrollment_dialog_title">বিষয় নির্বাচন করুন</string>
+    <string name="enrollment_dialog_empty">কোনো বিষয় পাওয়া যায়নি।</string>
+
+    <string name="schedule_title">ক্লাস শিডিউল করুন</string>
+    <string name="schedule_list_title">রুটিন পরিচালনা</string>
+    <string name="schedule_list_empty">কোনো রুটিন পাওয়া যায়নি।</string>
     <string name="schedule_select_student">শিক্ষার্থী নির্বাচন করুন</string>
-    <string name="schedule_select_subject">বিষয় নির্বাচন করুন</string>
-    <string name="schedule_is_recurring">সাপ্তাহিক ক্লাস (পুনরাবৃত্তি)</string>
-    <string name="schedule_is_recurring_desc">ক্লাসটি প্রতি সপ্তাহে নির্দিষ্ট দিনে হবে</string>
-    <string name="schedule_day_of_week">সপ্তাহের দিন</string>
-    <string name="schedule_specific_date">নির্দিষ্ট ক্লাসের তারিখ</string>
-    <string name="schedule_start_time">শুরুর সময়</string>
-    <string name="schedule_duration_minutes">সময়কাল (মিনিট)</string>
-    <string name="action_save_schedule">সংরক্ষণ করুন</string>
-    <string name="schedule_err_select_student">দয়া করে একজন শিক্ষার্থী নির্বাচন করুন</string>
-    <string name="schedule_err_select_subject">দয়া করে একটি বিষয় নির্বাচন করুন</string>
-    <string name="schedule_err_time">দয়া করে শুরুর সময় নির্বাচন করুন</string>
-    <string name="schedule_err_date">দয়া করে তারিখ নির্বাচন করুন</string>
-    <string name="schedule_success">ক্লাসের সময়সূচী সফলভাবে সংরক্ষিত হয়েছে</string>
-    <string name="schedule_failed">সময়সূচী সংরক্ষণ করতে ব্যর্থ হয়েছে</string>
-    <!-- Schedule Premium UI Strings -->
+    <string name="schedule_select_subject">বিষয় নির্বাচন করুন</string>
+    <string name="schedule_is_recurring">সাপ্তাহিক রুটিন</string>
+    <string name="schedule_is_recurring_desc">নির্দিষ্ট দিনে প্রতি সপ্তাহে ক্লাস হবে</string>
+    <string name="schedule_select_days">সপ্তাহের দিনগুলো নির্বাচন করুন</string>
     <string name="day_sun">রবি</string>
     <string name="day_mon">সোম</string>
     <string name="day_tue">মঙ্গল</string>
@@ -137,6 +110,50 @@
     <string name="day_thu">বৃহঃ</string>
     <string name="day_fri">শুক্র</string>
     <string name="day_sat">শনি</string>
-    <string name="schedule_select_days">সপ্তাহের দিনগুলো নির্বাচন করুন</string>
-    <string name="schedule_err_select_day">অন্তত একটি দিন নির্বাচন করুন।</string>
+    <string name="schedule_specific_date">নির্দিষ্ট তারিখ</string>
+    <string name="schedule_start_time">শুরুর সময়</string>
+    <string name="schedule_duration_minutes">ব্যাপ্তিকাল (মিনিট)</string>
+    <string name="action_save_schedule">রুটিন সেভ করুন</string>
+
+    <string name="schedule_err_select_student">অন্তত একজন শিক্ষার্থী নির্বাচন করুন</string>
+    <string name="schedule_err_select_subject">অন্তত একটি বিষয় নির্বাচন করুন</string>
+    <string name="schedule_err_time">শুরুর সময় নির্বাচন করুন</string>
+    <string name="schedule_err_date">তারিখ নির্বাচন করুন</string>
+    <string name="schedule_err_select_day">অন্তত একটি দিন নির্বাচন করুন</string>
+    <string name="schedule_success">রুটিন সেভ হয়েছে!</string>
+    <string name="schedule_failed">রুটিন সেভ করতে ব্যর্থ।</string>
+
+    <string name="attendance_title">এটেন্ডেন্স রেকর্ড করুন</string>
+    <string name="attendance_status_present">উপস্থিত</string>
+    <string name="attendance_status_absent">অনুপস্থিত</string>
+    <string name="attendance_status_cancelled">বাতিল</string>
+    <string name="attendance_topic_hint">পড়ানো টপিক (ঐচ্ছিক)</string>
+    <string name="attendance_homework_hint">হোমওয়ার্ক (ঐচ্ছিক)</string>
+    <string name="attendance_notes_hint">টিউটর নোটস (গোপন)</string>
+    <string name="attendance_remove_class">ড্যাশবোর্ড থেকে ক্লাস মুছুন</string>
+    <string name="attendance_save">রেকর্ড সেভ করুন</string>
+
+    <string name="cd_app_logo">App Logo</string>
+    <string name="cd_selected_indicator">Selected</string>
+
+    <!-- New Dynamic Translation Strings -->
+    <string name="student_no_details">কোনো বিস্তারিত তথ্য নেই</string>
+    <string name="subject_level_general">সাধারণ</string>
+    <string name="dialog_manage_enrollments">এনরোলমেন্ট পরিচালনা</string>
+    <string name="dialog_delete_student">শিক্ষার্থী মুছুন</string>
+    <string name="dialog_delete_student_title">শিক্ষার্থী মুছবেন?</string>
+    <string name="dialog_delete_student_msg">আপনি কি নিশ্চিত? এর ফলে শিক্ষার্থীর সমস্ত রুটিন এবং ডেটা স্থায়ীভাবে মুছে যাবে।</string>
+    <string name="dialog_delete">মুছুন</string>
+    <string name="dialog_delete_subject_title">বিষয় মুছবেন?</string>
+    <string name="dialog_delete_subject_msg">আপনি কি নিশ্চিত যে আপনি %s মুছতে চান?</string>
+    <string name="dialog_manage_schedule">রুটিন পরিচালনা</string>
+    <string name="dialog_edit_schedule_group">শিডিউল গ্রুপ এডিট করুন</string>
+    <string name="dialog_delete_entire_group">সম্পূর্ণ গ্রুপ মুছুন</string>
+    <string name="dialog_delete_group_title">গ্রুপ মুছবেন?</string>
+    <string name="dialog_delete_group_msg">আপনি কি নিশ্চিত যে এই রুটিনের সব দিনের ক্লাস মুছতে চান?</string>
+    <string name="schedule_rule_every">প্রতি %1$s, %2$s-এ (%3$d মিনিট)</string>
+    <string name="schedule_rule_everyday">প্রতিদিন</string>
+    <string name="occurrence_rule_today">আজ %1$s-এ (%2$d মিনিট)</string>
+    <string name="unknown_student">অজানা শিক্ষার্থী</string>
+    <string name="unknown_subject">অজানা বিষয়</string>
 </resources>

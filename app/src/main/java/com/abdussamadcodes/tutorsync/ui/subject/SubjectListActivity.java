@@ -6,6 +6,7 @@ import android.view.View;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivitySubjectListBinding;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
@@ -34,15 +35,14 @@ public class SubjectListActivity extends BaseActivity {
 
         adapter = new SubjectAdapter(subject -> {
             new AlertDialog.Builder(this)
-                    .setTitle("Delete Subject?")
-                    .setMessage("Are you sure you want to delete " + subject.getTitle() + "?")
-                    .setPositiveButton("Delete", (dialog, which) -> {
+                    .setTitle(R.string.dialog_delete_subject_title)
+                    .setMessage(getString(R.string.dialog_delete_subject_msg, subject.getTitle()))
+                    .setPositiveButton(R.string.dialog_delete, (dialog, which) -> {
                         if (repository.deleteSubject(subject.getId())) {
-                            showMessage(binding.getRoot(), "Subject deleted");
                             loadSubjects();
                         }
                     })
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(R.string.action_cancel, null)
                     .show();
         });
 

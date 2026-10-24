@@ -10,7 +10,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Record Attendance"
+        android:text="@string/attendance_title"
         android:textAppearance="?attr/textAppearanceTitleLarge"
         android:textStyle="bold"
         android:layout_marginBottom="16dp"/>
@@ -29,7 +29,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Present" />
+            android:text="@string/attendance_status_present" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnStatusAbsent"
@@ -37,7 +37,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Absent" />
+            android:text="@string/attendance_status_absent" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnStatusCancelled"
@@ -45,14 +45,14 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Cancelled" />
+            android:text="@string/attendance_status_cancelled" />
     </com.google.android.material.button.MaterialButtonToggleGroup>
 
     <com.google.android.material.textfield.TextInputLayout
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Topic Covered (Optional)"
+        android:hint="@string/attendance_topic_hint"
         android:layout_marginBottom="12dp">
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etTopic"
@@ -65,7 +65,7 @@
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Homework Assigned (Optional)"
+        android:hint="@string/attendance_homework_hint"
         android:layout_marginBottom="12dp">
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etHomework"
@@ -78,7 +78,7 @@
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Tutor Notes (Private)"
+        android:hint="@string/attendance_notes_hint"
         android:layout_marginBottom="16dp">
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etNotes"
@@ -96,13 +96,13 @@
         android:layout_marginBottom="8dp"
         android:textColor="?attr/colorError"
         app:strokeColor="?attr/colorError"
-        android:text="Remove Class from Dashboard" />
+        android:text="@string/attendance_remove_class" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnSaveAttendance"
         style="@style/Widget.Material3.Button"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="Save Record" />
+        android:text="@string/attendance_save" />
 
 </LinearLayout>

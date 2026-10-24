@@ -1,10 +1,12 @@
 package com.abdussamadcodes.tutorsync.ui.schedule;
 
+import android.content.Context;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ItemOccurrenceBinding;
 import com.abdussamadcodes.tutorsync.model.OccurrenceGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -71,7 +73,8 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
         }
 
         void bind(OccurrenceGroup group) {
-            String studentName = "Unknown Student";
+            Context context = binding.getRoot().getContext();
+            String studentName = context.getString(R.string.unknown_student);
             for (Student s : students) {
                 if (s.getId().equals(group.getStudentId())) {
                     String displayId = s.getStudentIdDisplay() != null && !s.getStudentIdDisplay().isEmpty() ? s.getStudentIdDisplay() : "N/A";
@@ -90,7 +93,7 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
                     }
                 }
             }
-            String subjectName = subjectNamesList.isEmpty() ? "General" : TextUtils.join(", ", subjectNamesList);
+            String subjectName = subjectNamesList.isEmpty() ? context.getString(R.string.subject_level_general) : TextUtils.join(", ", subjectNamesList);
             binding.tvSubjectName.setText(subjectName);
 
             int hours = group.getStartTimeMinutes() / 60;
@@ -99,7 +102,8 @@ public class OccurrenceAdapter extends RecyclerView.Adapter<OccurrenceAdapter.Vi
             hours = hours % 12;
             if (hours == 0) hours = 12;
 
-            binding.tvDateTime.setText(String.format(Locale.getDefault(), "Today at %02d:%02d %s (%d mins)", hours, mins, ampm, group.getDurationMinutes()));
+            String timeStr = String.format(Locale.getDefault(), "%02d:%02d %s", hours, mins, ampm);
+            binding.tvDateTime.setText(context.getString(R.string.occurrence_rule_today, timeStr, group.getDurationMinutes()));
         }
     }
 }

@@ -1,99 +1,83 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TutorSync</string>
-    <string name="app_tagline">Smart Offline Tuition, Attendance &amp; Fee Manager</string>
 
-    <string name="welcome_badge">OFFLINE-FIRST TUTOR WORKSPACE</string>
-    <string name="welcome_title">Welcome to TutorSync</string>
-    <string name="welcome_subtitle">Organize your students, class schedules, attendance, monthly fees, and PDF invoices in one secure place.</string>
-    <string name="welcome_select_language_label">Choose Your Language / ভাষা নির্বাচন করুন</string>
-    <string name="welcome_lang_english_title">English</string>
-    <string name="welcome_lang_english_subtitle">Use TutorSync in English</string>
-    <string name="welcome_lang_bangla_title">বাংলা (Bangla)</string>
-    <string name="welcome_lang_bangla_subtitle">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন</string>
-
-    <string name="welcome_select_theme_label">Appearance</string>
-    <string name="theme_system">System</string>
-    <string name="theme_light">Light</string>
-    <string name="theme_dark">Dark</string>
-
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
     <string name="action_continue">Continue</string>
-    <string name="action_save_and_close">Save Selection</string>
+    <string name="action_save_and_close">Save &amp; Close</string>
 
-    <string name="main_foundation_header">TutorSync Foundation Ready</string>
-    <string name="main_foundation_description">Your localization engine, responsive Material 3 design system, and system inset handlers are active.</string>
-    <string name="main_current_language_label">Active Language</string>
-    <string name="main_current_language_value">English (en)</string>
-    <string name="main_current_theme_label">Active Theme Mode</string>
-    <string name="main_action_change_language">Change Language / ভাষা পরিবর্তন</string>
-    <string name="main_action_cycle_theme">Switch Theme Mode</string>
-    <string name="main_status_offline_ready">Offline Storage Mode: Ready (Currency default: BDT ৳)</string>
+    <string name="welcome_badge">SETUP</string>
+    <string name="welcome_title">Welcome to TutorSync</string>
+    <string name="welcome_subtitle">Let\'s set up your workspace.\nChoose your preferred language and theme.</string>
+    <string name="welcome_select_language_label">Select Language</string>
+    <string name="welcome_lang_english_title">English</string>
+    <string name="welcome_lang_english_subtitle">Set app language to English</string>
+    <string name="welcome_lang_bangla_title">বাংলা</string>
+    <string name="welcome_lang_bangla_subtitle">অ্যাপের ভাষা বাংলা করুন</string>
+    <string name="welcome_select_theme_label">Select Theme Mode</string>
+    <string name="theme_system">System Default</string>
+    <string name="theme_light">Light Mode</string>
+    <string name="theme_dark">Dark Mode</string>
 
-    <string name="cd_app_logo">TutorSync application logo</string>
-    <string name="cd_selected_indicator">Selected option</string>
-    <string name="msg_language_updated">Language updated to English</string>
-    <string name="msg_theme_updated">Appearance mode updated</string>
-
-    <!-- Phase 2: Account & Auth -->
-    <string name="auth_sign_in_title">Sign In to TutorSync</string>
+    <string name="auth_sign_in_title">Welcome Back!</string>
     <string name="auth_sign_up_title">Create Account</string>
     <string name="auth_full_name">Full Name</string>
-    <string name="auth_username">Username (Letters &amp; Numbers only)</string>
+    <string name="auth_username">Username</string>
     <string name="auth_password">Password</string>
     <string name="auth_confirm_password">Confirm Password</string>
     <string name="auth_action_sign_in">Sign In</string>
-    <string name="auth_action_sign_up">Create Account</string>
+    <string name="auth_action_sign_up">Sign Up</string>
     <string name="auth_prompt_no_account">Don\'t have an account? Sign Up</string>
     <string name="auth_prompt_have_account">Already have an account? Sign In</string>
 
-    <string name="auth_err_empty">Fields cannot be empty</string>
-    <string name="auth_err_password_mismatch">Passwords do not match</string>
-    <string name="auth_err_user_exists">Username already taken</string>
-    <string name="auth_err_invalid_credentials">Invalid username or password</string>
-    <string name="auth_err_hashing">Security error processing password</string>
-    <string name="auth_err_invalid_username">Username can only contain letters and numbers (no spaces or symbols)</string>
-
-    <!-- Dynamic Password Strength Errors -->
+    <string name="auth_err_empty">All fields are required</string>
+    <string name="auth_err_invalid_username">Username can only contain letters and numbers</string>
     <string name="auth_err_pass_length">Password must be at least 8 characters</string>
-    <string name="auth_err_pass_upper">Password needs at least one uppercase letter (A-Z)</string>
-    <string name="auth_err_pass_lower">Password needs at least one lowercase letter (a-z)</string>
-    <string name="auth_err_pass_digit">Password needs at least one number (0-9)</string>
-    <string name="auth_err_pass_special">Password needs at least one special symbol (@#$%^&amp;+=!*()~_-)</string>
+    <string name="auth_err_pass_upper">Password must contain an uppercase letter</string>
+    <string name="auth_err_pass_lower">Password must contain a lowercase letter</string>
+    <string name="auth_err_pass_digit">Password must contain a number</string>
+    <string name="auth_err_pass_special">Password must contain a special character</string>
+    <string name="auth_err_password_mismatch">Passwords do not match</string>
+    <string name="auth_err_user_exists">Username already exists</string>
+    <string name="auth_err_invalid_credentials">Invalid username or password</string>
+    <string name="auth_err_hashing">Security error occurred. Try again.</string>
 
-    <string name="action_sign_out">Sign Out</string>
-    <!-- Phase 4: Dashboard & Directory -->
+    <string name="dashboard_title">Dashboard</string>
     <string name="dashboard_greeting">Hello, Tutor!</string>
     <string name="dashboard_greeting_sub">Ready for today\'s classes?</string>
-    <string name="dashboard_title">Dashboard</string>
-    <string name="dashboard_section_management">Management</string>
-    <string name="dashboard_section_settings">Settings</string>
-    <string name="dashboard_metric_students">Students</string>
-    <string name="dashboard_metric_subjects">Subjects</string>
-    <string name="dashboard_revenue_title">This Month\'s Revenue</string>
+    <string name="dashboard_metric_students">Total Students</string>
+    <string name="dashboard_metric_subjects">Active Subjects</string>
+    <string name="dashboard_revenue_title">Estimated Revenue</string>
     <string name="dashboard_quick_actions">Quick Actions</string>
-    <string name="dashboard_action_new_student">New Student</string>
-    <string name="dashboard_action_new_subject">New Subject</string>
+    <string name="dashboard_action_new_student">Student</string>
+    <string name="dashboard_action_new_subject">Subject</string>
+    <string name="dashboard_action_new_schedule">Schedule</string>
     <string name="dashboard_upcoming_title">Upcoming Classes</string>
-    <string name="dashboard_upcoming_empty">No classes scheduled for today.\nEnjoy your day!</string>
+    <string name="dashboard_upcoming_empty">No classes scheduled for today.</string>
 
     <string name="directory_title">Directory</string>
     <string name="directory_manage_students">Manage Students</string>
-    <string name="directory_manage_students_sub">View profiles, enrollments, and details</string>
+    <string name="directory_manage_students_sub">Add, edit, or enroll students</string>
     <string name="directory_manage_subjects">Manage Subjects</string>
-    <string name="directory_manage_subjects_sub">Course subjects, levels, and colors</string>
+    <string name="directory_manage_subjects_sub">View and update subject list</string>
+    <string name="directory_manage_schedules">Manage Schedules</string>
+    <string name="directory_manage_schedules_sub">View and delete recurring classes</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_section_account">Account</string>
     <string name="settings_section_preferences">Preferences</string>
-    <string name="settings_language">Language</string>
+    <string name="action_sign_out">Sign Out</string>
+    <string name="settings_language">Language / ভাষা</string>
     <string name="settings_theme_mode">Theme Mode</string>
-    <!-- Phase 4: Students & Subjects -->
+    <string name="main_current_language_value">English</string>
+    <string name="msg_theme_updated">Theme updated</string>
+
     <string name="student_list_title">Students</string>
-    <string name="student_list_empty">No students found.\nTap + to add one.</string>
+    <string name="student_list_empty">No students found. Tap + to add one.</string>
     <string name="student_add_button">Add Student</string>
     <string name="student_form_title">Add Student</string>
-    <string name="student_form_id_hint">Student ID (Must be unique for your account)</string>
-    <string name="student_form_name_hint">Student Name *</string>
+    <string name="student_form_id_hint">Student ID (e.g. 001)</string>
+    <string name="student_form_name_hint">Full Name</string>
     <string name="student_form_grade_hint">Grade / Class</string>
     <string name="student_form_school_hint">School / Institution</string>
     <string name="student_form_guardian_name_hint">Guardian Name</string>
@@ -101,44 +85,24 @@
     <string name="student_form_save_button">Save Student</string>
 
     <string name="subject_list_title">Subjects</string>
-    <string name="subject_list_empty">No subjects found.\nTap + to add one.</string>
+    <string name="subject_list_empty">No subjects found. Tap + to add one.</string>
     <string name="subject_add_button">Add Subject</string>
     <string name="subject_form_title">Add Subject</string>
-    <string name="subject_form_title_hint">Subject Title * (e.g. Mathematics)</string>
-    <string name="subject_form_level_hint">Level (e.g. O-Level, Grade 10)</string>
+    <string name="subject_form_title_hint">Subject Title (e.g. Physics)</string>
+    <string name="subject_form_level_hint">Level (e.g. O-Level, HSC)</string>
     <string name="subject_form_save_button">Save Subject</string>
 
-    <string name="enrollment_dialog_title">Manage Enrollments</string>
-    <string name="enrollment_dialog_empty">No available subjects found.</string>
-    <string name="action_cancel">Cancel</string>
-    <string name="action_save">Save</string>
-    <!-- Phase 5: Calendar, Attendance, and Lessons -->
+    <string name="enrollment_dialog_title">Enroll in Subjects</string>
+    <string name="enrollment_dialog_empty">No active subjects available.</string>
+
     <string name="schedule_title">Schedule Class</string>
+    <string name="schedule_list_title">Manage Schedules</string>
+    <string name="schedule_list_empty">No recurring schedules found.</string>
     <string name="schedule_select_student">Select Student</string>
     <string name="schedule_select_subject">Select Subject</string>
     <string name="schedule_is_recurring">Recurring Weekly Class</string>
-    <string name="schedule_is_recurring_desc">Class repeats every week on a specific day</string>
-    <string name="schedule_day_of_week">Day of the Week</string>
-    <string name="schedule_specific_date">Specific Class Date</string>
-    <string name="schedule_start_time">Start Time</string>
-    <string name="schedule_duration_minutes">Duration (Minutes)</string>
-    <string name="action_save_schedule">Save Schedule</string>
-    <string name="schedule_err_select_student">Please select a student</string>
-    <string name="schedule_err_select_subject">Please select a subject</string>
-    <string name="schedule_err_time">Please select a start time</string>
-    <string name="schedule_err_date">Please select a date</string>
-    <string name="schedule_success">Class scheduled successfully</string>
-    <string name="schedule_failed">Failed to schedule class</string>
-    <string-array name="days_of_week_array">
-        <item>Sunday</item>
-        <item>Monday</item>
-        <item>Tuesday</item>
-        <item>Wednesday</item>
-        <item>Thursday</item>
-        <item>Friday</item>
-        <item>Saturday</item>
-    </string-array>
-    <!-- Schedule Premium UI Strings -->
+    <string name="schedule_is_recurring_desc">Class repeats every week on specific days</string>
+    <string name="schedule_select_days">Select Days of the Week</string>
     <string name="day_sun">Sun</string>
     <string name="day_mon">Mon</string>
     <string name="day_tue">Tue</string>
@@ -146,6 +110,50 @@
     <string name="day_thu">Thu</string>
     <string name="day_fri">Fri</string>
     <string name="day_sat">Sat</string>
-    <string name="schedule_select_days">Select Days of the Week</string>
-    <string name="schedule_err_select_day">Please select at least one day.</string>
+    <string name="schedule_specific_date">Specific Date</string>
+    <string name="schedule_start_time">Start Time</string>
+    <string name="schedule_duration_minutes">Duration (Minutes)</string>
+    <string name="action_save_schedule">Save Schedule</string>
+
+    <string name="schedule_err_select_student">Please select at least one student</string>
+    <string name="schedule_err_select_subject">Please select at least one subject</string>
+    <string name="schedule_err_time">Please select a start time</string>
+    <string name="schedule_err_date">Please select a date</string>
+    <string name="schedule_err_select_day">Please select at least one day</string>
+    <string name="schedule_success">Schedule saved successfully!</string>
+    <string name="schedule_failed">Failed to save schedule.</string>
+
+    <string name="attendance_title">Record Attendance</string>
+    <string name="attendance_status_present">Present</string>
+    <string name="attendance_status_absent">Absent</string>
+    <string name="attendance_status_cancelled">Cancelled</string>
+    <string name="attendance_topic_hint">Topic Covered (Optional)</string>
+    <string name="attendance_homework_hint">Homework Assigned (Optional)</string>
+    <string name="attendance_notes_hint">Tutor Notes (Private)</string>
+    <string name="attendance_remove_class">Remove Class from Dashboard</string>
+    <string name="attendance_save">Save Record</string>
+
+    <string name="cd_app_logo">App Logo</string>
+    <string name="cd_selected_indicator">Selected</string>
+
+    <!-- New Dynamic Translation Strings -->
+    <string name="student_no_details">No details added</string>
+    <string name="subject_level_general">General</string>
+    <string name="dialog_manage_enrollments">Manage Enrollments</string>
+    <string name="dialog_delete_student">Delete Student</string>
+    <string name="dialog_delete_student_title">Delete Student?</string>
+    <string name="dialog_delete_student_msg">Are you sure? This will delete all their schedules and data permanently.</string>
+    <string name="dialog_delete">Delete</string>
+    <string name="dialog_delete_subject_title">Delete Subject?</string>
+    <string name="dialog_delete_subject_msg">Are you sure you want to delete %s?</string>
+    <string name="dialog_manage_schedule">Manage Schedule</string>
+    <string name="dialog_edit_schedule_group">Edit Schedule Group</string>
+    <string name="dialog_delete_entire_group">Delete Entire Group</string>
+    <string name="dialog_delete_group_title">Delete Group?</string>
+    <string name="dialog_delete_group_msg">Are you sure you want to delete all days in this recurring schedule?</string>
+    <string name="schedule_rule_every">Every %1$s at %2$s (%3$d mins)</string>
+    <string name="schedule_rule_everyday">Everyday</string>
+    <string name="occurrence_rule_today">Today at %1$s (%2$d mins)</string>
+    <string name="unknown_student">Unknown Student</string>
+    <string name="unknown_subject">Unknown Subject</string>
 </resources>
