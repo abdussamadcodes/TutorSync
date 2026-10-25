@@ -165,4 +165,13 @@
     <string name="fee_amount_hint">Amount (e.g. 2000)</string>
     <string name="fee_save">Save Agreement</string>
     <string name="fee_saved_success">Fee Agreement Saved!</string>
+    <!-- Invoices -->
+    <string name="invoice_list_title">Invoices &amp; Payments</string>
+    <string name="invoice_empty">No invoices found. Generate one to get started.</string>
+    <string name="invoice_generate">Generate Monthly Invoices</string>
+    <string name="invoice_status_unpaid">UNPAID</string>
+    <string name="invoice_status_partial">PARTIAL</string>
+    <string name="invoice_status_paid">PAID</string>
+    <string name="invoice_generated_success">Invoices generated successfully!</string>
+    <string name="invoice_none_needed">No new invoices needed right now.</string>
 </resources>

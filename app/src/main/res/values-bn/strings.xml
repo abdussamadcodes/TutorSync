@@ -165,4 +165,13 @@
     <string name="fee_amount_hint">পরিমাণ (যেমন ২০০০)</string>
     <string name="fee_save">এগ্রিমেন্ট সেভ করুন</string>
     <string name="fee_saved_success">ফি এগ্রিমেন্ট সেভ হয়েছে!</string>
+    <!-- Invoices -->
+    <string name="invoice_list_title">ইনভয়েস এবং পেমেন্ট</string>
+    <string name="invoice_empty">কোনো ইনভয়েস নেই। একটি তৈরি করুন।</string>
+    <string name="invoice_generate">মাসিক ইনভয়েস তৈরি করুন</string>
+    <string name="invoice_status_unpaid">বকেয়া</string>
+    <string name="invoice_status_partial">আংশিক</string>
+    <string name="invoice_status_paid">পরিশোধিত</string>
+    <string name="invoice_generated_success">ইনভয়েস সফলভাবে তৈরি হয়েছে!</string>
+    <string name="invoice_none_needed">এই মুহূর্তে নতুন ইনভয়েসের প্রয়োজন নেই।</string>
 </resources>
