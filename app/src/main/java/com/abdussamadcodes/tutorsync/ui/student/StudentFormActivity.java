@@ -14,65 +14,77 @@ public class StudentFormActivity extends BaseActivity {
     private ActivityStudentFormBinding binding;
     private StudentRepository repository;
     private SessionManager sessionManager;
+    private String existingStudentId = null;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityStudentFormBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-        applySystemBarInsets(binding.studentFormRoot);
+        applySystemBarInsets(binding.getRoot());
 
         repository = new StudentRepository();
         sessionManager = new SessionManager(this);
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
-        binding.btnSaveStudent.setOnClickListener(v -> saveStudent());
+
+        existingStudentId = getIntent().getStringExtra("student_id");
+        if (existingStudentId != null) {
+            binding.toolbar.setTitle("Edit Student");
+            binding.btnSave.setText("Update Student");
+            loadExistingStudentData();
+        }
+
+        binding.btnSave.setOnClickListener(v -> saveStudent());
+    }
+
+    private void loadExistingStudentData() {
+        Student student = repository.getStudentById(existingStudentId);
+        if (student != null) {
+            binding.etStudentId.setText(student.getStudentIdDisplay());
+            binding.etStudentId.setEnabled(false);
+            binding.etName.setText(student.getName());
+            binding.etGrade.setText(student.getGrade());
+            binding.etSchool.setText(student.getSchool());
+            binding.etGuardianName.setText(student.getGuardianName());
+            binding.etGuardianPhone.setText(student.getGuardianPhone());
+            binding.etAddress.setText(student.getAddress());
+        }
     }
 
     private void saveStudent() {
-        String studentIdDisplay = binding.etStudentIdDisplay.getText() != null ? binding.etStudentIdDisplay.getText().toString().trim() : "";
+        // Safe extraction to prevent NullPointerException warnings
         String name = binding.etName.getText() != null ? binding.etName.getText().toString().trim() : "";
-        String grade = binding.etGrade.getText() != null ? binding.etGrade.getText().toString().trim() : "";
-        String school = binding.etSchool.getText() != null ? binding.etSchool.getText().toString().trim() : "";
-        String guardianName = binding.etGuardianName.getText() != null ? binding.etGuardianName.getText().toString().trim() : "";
-        String guardianPhone = binding.etGuardianPhone.getText() != null ? binding.etGuardianPhone.getText().toString().trim() : "";
-
         if (name.isEmpty()) {
-            binding.etName.setError("Student name is required");
-            return;
-        }
-
-        if (studentIdDisplay.isEmpty()) {
-            binding.etStudentIdDisplay.setError("Student ID is required");
+            binding.etName.setError("Name is required");
             return;
         }
 
         String accountId = sessionManager.getActiveAccountId();
-        if (accountId.isEmpty()) {
-            showMessage(binding.getRoot(), "Session error. Please log in again.");
-            return;
-        }
+        String displayId = binding.etStudentId.getText() != null ? binding.etStudentId.getText().toString().trim() : "";
+        String grade = binding.etGrade.getText() != null ? binding.etGrade.getText().toString().trim() : "";
+        String school = binding.etSchool.getText() != null ? binding.etSchool.getText().toString().trim() : "";
+        String guardianName = binding.etGuardianName.getText() != null ? binding.etGuardianName.getText().toString().trim() : "";
+        String guardianPhone = binding.etGuardianPhone.getText() != null ? binding.etGuardianPhone.getText().toString().trim() : "";
+        String address = binding.etAddress.getText() != null ? binding.etAddress.getText().toString().trim() : "";
 
-        Student newStudent = new Student(
-                UUID.randomUUID().toString(),
-                accountId,
-                studentIdDisplay,
-                name,
-                grade.isEmpty() ? null : grade,
-                school.isEmpty() ? null : school,
-                guardianName.isEmpty() ? null : guardianName,
-                guardianPhone.isEmpty() ? null : guardianPhone,
-                null,
-                true
-        );
-
-        int result = repository.insertStudent(newStudent);
-        if (result == 1) {
-            finish();
-        } else if (result == -1) {
-            binding.etStudentIdDisplay.setError("This Student ID is already used in your account");
+        if (existingStudentId != null) {
+            Student student = new Student(existingStudentId, accountId, displayId, name, grade, school, guardianName, guardianPhone, address, true);
+            if (repository.updateStudent(student)) {
+                showMessage(binding.getRoot(), "Student updated successfully");
+                finish();
+            } else {
+                showMessage(binding.getRoot(), "Failed to update student");
+            }
         } else {
-            showMessage(binding.getRoot(), "Failed to save student.");
+            Student student = new Student(UUID.randomUUID().toString(), accountId, displayId, name, grade, school, guardianName, guardianPhone, address, true);
+            int result = repository.insertStudent(student);
+            if (result == 1) {
+                showMessage(binding.getRoot(), "Student added successfully");
+                finish();
+            } else {
+                showMessage(binding.getRoot(), "Failed to add student. Ensure ID is unique.");
+            }
         }
     }
 }

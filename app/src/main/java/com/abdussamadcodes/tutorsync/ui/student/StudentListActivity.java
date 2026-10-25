@@ -71,6 +71,7 @@ public class StudentListActivity extends BaseActivity {
 
     private void showStudentOptionsDialog(Student student) {
         String[] options = {
+                "Edit Student Profile",
                 getString(R.string.dialog_manage_enrollments),
                 getString(R.string.dialog_delete_student)
         };
@@ -78,6 +79,10 @@ public class StudentListActivity extends BaseActivity {
                 .setTitle(student.getName())
                 .setItems(options, (dialog, which) -> {
                     if (which == 0) {
+                        Intent intent = new Intent(this, StudentFormActivity.class);
+                        intent.putExtra("student_id", student.getId());
+                        startActivity(intent);
+                    } else if (which == 1) {
                         showEnrollmentDialog(student);
                     } else {
                         new AlertDialog.Builder(this)

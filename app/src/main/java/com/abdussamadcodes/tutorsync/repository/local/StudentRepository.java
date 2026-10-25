@@ -5,6 +5,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteConstraintException;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -39,6 +40,50 @@ public class StudentRepository {
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
+    }
+
+    public boolean updateStudent(@NonNull Student student) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            ContentValues values = new ContentValues();
+            // ID and AccountID are intentionally omitted to prevent modification
+            values.put(StudentEntry.COLUMN_NAME, student.getName());
+            values.put(StudentEntry.COLUMN_GRADE, student.getGrade());
+            values.put(StudentEntry.COLUMN_SCHOOL, student.getSchool());
+            values.put(StudentEntry.COLUMN_GUARDIAN_NAME, student.getGuardianName());
+            values.put(StudentEntry.COLUMN_GUARDIAN_PHONE, student.getGuardianPhone());
+            values.put(StudentEntry.COLUMN_ADDRESS, student.getAddress());
+            values.put(StudentEntry.COLUMN_IS_ACTIVE, student.isActive() ? 1 : 0);
+            values.put(StudentEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+
+            return db.update(StudentEntry.TABLE_NAME, values, StudentEntry.COLUMN_ID + " = ?", new String[]{student.getId()}) > 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
+    @Nullable
+    public Student getStudentById(@NonNull String studentId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try (Cursor cursor = db.query(StudentEntry.TABLE_NAME, null, StudentEntry.COLUMN_ID + " = ?", new String[]{studentId}, null, null, null)) {
+            if (cursor.moveToFirst()) {
+                return new Student(
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ID)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ACCOUNT_ID)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_STUDENT_ID_DISPLAY)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_NAME)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_GRADE)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_SCHOOL)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_GUARDIAN_NAME)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_GUARDIAN_PHONE)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ADDRESS)),
+                        cursor.getInt(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_IS_ACTIVE)) == 1
+                );
+            }
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+        return null;
     }
 
     public boolean deleteStudent(@NonNull String studentId) {
