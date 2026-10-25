@@ -43,6 +43,20 @@
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/btnManageFees"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:paddingVertical="16dp">
+        <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_manage" app:tint="?attr/colorPrimary"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/dialog_manage_fees" android:layout_marginStart="16dp" android:textSize="16sp" android:textColor="?attr/colorPrimary"/>
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/btnDeleteStudent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

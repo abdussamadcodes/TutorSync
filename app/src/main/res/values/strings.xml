@@ -157,4 +157,12 @@
     <string name="unknown_student">Unknown Student</string>
     <string name="unknown_subject">Unknown Subject</string>
     <string name="dialog_edit_student_profile">Edit Student Profile</string>
+    <!-- Fees -->
+    <string name="dialog_manage_fees">Manage Fees</string>
+    <string name="fee_agreement_title">Set Fee Agreement</string>
+    <string name="fee_type_monthly">Monthly Rate</string>
+    <string name="fee_type_per_class">Per Class</string>
+    <string name="fee_amount_hint">Amount (e.g. 2000)</string>
+    <string name="fee_save">Save Agreement</string>
+    <string name="fee_saved_success">Fee Agreement Saved!</string>
 </resources>

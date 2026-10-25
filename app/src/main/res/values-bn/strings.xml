@@ -157,4 +157,12 @@
     <string name="unknown_student">অজানা শিক্ষার্থী</string>
     <string name="unknown_subject">অজানা বিষয়</string>
     <string name="dialog_edit_student_profile">শিক্ষার্থীর প্রোফাইল এডিট করুন</string>
+    <!-- Fees -->
+    <string name="dialog_manage_fees">ফি ম্যানেজমেন্ট</string>
+    <string name="fee_agreement_title">ফি নির্ধারণ করুন</string>
+    <string name="fee_type_monthly">মাসিক ফি</string>
+    <string name="fee_type_per_class">প্রতি ক্লাসের ফি</string>
+    <string name="fee_amount_hint">পরিমাণ (যেমন ২০০০)</string>
+    <string name="fee_save">এগ্রিমেন্ট সেভ করুন</string>
+    <string name="fee_saved_success">ফি এগ্রিমেন্ট সেভ হয়েছে!</string>
 </resources>
