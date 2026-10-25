@@ -127,6 +127,48 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                     "FOREIGN KEY(" + TutorSyncContract.LessonEntry.COLUMN_OCCURRENCE_ID + ") REFERENCES " +
                     TutorSyncContract.OccurrenceEntry.TABLE_NAME + "(" + TutorSyncContract.OccurrenceEntry.COLUMN_ID + ") ON DELETE CASCADE)";
 
+    private static final String SQL_CREATE_FEE_AGREEMENTS =
+            "CREATE TABLE " + TutorSyncContract.FeeAgreementEntry.TABLE_NAME + " (" +
+                    TutorSyncContract.FeeAgreementEntry.COLUMN_ID + " TEXT PRIMARY KEY, " +
+                    TutorSyncContract.FeeAgreementEntry.COLUMN_ACCOUNT_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.FeeAgreementEntry.COLUMN_STUDENT_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.FeeAgreementEntry.COLUMN_FEE_TYPE + " TEXT NOT NULL, " +
+                    TutorSyncContract.FeeAgreementEntry.COLUMN_AMOUNT_MINOR + " INTEGER NOT NULL, " +
+                    TutorSyncContract.FeeAgreementEntry.COLUMN_UPDATED_AT + " INTEGER NOT NULL, " +
+                    "FOREIGN KEY(" + TutorSyncContract.FeeAgreementEntry.COLUMN_ACCOUNT_ID + ") REFERENCES " +
+                    TutorSyncContract.AccountEntry.TABLE_NAME + "(" + TutorSyncContract.AccountEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
+                    "FOREIGN KEY(" + TutorSyncContract.FeeAgreementEntry.COLUMN_STUDENT_ID + ") REFERENCES " +
+                    TutorSyncContract.StudentEntry.TABLE_NAME + "(" + TutorSyncContract.StudentEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
+                    "UNIQUE(" + TutorSyncContract.FeeAgreementEntry.COLUMN_STUDENT_ID + "))";
+
+    private static final String SQL_CREATE_INVOICES =
+            "CREATE TABLE " + TutorSyncContract.InvoiceEntry.TABLE_NAME + " (" +
+                    TutorSyncContract.InvoiceEntry.COLUMN_ID + " TEXT PRIMARY KEY, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_ACCOUNT_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_STUDENT_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_BILLING_PERIOD + " TEXT NOT NULL, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_TOTAL_AMOUNT + " INTEGER NOT NULL, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_PAID_AMOUNT + " INTEGER NOT NULL DEFAULT 0, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_STATUS + " TEXT NOT NULL, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_DUE_DATE + " INTEGER NOT NULL, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_CREATED_AT + " INTEGER NOT NULL, " +
+                    "FOREIGN KEY(" + TutorSyncContract.InvoiceEntry.COLUMN_ACCOUNT_ID + ") REFERENCES " +
+                    TutorSyncContract.AccountEntry.TABLE_NAME + "(" + TutorSyncContract.AccountEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
+                    "FOREIGN KEY(" + TutorSyncContract.InvoiceEntry.COLUMN_STUDENT_ID + ") REFERENCES " +
+                    TutorSyncContract.StudentEntry.TABLE_NAME + "(" + TutorSyncContract.StudentEntry.COLUMN_ID + ") ON DELETE CASCADE)";
+
+    private static final String SQL_CREATE_PAYMENTS =
+            "CREATE TABLE " + TutorSyncContract.PaymentEntry.TABLE_NAME + " (" +
+                    TutorSyncContract.PaymentEntry.COLUMN_ID + " TEXT PRIMARY KEY, " +
+                    TutorSyncContract.PaymentEntry.COLUMN_ACCOUNT_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.PaymentEntry.COLUMN_INVOICE_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.PaymentEntry.COLUMN_AMOUNT + " INTEGER NOT NULL, " +
+                    TutorSyncContract.PaymentEntry.COLUMN_PAYMENT_DATE + " INTEGER NOT NULL, " +
+                    TutorSyncContract.PaymentEntry.COLUMN_METHOD + " TEXT NOT NULL, " +
+                    "FOREIGN KEY(" + TutorSyncContract.PaymentEntry.COLUMN_ACCOUNT_ID + ") REFERENCES " +
+                    TutorSyncContract.AccountEntry.TABLE_NAME + "(" + TutorSyncContract.AccountEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
+                    "FOREIGN KEY(" + TutorSyncContract.PaymentEntry.COLUMN_INVOICE_ID + ") REFERENCES " +
+                    TutorSyncContract.InvoiceEntry.TABLE_NAME + "(" + TutorSyncContract.InvoiceEntry.COLUMN_ID + ") ON DELETE CASCADE)";
     public TutorSyncDbHelper(Context context) {
         super(context, TutorSyncContract.DATABASE_NAME, null, TutorSyncContract.DATABASE_VERSION);
     }
@@ -148,6 +190,9 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         db.execSQL(SQL_CREATE_OCCURRENCES);
         db.execSQL(SQL_CREATE_ATTENDANCE);
         db.execSQL(SQL_CREATE_LESSONS);
+        db.execSQL(SQL_CREATE_FEE_AGREEMENTS);
+        db.execSQL(SQL_CREATE_INVOICES);
+        db.execSQL(SQL_CREATE_PAYMENTS);
     }
 
     @Override
@@ -155,6 +200,11 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE " + TutorSyncContract.OccurrenceEntry.TABLE_NAME +
                     " ADD COLUMN " + TutorSyncContract.OccurrenceEntry.COLUMN_SUBJECT_ID + " TEXT");
+        }
+        if (oldVersion < 3) {
+            db.execSQL(SQL_CREATE_FEE_AGREEMENTS);
+            db.execSQL(SQL_CREATE_INVOICES);
+            db.execSQL(SQL_CREATE_PAYMENTS);
         }
     }
 }

@@ -6,7 +6,7 @@ public final class TutorSyncContract {
     private TutorSyncContract() {}
 
     public static final String DATABASE_NAME = "tutorsync.db";
-    public static final int DATABASE_VERSION = 2; // Bumped to Version 2
+    public static final int DATABASE_VERSION = 3; // Bumped to Version 2
 
     public static class AccountEntry implements BaseColumns {
         public static final String TABLE_NAME = "accounts";
@@ -102,5 +102,38 @@ public final class TutorSyncContract {
         public static final String COLUMN_HOMEWORK = "homework";
         public static final String COLUMN_TUTOR_NOTES = "tutor_notes";
         public static final String COLUMN_UPDATED_AT = "updated_at";
+    }
+
+    public static class FeeAgreementEntry implements BaseColumns {
+        public static final String TABLE_NAME = "fee_agreements";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_FEE_TYPE = "fee_type";
+        public static final String COLUMN_AMOUNT_MINOR = "amount_minor_units";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
+    }
+
+    public static class InvoiceEntry implements BaseColumns {
+        public static final String TABLE_NAME = "invoices";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_BILLING_PERIOD = "billing_period";
+        public static final String COLUMN_TOTAL_AMOUNT = "total_amount";
+        public static final String COLUMN_PAID_AMOUNT = "paid_amount";
+        public static final String COLUMN_STATUS = "status";
+        public static final String COLUMN_DUE_DATE = "due_date";
+        public static final String COLUMN_CREATED_AT = "created_at";
+    }
+
+    public static class PaymentEntry implements BaseColumns {
+        public static final String TABLE_NAME = "payments";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_INVOICE_ID = "invoice_id";
+        public static final String COLUMN_AMOUNT = "amount";
+        public static final String COLUMN_PAYMENT_DATE = "payment_date";
+        public static final String COLUMN_METHOD = "method";
     }
 }
