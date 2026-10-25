@@ -40,4 +40,12 @@ public class Student {
     @Nullable public String getGuardianPhone() { return guardianPhone; }
     @Nullable public String getAddress() { return address; }
     public boolean isActive() { return isActive; }
+
+    @NonNull
+    public String getFormattedDisplayName() {
+        if (studentIdDisplay != null && !studentIdDisplay.trim().isEmpty()) {
+            return name + " · " + studentIdDisplay;
+        }
+        return name;
+    }
 }

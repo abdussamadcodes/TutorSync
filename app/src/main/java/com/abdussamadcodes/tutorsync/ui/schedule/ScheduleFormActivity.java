@@ -150,8 +150,7 @@ public class ScheduleFormActivity extends BaseActivity {
     }
 
     private String getStudentDisplayName(Student s) {
-        String displayId = s.getStudentIdDisplay() != null && !s.getStudentIdDisplay().isEmpty() ? s.getStudentIdDisplay() : "N/A";
-        return s.getName() + " (ID: " + displayId + ")";
+        return s.getFormattedDisplayName();
     }
 
     private void showStudentMultiSelectDialog() {

@@ -64,11 +64,9 @@ public class StudentAdapter extends RecyclerView.Adapter<StudentAdapter.StudentV
 
         void bind(Student student) {
             Context context = binding.getRoot().getContext();
-            String displayName = student.getName();
-            if (student.getStudentIdDisplay() != null && !student.getStudentIdDisplay().isEmpty()) {
-                displayName = displayName + " (ID: " + student.getStudentIdDisplay() + ")";
-            }
-            binding.tvStudentName.setText(displayName);
+
+            // Use the new centralized helper
+            binding.tvStudentName.setText(student.getFormattedDisplayName());
 
             String grade = student.getGrade() != null ? student.getGrade() : "";
             String school = student.getSchool() != null ? student.getSchool() : "";

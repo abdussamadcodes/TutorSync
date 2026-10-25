@@ -70,7 +70,8 @@ public class InvoiceAdapter extends RecyclerView.Adapter<InvoiceAdapter.ViewHold
             String studentName = "Unknown Student";
             for (Student s : students) {
                 if (s.getId().equals(invoice.getStudentId())) {
-                    studentName = s.getName();
+                    // Use the new centralized helper
+                    studentName = s.getFormattedDisplayName();
                     break;
                 }
             }

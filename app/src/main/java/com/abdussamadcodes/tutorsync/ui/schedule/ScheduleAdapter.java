@@ -76,8 +76,8 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
             String studentName = context.getString(R.string.unknown_student);
             for (Student s : students) {
                 if (s.getId().equals(group.getStudentId())) {
-                    String displayId = s.getStudentIdDisplay() != null && !s.getStudentIdDisplay().isEmpty() ? s.getStudentIdDisplay() : "N/A";
-                    studentName = s.getName() + " (ID: " + displayId + ")";
+                    // Use the new centralized helper
+                    studentName = s.getFormattedDisplayName();
                     break;
                 }
             }
