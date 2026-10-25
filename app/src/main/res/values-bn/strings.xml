@@ -174,4 +174,14 @@
     <string name="invoice_status_paid">পরিশোধিত</string>
     <string name="invoice_generated_success">ইনভয়েস সফলভাবে তৈরি হয়েছে!</string>
     <string name="invoice_none_needed">এই মুহূর্তে নতুন ইনভয়েসের প্রয়োজন নেই।</string>
+
+    <!-- Invoice Details -->
+    <string name="invoice_detail_title">ইনভয়েস বিস্তারিত</string>
+    <string name="invoice_total_amount">মোট পরিমাণ:</string>
+    <string name="invoice_paid_amount">পরিশোধিত পরিমাণ:</string>
+    <string name="invoice_due_amount">বকেয়া পরিমাণ:</string>
+    <string name="invoice_payment_history">পেমেন্টের ইতিহাস</string>
+    <string name="invoice_no_payments">এখনো কোনো পেমেন্ট রেকর্ড করা হয়নি।</string>
+    <string name="invoice_record_payment">নতুন পেমেন্ট রেকর্ড করুন</string>
+    <string name="invoice_payment_amount">পেমেন্টের পরিমাণ</string>
 </resources>

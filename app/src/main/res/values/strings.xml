@@ -174,4 +174,13 @@
     <string name="invoice_status_paid">PAID</string>
     <string name="invoice_generated_success">Invoices generated successfully!</string>
     <string name="invoice_none_needed">No new invoices needed right now.</string>
+    <!-- Invoice Details -->
+    <string name="invoice_detail_title">Invoice Details</string>
+    <string name="invoice_total_amount">Total Amount:</string>
+    <string name="invoice_paid_amount">Paid Amount:</string>
+    <string name="invoice_due_amount">Due Amount:</string>
+    <string name="invoice_payment_history">Payment History</string>
+    <string name="invoice_no_payments">No payments recorded yet.</string>
+    <string name="invoice_record_payment">Record New Payment</string>
+    <string name="invoice_payment_amount">Amount to Pay</string>
 </resources>

@@ -12,6 +12,7 @@ import com.abdussamadcodes.tutorsync.databinding.ActivityMainBinding;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import com.abdussamadcodes.tutorsync.model.OccurrenceGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
+import com.abdussamadcodes.tutorsync.repository.local.InvoiceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
@@ -20,6 +21,7 @@ import com.abdussamadcodes.tutorsync.ui.account.PinLockActivity;
 import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
 import com.abdussamadcodes.tutorsync.ui.attendance.AttendanceBottomSheetFragment;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import com.abdussamadcodes.tutorsync.ui.finance.InvoiceListActivity;
 import com.abdussamadcodes.tutorsync.ui.onboarding.WelcomeActivity;
 import com.abdussamadcodes.tutorsync.ui.schedule.OccurrenceAdapter;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
@@ -34,6 +36,7 @@ public class MainActivity extends BaseActivity {
     private StudentRepository studentRepo;
     private SubjectRepository subjectRepo;
     private OccurrenceRepository occurrenceRepo;
+    private InvoiceRepository invoiceRepo;
     private OccurrenceAdapter occurrenceAdapter;
     private boolean isPinVerifiedThisSession = false;
     private static final String STATE_PIN_VERIFIED = "state_pin_verified";
@@ -51,6 +54,7 @@ public class MainActivity extends BaseActivity {
         studentRepo = new StudentRepository();
         subjectRepo = new SubjectRepository();
         occurrenceRepo = new OccurrenceRepository();
+        invoiceRepo = new InvoiceRepository();
 
         if (!sessionManager.hasActiveSession()) {
             startActivity(new Intent(this, SignInActivity.class));
@@ -130,7 +134,7 @@ public class MainActivity extends BaseActivity {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
-        // Fetch the account owner's name directly from the database for the greeting
+        // Fetch account name and update greeting dynamically based on active language
         String accountName = "Tutor";
         android.database.sqlite.SQLiteDatabase db = com.abdussamadcodes.tutorsync.database.DatabaseManager.getInstance().openDatabase();
         try (android.database.Cursor cursor = db.query(
@@ -153,19 +157,23 @@ public class MainActivity extends BaseActivity {
             binding.tvGreeting.setText("Hello, " + accountName + "!");
         }
 
-        java.util.List<com.abdussamadcodes.tutorsync.model.Student> students = studentRepo.getActiveStudentsForAccount(accountId);
-        java.util.List<com.abdussamadcodes.tutorsync.model.Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
+        List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
+        List<com.abdussamadcodes.tutorsync.model.Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
 
         binding.tvStudentCount.setText(String.valueOf(students.size()));
         binding.tvSubjectCount.setText(String.valueOf(subjects.size()));
 
-        java.util.List<com.abdussamadcodes.tutorsync.model.ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
+        // Wire up Revenue Metrics!
+        int totalRevenueMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
+        binding.tvRevenue.setText(String.format("৳ %.2f", totalRevenueMinor / 100.0));
+
+        List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
 
         // Group occurrences by student, start time, and duration
-        java.util.List<com.abdussamadcodes.tutorsync.model.OccurrenceGroup> groups = new java.util.ArrayList<>();
-        for (com.abdussamadcodes.tutorsync.model.ClassOccurrence occ : occurrences) {
+        List<OccurrenceGroup> groups = new ArrayList<>();
+        for (ClassOccurrence occ : occurrences) {
             boolean found = false;
-            for (com.abdussamadcodes.tutorsync.model.OccurrenceGroup g : groups) {
+            for (OccurrenceGroup g : groups) {
                 if (g.getStudentId().equals(occ.getStudentId()) &&
                         g.getStartTimeMinutes() == occ.getStartTimeMinutes() &&
                         g.getDurationMinutes() == occ.getDurationMinutes()) {
@@ -181,7 +189,7 @@ public class MainActivity extends BaseActivity {
                 }
             }
             if (!found) {
-                com.abdussamadcodes.tutorsync.model.OccurrenceGroup newGroup = new com.abdussamadcodes.tutorsync.model.OccurrenceGroup(occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
+                OccurrenceGroup newGroup = new OccurrenceGroup(occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
                 if (occ.getSubjectId() != null) newGroup.getSubjectIds().add(occ.getSubjectId());
                 newGroup.getOccurrenceIds().add(occ.getId());
                 groups.add(newGroup);
@@ -191,26 +199,26 @@ public class MainActivity extends BaseActivity {
         occurrenceAdapter.setData(groups, students, subjects);
 
         if (groups.isEmpty()) {
-            binding.tvEmptyUpcoming.setVisibility(android.view.View.VISIBLE);
-            binding.rvOccurrences.setVisibility(android.view.View.GONE);
+            binding.tvEmptyUpcoming.setVisibility(View.VISIBLE);
+            binding.rvOccurrences.setVisibility(View.GONE);
         } else {
-            binding.tvEmptyUpcoming.setVisibility(android.view.View.GONE);
-            binding.rvOccurrences.setVisibility(android.view.View.VISIBLE);
+            binding.tvEmptyUpcoming.setVisibility(View.GONE);
+            binding.rvOccurrences.setVisibility(View.VISIBLE);
         }
     }
 
     private void refreshStatusLabels() {
         String currentLang = appPreferences.getLanguageCode();
-        if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
+        if (com.abdussamadcodes.tutorsync.util.AppPreferences.LANG_BANGLA.equals(currentLang)) {
             binding.tvActiveLanguageValue.setText("বাংলা");
         } else {
             binding.tvActiveLanguageValue.setText("English");
         }
 
         String themeMode = appPreferences.getThemeMode();
-        if (AppPreferences.THEME_LIGHT.equals(themeMode)) {
+        if (com.abdussamadcodes.tutorsync.util.AppPreferences.THEME_LIGHT.equals(themeMode)) {
             binding.tvActiveThemeValue.setText(R.string.theme_light);
-        } else if (AppPreferences.THEME_DARK.equals(themeMode)) {
+        } else if (com.abdussamadcodes.tutorsync.util.AppPreferences.THEME_DARK.equals(themeMode)) {
             binding.tvActiveThemeValue.setText(R.string.theme_dark);
         } else {
             binding.tvActiveThemeValue.setText(R.string.theme_system);
@@ -240,6 +248,11 @@ public class MainActivity extends BaseActivity {
 
         binding.cardManageSchedules.setOnClickListener(v ->
                 startActivity(new Intent(this, com.abdussamadcodes.tutorsync.ui.schedule.ScheduleListActivity.class))
+        );
+
+        // ADDED: Launch Invoice list from Revenue card
+        binding.cardRevenue.setOnClickListener(v ->
+                startActivity(new Intent(this, InvoiceListActivity.class))
         );
 
         binding.btnOpenLanguageSettings.setOnClickListener(v -> startActivity(WelcomeActivity.createReopenIntent(this)));
