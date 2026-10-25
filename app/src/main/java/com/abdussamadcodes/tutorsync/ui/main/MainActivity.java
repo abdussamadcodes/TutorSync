@@ -130,19 +130,42 @@ public class MainActivity extends BaseActivity {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
-        List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
-        List<com.abdussamadcodes.tutorsync.model.Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
+        // Fetch the account owner's name directly from the database for the greeting
+        String accountName = "Tutor";
+        android.database.sqlite.SQLiteDatabase db = com.abdussamadcodes.tutorsync.database.DatabaseManager.getInstance().openDatabase();
+        try (android.database.Cursor cursor = db.query(
+                com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry.TABLE_NAME,
+                new String[]{com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry.COLUMN_FULL_NAME},
+                com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry.COLUMN_ID + " = ?",
+                new String[]{accountId}, null, null, null)) {
+            if (cursor.moveToFirst()) {
+                accountName = cursor.getString(0);
+            }
+        } catch (Exception ignored) {}
+        finally {
+            com.abdussamadcodes.tutorsync.database.DatabaseManager.getInstance().closeDatabase();
+        }
+
+        String currentLang = appPreferences.getLanguageCode();
+        if (com.abdussamadcodes.tutorsync.util.AppPreferences.LANG_BANGLA.equals(currentLang)) {
+            binding.tvGreeting.setText("হ্যালো, " + accountName + "!");
+        } else {
+            binding.tvGreeting.setText("Hello, " + accountName + "!");
+        }
+
+        java.util.List<com.abdussamadcodes.tutorsync.model.Student> students = studentRepo.getActiveStudentsForAccount(accountId);
+        java.util.List<com.abdussamadcodes.tutorsync.model.Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
 
         binding.tvStudentCount.setText(String.valueOf(students.size()));
         binding.tvSubjectCount.setText(String.valueOf(subjects.size()));
 
-        List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
+        java.util.List<com.abdussamadcodes.tutorsync.model.ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
 
         // Group occurrences by student, start time, and duration
-        List<OccurrenceGroup> groups = new ArrayList<>();
-        for (ClassOccurrence occ : occurrences) {
+        java.util.List<com.abdussamadcodes.tutorsync.model.OccurrenceGroup> groups = new java.util.ArrayList<>();
+        for (com.abdussamadcodes.tutorsync.model.ClassOccurrence occ : occurrences) {
             boolean found = false;
-            for (OccurrenceGroup g : groups) {
+            for (com.abdussamadcodes.tutorsync.model.OccurrenceGroup g : groups) {
                 if (g.getStudentId().equals(occ.getStudentId()) &&
                         g.getStartTimeMinutes() == occ.getStartTimeMinutes() &&
                         g.getDurationMinutes() == occ.getDurationMinutes()) {
@@ -158,7 +181,7 @@ public class MainActivity extends BaseActivity {
                 }
             }
             if (!found) {
-                OccurrenceGroup newGroup = new OccurrenceGroup(occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
+                com.abdussamadcodes.tutorsync.model.OccurrenceGroup newGroup = new com.abdussamadcodes.tutorsync.model.OccurrenceGroup(occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
                 if (occ.getSubjectId() != null) newGroup.getSubjectIds().add(occ.getSubjectId());
                 newGroup.getOccurrenceIds().add(occ.getId());
                 groups.add(newGroup);
@@ -168,18 +191,18 @@ public class MainActivity extends BaseActivity {
         occurrenceAdapter.setData(groups, students, subjects);
 
         if (groups.isEmpty()) {
-            binding.tvEmptyUpcoming.setVisibility(View.VISIBLE);
-            binding.rvOccurrences.setVisibility(View.GONE);
+            binding.tvEmptyUpcoming.setVisibility(android.view.View.VISIBLE);
+            binding.rvOccurrences.setVisibility(android.view.View.GONE);
         } else {
-            binding.tvEmptyUpcoming.setVisibility(View.GONE);
-            binding.rvOccurrences.setVisibility(View.VISIBLE);
+            binding.tvEmptyUpcoming.setVisibility(android.view.View.GONE);
+            binding.rvOccurrences.setVisibility(android.view.View.VISIBLE);
         }
     }
 
     private void refreshStatusLabels() {
         String currentLang = appPreferences.getLanguageCode();
         if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
-            binding.tvActiveLanguageValue.setText("‡¶¨‡¶æ‡¶Ç‡¶≤‡¶æ");
+            binding.tvActiveLanguageValue.setText("বাংলা");
         } else {
             binding.tvActiveLanguageValue.setText("English");
         }
