@@ -100,27 +100,39 @@ public class ScheduleListActivity extends BaseActivity {
         }
     }
 
-    private void showOptionsDialog(ScheduleGroup group) {
-        String[] options = {
-                getString(R.string.dialog_edit_schedule_group),
-                getString(R.string.dialog_delete_entire_group)
-        };
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.dialog_manage_schedule)
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
-                        Intent intent = new Intent(this, ScheduleFormActivity.class);
-                        intent.putExtra("edit_student_id", group.getStudentId());
-                        intent.putStringArrayListExtra("edit_subject_ids", new ArrayList<>(group.getSubjectIds()));
-                        intent.putExtra("edit_start_time", group.getStartTimeMinutes());
-                        intent.putExtra("edit_duration", group.getDurationMinutes());
-                        intent.putIntegerArrayListExtra("edit_days", new ArrayList<>(group.getDaysOfWeek()));
-                        intent.putStringArrayListExtra("edit_schedule_ids", new ArrayList<>(group.getScheduleIds()));
-                        startActivity(intent);
-                    } else {
-                        showDeleteDialog(group);
-                    }
-                }).show();
+    private void showOptionsDialog(com.abdussamadcodes.tutorsync.model.ScheduleGroup group) {
+        com.google.android.material.bottomsheet.BottomSheetDialog bottomSheet = new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        android.view.View view = getLayoutInflater().inflate(R.layout.bottom_sheet_schedule_options, null);
+        bottomSheet.setContentView(view);
+
+        view.findViewById(R.id.btnEditSchedule).setOnClickListener(v -> {
+            bottomSheet.dismiss();
+            android.content.Intent intent = new android.content.Intent(this, ScheduleFormActivity.class);
+            intent.putExtra("edit_student_id", group.getStudentId());
+            intent.putStringArrayListExtra("edit_subject_ids", new java.util.ArrayList<>(group.getSubjectIds()));
+            intent.putExtra("edit_start_time", group.getStartTimeMinutes());
+            intent.putExtra("edit_duration", group.getDurationMinutes());
+            intent.putIntegerArrayListExtra("edit_days", new java.util.ArrayList<>(group.getDaysOfWeek()));
+            intent.putStringArrayListExtra("edit_schedule_ids", new java.util.ArrayList<>(group.getScheduleIds()));
+            startActivity(intent);
+        });
+
+        view.findViewById(R.id.btnDeleteSchedule).setOnClickListener(v -> {
+            bottomSheet.dismiss();
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.dialog_delete_group_title)
+                    .setMessage(R.string.dialog_delete_group_msg)
+                    .setPositiveButton(R.string.dialog_delete, (dialog, which) -> {
+                        for (String id : group.getScheduleIds()) {
+                            scheduleRepo.deleteScheduleSafely(id);
+                        }
+                        loadData();
+                    })
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .show();
+        });
+
+        bottomSheet.show();
     }
 
     private void showDeleteDialog(ScheduleGroup group) {

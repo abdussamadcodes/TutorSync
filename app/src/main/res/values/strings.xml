@@ -156,4 +156,5 @@
     <string name="occurrence_rule_today">Today at %1$s (%2$d mins)</string>
     <string name="unknown_student">Unknown Student</string>
     <string name="unknown_subject">Unknown Subject</string>
+    <string name="dialog_edit_student_profile">Edit Student Profile</string>
 </resources>

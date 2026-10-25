@@ -156,4 +156,5 @@
     <string name="occurrence_rule_today">আজ %1$s-এ (%2$d মিনিট)</string>
     <string name="unknown_student">অজানা শিক্ষার্থী</string>
     <string name="unknown_subject">অজানা বিষয়</string>
+    <string name="dialog_edit_student_profile">শিক্ষার্থীর প্রোফাইল এডিট করুন</string>
 </resources>

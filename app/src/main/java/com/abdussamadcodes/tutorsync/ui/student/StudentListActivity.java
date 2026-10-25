@@ -3,6 +3,7 @@ package com.abdussamadcodes.tutorsync.ui.student;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -17,6 +18,8 @@ import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectAdapter;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import java.util.List;
 
 public class StudentListActivity extends BaseActivity {
@@ -70,33 +73,40 @@ public class StudentListActivity extends BaseActivity {
     }
 
     private void showStudentOptionsDialog(Student student) {
-        String[] options = {
-                "Edit Student Profile",
-                getString(R.string.dialog_manage_enrollments),
-                getString(R.string.dialog_delete_student)
-        };
-        new AlertDialog.Builder(this)
-                .setTitle(student.getName())
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
-                        Intent intent = new Intent(this, StudentFormActivity.class);
-                        intent.putExtra("student_id", student.getId());
-                        startActivity(intent);
-                    } else if (which == 1) {
-                        showEnrollmentDialog(student);
-                    } else {
-                        new AlertDialog.Builder(this)
-                                .setTitle(R.string.dialog_delete_student_title)
-                                .setMessage(R.string.dialog_delete_student_msg)
-                                .setPositiveButton(R.string.dialog_delete, (d, w) -> {
-                                    if (studentRepo.deleteStudent(student.getId())) {
-                                        loadStudents();
-                                    }
-                                })
-                                .setNegativeButton(R.string.action_cancel, null)
-                                .show();
-                    }
-                }).show();
+        BottomSheetDialog bottomSheet = new BottomSheetDialog(this);
+        View view = getLayoutInflater().inflate(R.layout.bottom_sheet_student_options, null);
+        bottomSheet.setContentView(view);
+
+        TextView tvName = view.findViewById(R.id.tvStudentName);
+        tvName.setText(student.getName());
+
+        view.findViewById(R.id.btnEditProfile).setOnClickListener(v -> {
+            bottomSheet.dismiss();
+            Intent intent = new Intent(this, StudentFormActivity.class);
+            intent.putExtra("student_id", student.getId());
+            startActivity(intent);
+        });
+
+        view.findViewById(R.id.btnManageEnrollments).setOnClickListener(v -> {
+            bottomSheet.dismiss();
+            showEnrollmentDialog(student);
+        });
+
+        view.findViewById(R.id.btnDeleteStudent).setOnClickListener(v -> {
+            bottomSheet.dismiss();
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.dialog_delete_student_title)
+                    .setMessage(R.string.dialog_delete_student_msg)
+                    .setPositiveButton(R.string.dialog_delete, (d, w) -> {
+                        if (studentRepo.deleteStudent(student.getId())) {
+                            loadStudents();
+                        }
+                    })
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .show();
+        });
+
+        bottomSheet.show();
     }
 
     private void showEnrollmentDialog(Student student) {
@@ -105,7 +115,9 @@ public class StudentListActivity extends BaseActivity {
         List<String> enrolledIds = enrollmentRepo.getEnrolledSubjectIdsForStudent(student.getId());
 
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_enroll_subject, null);
-        AlertDialog dialog = new AlertDialog.Builder(this).setView(dialogView).create();
+
+        // Upgrade to Material 3 Dialog
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(dialogView).create();
         dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
         RecyclerView rvAvailableSubjects = dialogView.findViewById(R.id.rvAvailableSubjects);

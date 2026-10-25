@@ -34,7 +34,7 @@ public class SubjectListActivity extends BaseActivity {
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
         adapter = new SubjectAdapter(subject -> {
-            new AlertDialog.Builder(this)
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_delete_subject_title)
                     .setMessage(getString(R.string.dialog_delete_subject_msg, subject.getTitle()))
                     .setPositiveButton(R.string.dialog_delete, (dialog, which) -> {

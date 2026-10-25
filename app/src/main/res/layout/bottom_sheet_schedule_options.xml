@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/dialog_manage_schedule"
+        android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
+
+    <LinearLayout
+        android:id="@+id/btnEditSchedule"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:paddingVertical="16dp">
+        <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_edit" app:tint="?attr/colorOnSurface"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/dialog_edit_schedule_group" android:layout_marginStart="16dp" android:textSize="16sp" android:textColor="?attr/colorOnSurface"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/btnDeleteSchedule"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:paddingVertical="16dp">
+        <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_delete" app:tint="?attr/colorError"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/dialog_delete_entire_group" android:layout_marginStart="16dp" android:textSize="16sp" android:textColor="?attr/colorError"/>
+    </LinearLayout>
+</LinearLayout>
