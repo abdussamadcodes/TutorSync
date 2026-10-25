@@ -1,6 +1,7 @@
 package com.abdussamadcodes.tutorsync.ui.student;
 
 import android.os.Bundle;
+import android.view.View;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.databinding.ActivityStudentFormBinding;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -33,6 +34,10 @@ public class StudentFormActivity extends BaseActivity {
             binding.toolbar.setTitle("Edit Student");
             binding.btnSave.setText("Update Student");
             loadExistingStudentData();
+        } else {
+            // Hide the ID field completely for new students (it's auto-generated)
+            binding.etStudentId.setVisibility(View.GONE);
+            ((View)binding.etStudentId.getParent().getParent()).setVisibility(View.GONE);
         }
 
         binding.btnSave.setOnClickListener(v -> saveStudent());
@@ -53,7 +58,6 @@ public class StudentFormActivity extends BaseActivity {
     }
 
     private void saveStudent() {
-        // Safe extraction to prevent NullPointerException warnings
         String name = binding.etName.getText() != null ? binding.etName.getText().toString().trim() : "";
         if (name.isEmpty()) {
             binding.etName.setError("Name is required");
@@ -61,6 +65,7 @@ public class StudentFormActivity extends BaseActivity {
         }
 
         String accountId = sessionManager.getActiveAccountId();
+        // displayId is ignored on insert (auto-generated) and ignored on update (permanent)
         String displayId = binding.etStudentId.getText() != null ? binding.etStudentId.getText().toString().trim() : "";
         String grade = binding.etGrade.getText() != null ? binding.etGrade.getText().toString().trim() : "";
         String school = binding.etSchool.getText() != null ? binding.etSchool.getText().toString().trim() : "";
@@ -77,13 +82,13 @@ public class StudentFormActivity extends BaseActivity {
                 showMessage(binding.getRoot(), "Failed to update student");
             }
         } else {
-            Student student = new Student(UUID.randomUUID().toString(), accountId, displayId, name, grade, school, guardianName, guardianPhone, address, true);
+            Student student = new Student(UUID.randomUUID().toString(), accountId, null, name, grade, school, guardianName, guardianPhone, address, true);
             int result = repository.insertStudent(student);
             if (result == 1) {
                 showMessage(binding.getRoot(), "Student added successfully");
                 finish();
             } else {
-                showMessage(binding.getRoot(), "Failed to add student. Ensure ID is unique.");
+                showMessage(binding.getRoot(), "Failed to add student.");
             }
         }
     }

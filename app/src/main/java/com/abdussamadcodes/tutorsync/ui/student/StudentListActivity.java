@@ -68,6 +68,10 @@ public class StudentListActivity extends BaseActivity {
     private void loadStudents() {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
+
+        // Ensure all legacy students have an ID before loading
+        studentRepo.migrateLegacyStudentIds(accountId);
+
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
         adapter.setStudents(students);
         if (students.isEmpty()) {
