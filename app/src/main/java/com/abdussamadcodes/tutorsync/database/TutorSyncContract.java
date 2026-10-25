@@ -119,6 +119,8 @@ public final class TutorSyncContract {
         public static final String COLUMN_ID = "id";
         public static final String COLUMN_ACCOUNT_ID = "account_id";
         public static final String COLUMN_STUDENT_ID = "student_id";
+        // NEW COLUMN added for Phase 6 upgrade
+        public static final String COLUMN_INVOICE_ID_DISPLAY = "invoice_id_display";
         public static final String COLUMN_BILLING_PERIOD = "billing_period";
         public static final String COLUMN_TOTAL_AMOUNT = "total_amount";
         public static final String COLUMN_PAID_AMOUNT = "paid_amount";

@@ -1,6 +1,7 @@
 package com.abdussamadcodes.tutorsync.model;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 public class Invoice {
     public static final String STATUS_UNPAID = "UNPAID";
@@ -10,6 +11,7 @@ public class Invoice {
     private final String id;
     private final String accountId;
     private final String studentId;
+    private final String invoiceIdDisplay; // NEW
     private final String billingPeriod;
     private final int totalAmount;
     private final int paidAmount;
@@ -18,11 +20,12 @@ public class Invoice {
     private final long createdAt;
 
     public Invoice(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
-                   @NonNull String billingPeriod, int totalAmount, int paidAmount,
+                   @Nullable String invoiceIdDisplay, @NonNull String billingPeriod, int totalAmount, int paidAmount,
                    @NonNull String status, long dueDate, long createdAt) {
         this.id = id;
         this.accountId = accountId;
         this.studentId = studentId;
+        this.invoiceIdDisplay = invoiceIdDisplay;
         this.billingPeriod = billingPeriod;
         this.totalAmount = totalAmount;
         this.paidAmount = paidAmount;
@@ -34,6 +37,7 @@ public class Invoice {
     @NonNull public String getId() { return id; }
     @NonNull public String getAccountId() { return accountId; }
     @NonNull public String getStudentId() { return studentId; }
+    @Nullable public String getInvoiceIdDisplay() { return invoiceIdDisplay; } // NEW
     @NonNull public String getBillingPeriod() { return billingPeriod; }
     public int getTotalAmount() { return totalAmount; }
     public int getPaidAmount() { return paidAmount; }

@@ -130,6 +130,7 @@ public class InvoiceListActivity extends BaseActivity {
                     UUID.randomUUID().toString(),
                     accountId,
                     student.getId(),
+                    null, // NEW: pass null for invoiceIdDisplay so the repository auto-generates it
                     currentMonth,
                     totalAmountMinor,
                     0,

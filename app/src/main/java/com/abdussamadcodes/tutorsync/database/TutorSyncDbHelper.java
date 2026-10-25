@@ -146,6 +146,7 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                     TutorSyncContract.InvoiceEntry.COLUMN_ID + " TEXT PRIMARY KEY, " +
                     TutorSyncContract.InvoiceEntry.COLUMN_ACCOUNT_ID + " TEXT NOT NULL, " +
                     TutorSyncContract.InvoiceEntry.COLUMN_STUDENT_ID + " TEXT NOT NULL, " +
+                    TutorSyncContract.InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " TEXT, " + // NEW
                     TutorSyncContract.InvoiceEntry.COLUMN_BILLING_PERIOD + " TEXT NOT NULL, " +
                     TutorSyncContract.InvoiceEntry.COLUMN_TOTAL_AMOUNT + " INTEGER NOT NULL, " +
                     TutorSyncContract.InvoiceEntry.COLUMN_PAID_AMOUNT + " INTEGER NOT NULL DEFAULT 0, " +
@@ -169,8 +170,10 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                     TutorSyncContract.AccountEntry.TABLE_NAME + "(" + TutorSyncContract.AccountEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
                     "FOREIGN KEY(" + TutorSyncContract.PaymentEntry.COLUMN_INVOICE_ID + ") REFERENCES " +
                     TutorSyncContract.InvoiceEntry.TABLE_NAME + "(" + TutorSyncContract.InvoiceEntry.COLUMN_ID + ") ON DELETE CASCADE)";
+
     public TutorSyncDbHelper(Context context) {
-        super(context, TutorSyncContract.DATABASE_NAME, null, TutorSyncContract.DATABASE_VERSION);
+        // Updated Version to 4
+        super(context, TutorSyncContract.DATABASE_NAME, null, 4);
     }
 
     @Override
@@ -205,6 +208,11 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
             db.execSQL(SQL_CREATE_FEE_AGREEMENTS);
             db.execSQL(SQL_CREATE_INVOICES);
             db.execSQL(SQL_CREATE_PAYMENTS);
+        }
+        // Migration to add invoice_id_display
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE " + TutorSyncContract.InvoiceEntry.TABLE_NAME +
+                    " ADD COLUMN " + TutorSyncContract.InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " TEXT");
         }
     }
 }
