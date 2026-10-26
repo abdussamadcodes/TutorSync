@@ -96,6 +96,24 @@ public class LocalAccountStore {
 
             return db.update(AccountEntry.TABLE_NAME, values,
                     AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}) > 0;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
+    public boolean updateProfilePicPath(@NonNull String accountId, @Nullable String profilePicPath) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            ContentValues values = new ContentValues();
+            values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, profilePicPath);
+            values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+
+            return db.update(AccountEntry.TABLE_NAME, values,
+                    AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}) > 0;
+        } catch (Exception e) {
+            return false;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }

@@ -1,6 +1,7 @@
 package com.abdussamadcodes.tutorsync.ui.main;
 
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
@@ -10,11 +11,13 @@ import android.text.InputType;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
+import androidx.core.widget.ImageViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.abdussamadcodes.tutorsync.R;
@@ -61,6 +64,13 @@ public class MainActivity extends BaseActivity {
     private InvoiceRepository invoiceRepo;
     private OccurrenceAdapter occurrenceAdapter;
 
+    private int defaultSettingsPicPaddingLeft;
+    private int defaultSettingsPicPaddingTop;
+    private int defaultSettingsPicPaddingRight;
+    private int defaultSettingsPicPaddingBottom;
+    private ImageView.ScaleType defaultSettingsPicScaleType;
+    private ColorStateList defaultSettingsPicTintList;
+
     private final ActivityResultLauncher<String> exportBackupLauncher =
             registerForActivityResult(new ActivityResultContracts.CreateDocument("application/json"), this::onExportBackupUriSelected);
 
@@ -87,6 +97,13 @@ public class MainActivity extends BaseActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         applySystemBarInsets(binding.mainRoot);
+
+        defaultSettingsPicPaddingLeft = binding.ivSettingsProfilePic.getPaddingLeft();
+        defaultSettingsPicPaddingTop = binding.ivSettingsProfilePic.getPaddingTop();
+        defaultSettingsPicPaddingRight = binding.ivSettingsProfilePic.getPaddingRight();
+        defaultSettingsPicPaddingBottom = binding.ivSettingsProfilePic.getPaddingBottom();
+        defaultSettingsPicScaleType = binding.ivSettingsProfilePic.getScaleType();
+        defaultSettingsPicTintList = ImageViewCompat.getImageTintList(binding.ivSettingsProfilePic);
 
         setupUI();
         setupListeners();
@@ -168,17 +185,32 @@ public class MainActivity extends BaseActivity {
             boolean loadedPic = false;
             if (picPath != null && !picPath.isEmpty()) {
                 File f = new File(picPath);
-                if (f.exists()) {
+                if (f.exists() && f.length() > 0) {
                     Bitmap bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
                     if (bmp != null) {
-                        binding.ivSettingsProfilePic.setImageTintList(null);
+                        binding.ivSettingsProfilePic.setImageDrawable(null);
+                        ImageViewCompat.setImageTintList(binding.ivSettingsProfilePic, null);
+                        binding.ivSettingsProfilePic.clearColorFilter();
+                        binding.ivSettingsProfilePic.setPadding(0, 0, 0, 0);
+                        binding.ivSettingsProfilePic.setScaleType(ImageView.ScaleType.CENTER_CROP);
                         binding.ivSettingsProfilePic.setImageBitmap(bmp);
                         loadedPic = true;
                     }
                 }
             }
             if (!loadedPic) {
+                binding.ivSettingsProfilePic.setImageBitmap(null);
+                binding.ivSettingsProfilePic.setPadding(
+                        defaultSettingsPicPaddingLeft,
+                        defaultSettingsPicPaddingTop,
+                        defaultSettingsPicPaddingRight,
+                        defaultSettingsPicPaddingBottom
+                );
+                binding.ivSettingsProfilePic.setScaleType(
+                        defaultSettingsPicScaleType != null ? defaultSettingsPicScaleType : ImageView.ScaleType.CENTER_INSIDE
+                );
                 binding.ivSettingsProfilePic.setImageResource(R.drawable.ic_tutor_logo);
+                ImageViewCompat.setImageTintList(binding.ivSettingsProfilePic, defaultSettingsPicTintList);
             }
         }
 
@@ -298,9 +330,10 @@ public class MainActivity extends BaseActivity {
 
         // Local Backup & Restore
         binding.btnExportBackup.setOnClickListener(v -> startBackupExport());
-        binding.btnImportBackup.setOnClickListener(v ->
-                importBackupLauncher.launch(new String[]{"application/json", "application/octet-stream", "*/*"})
-        );
+        binding.btnImportBackup.setOnClickListener(v -> {
+            AppLockManager.getInstance().markExternalFlowStarted();
+            importBackupLauncher.launch(new String[]{"application/json", "application/octet-stream", "*/*"});
+        });
 
         binding.btnOpenLanguageSettings.setOnClickListener(v -> startActivity(WelcomeActivity.createReopenIntent(this)));
 
@@ -409,6 +442,7 @@ public class MainActivity extends BaseActivity {
         String username = account != null ? account.getUsername() : "account";
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(new Date());
         String filename = "tutorsync_backup_" + username + "_" + timestamp + ".json";
+        AppLockManager.getInstance().markExternalFlowStarted();
         exportBackupLauncher.launch(filename);
     }
 

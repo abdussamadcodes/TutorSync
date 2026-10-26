@@ -6,7 +6,7 @@ public final class TutorSyncContract {
     private TutorSyncContract() {}
 
     public static final String DATABASE_NAME = "tutorsync.db";
-    public static final int DATABASE_VERSION = 5;
+    public static final int DATABASE_VERSION = 6;
 
     public static class ScheduleFeeHistoryEntry implements BaseColumns {
         public static final String TABLE_NAME = "schedule_fee_history";

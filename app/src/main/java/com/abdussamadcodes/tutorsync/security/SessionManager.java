@@ -8,6 +8,9 @@ import androidx.annotation.Nullable;
 public class SessionManager {
     private static final String PREF_NAME = "tutorsync_session";
     private static final String KEY_ACTIVE_ACCOUNT_ID = "active_account_id";
+    private static final String KEY_SESSION_UNLOCKED = "session_unlocked";
+    private static final String KEY_LAST_BACKGROUND_TS = "last_background_ts";
+    private static final String KEY_EXTERNAL_FLOW_TS = "external_flow_ts";
     public static final String PIN_SALT_BASE64 = "VHV0b3JTeW5jUGluU2FsdA==";
 
     private final SharedPreferences prefs;
@@ -17,11 +20,21 @@ public class SessionManager {
     }
 
     public void login(@NonNull String accountId) {
-        prefs.edit().putString(KEY_ACTIVE_ACCOUNT_ID, accountId).apply();
+        prefs.edit()
+                .putString(KEY_ACTIVE_ACCOUNT_ID, accountId)
+                .putBoolean(KEY_SESSION_UNLOCKED, true)
+                .putLong(KEY_LAST_BACKGROUND_TS, 0L)
+                .putLong(KEY_EXTERNAL_FLOW_TS, 0L)
+                .apply();
     }
 
     public void logout() {
-        prefs.edit().remove(KEY_ACTIVE_ACCOUNT_ID).apply();
+        prefs.edit()
+                .remove(KEY_ACTIVE_ACCOUNT_ID)
+                .putBoolean(KEY_SESSION_UNLOCKED, false)
+                .putLong(KEY_LAST_BACKGROUND_TS, 0L)
+                .putLong(KEY_EXTERNAL_FLOW_TS, 0L)
+                .apply();
     }
 
     public boolean hasActiveSession() {
@@ -83,5 +96,29 @@ public class SessionManager {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public void setSessionUnlockedState(boolean unlocked) {
+        prefs.edit().putBoolean(KEY_SESSION_UNLOCKED, unlocked).apply();
+    }
+
+    public boolean isSessionUnlockedState() {
+        return prefs.getBoolean(KEY_SESSION_UNLOCKED, false);
+    }
+
+    public void setLastBackgroundTimestamp(long timestampMillis) {
+        prefs.edit().putLong(KEY_LAST_BACKGROUND_TS, timestampMillis).apply();
+    }
+
+    public long getLastBackgroundTimestamp() {
+        return prefs.getLong(KEY_LAST_BACKGROUND_TS, 0L);
+    }
+
+    public void setExternalFlowTimestamp(long timestampMillis) {
+        prefs.edit().putLong(KEY_EXTERNAL_FLOW_TS, timestampMillis).apply();
+    }
+
+    public long getExternalFlowTimestamp() {
+        return prefs.getLong(KEY_EXTERNAL_FLOW_TS, 0L);
     }
 }
