@@ -8,6 +8,20 @@ public final class TutorSyncContract {
     public static final String DATABASE_NAME = "tutorsync.db";
     public static final int DATABASE_VERSION = 5;
 
+    public static class ScheduleFeeHistoryEntry implements BaseColumns {
+        public static final String TABLE_NAME = "schedule_fee_history";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_SCHEDULE_GROUP_ID = "schedule_group_id";
+        public static final String COLUMN_BILLING_MODEL = "billing_model";
+        public static final String COLUMN_FEE_AMOUNT_MINOR = "fee_amount_minor";
+        public static final String COLUMN_ANCHOR_DAY = "anchor_day";
+        public static final String COLUMN_EFFECTIVE_FROM = "effective_from";
+        public static final String COLUMN_EFFECTIVE_TO = "effective_to";
+        public static final String COLUMN_CREATED_AT = "created_at";
+    }
+
     public static class AccountEntry implements BaseColumns {
         public static final String TABLE_NAME = "accounts";
         public static final String COLUMN_ID = "id";
@@ -15,6 +29,11 @@ public final class TutorSyncContract {
         public static final String COLUMN_USERNAME = "username_normalized";
         public static final String COLUMN_PASSWORD_HASH = "password_hash";
         public static final String COLUMN_SALT = "salt";
+        public static final String COLUMN_PHONE = "phone";
+        public static final String COLUMN_EMAIL = "email";
+        public static final String COLUMN_ADDRESS = "address";
+        public static final String COLUMN_DOB = "dob";
+        public static final String COLUMN_PROFILE_PIC_PATH = "profile_pic_path";
         public static final String COLUMN_SYNC_STATUS = "sync_status";
         public static final String COLUMN_SYNC_VERSION = "sync_version";
         public static final String COLUMN_IS_DELETED = "is_deleted";
@@ -69,23 +88,11 @@ public final class TutorSyncContract {
         public static final String COLUMN_DURATION_MINUTES = "duration_minutes";
         public static final String COLUMN_START_DATE = "start_date";
         public static final String COLUMN_END_DATE = "end_date";
-        public static final String COLUMN_BILLING_MODEL = "billing_model"; // MONTHLY or PER_CLASS
-        public static final String COLUMN_FEE_AMOUNT_MINOR = "fee_amount_minor";
-        public static final String COLUMN_ANCHOR_DAY = "anchor_day"; // 1..31 for anniversary cycle
-        public static final String COLUMN_IS_ACTIVE = "is_active";
-        public static final String COLUMN_UPDATED_AT = "updated_at";
-    }
-
-    public static class ScheduleFeeHistoryEntry implements BaseColumns {
-        public static final String TABLE_NAME = "schedule_fee_history";
-        public static final String COLUMN_ID = "id";
-        public static final String COLUMN_ACCOUNT_ID = "account_id";
-        public static final String COLUMN_SCHEDULE_GROUP_ID = "schedule_group_id";
         public static final String COLUMN_BILLING_MODEL = "billing_model";
         public static final String COLUMN_FEE_AMOUNT_MINOR = "fee_amount_minor";
-        public static final String COLUMN_EFFECTIVE_FROM = "effective_from";
-        public static final String COLUMN_EFFECTIVE_TO = "effective_to"; // NULL if current
-        public static final String COLUMN_CREATED_AT = "created_at";
+        public static final String COLUMN_ANCHOR_DAY = "anchor_day";
+        public static final String COLUMN_IS_ACTIVE = "is_active";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
     }
 
     public static class OccurrenceEntry implements BaseColumns {
@@ -107,9 +114,7 @@ public final class TutorSyncContract {
         public static final String COLUMN_ID = "id";
         public static final String COLUMN_ACCOUNT_ID = "account_id";
         public static final String COLUMN_OCCURRENCE_ID = "occurrence_id";
-        // PRESENT, STUDENT_ABSENT, TUTOR_ABSENT, CANCELLED_BY_STUDENT, CANCELLED_BY_TUTOR, RESCHEDULED
         public static final String COLUMN_STATUS = "status";
-        // CHARGE, WAIVE, PENDING, INCLUDED_IN_MONTHLY
         public static final String COLUMN_CHARGE_DECISION = "charge_decision";
         public static final String COLUMN_APPLICABLE_FEE_MINOR = "applicable_fee_minor";
         public static final String COLUMN_NEEDS_RESCHEDULE = "needs_reschedule";
@@ -145,7 +150,7 @@ public final class TutorSyncContract {
         public static final String COLUMN_ID = "id";
         public static final String COLUMN_ACCOUNT_ID = "account_id";
         public static final String COLUMN_STUDENT_ID = "student_id";
-        public static final String COLUMN_INVOICE_ID_DISPLAY = "invoice_id_display"; // TS-2026-000001
+        public static final String COLUMN_INVOICE_ID_DISPLAY = "invoice_id_display";
         public static final String COLUMN_BILLING_PERIOD = "billing_period";
         public static final String COLUMN_PERIOD_START = "period_start";
         public static final String COLUMN_PERIOD_END = "period_end";
@@ -153,9 +158,9 @@ public final class TutorSyncContract {
         public static final String COLUMN_DUE_DATE = "due_date";
         public static final String COLUMN_SUBTOTAL_MINOR = "subtotal_minor";
         public static final String COLUMN_DISCOUNT_MINOR = "discount_minor";
-        public static final String COLUMN_TOTAL_AMOUNT = "total_amount"; // Final payable minor units
-        public static final String COLUMN_PAID_AMOUNT = "paid_amount";   // Legacy mirror, calculated dynamically
-        public static final String COLUMN_STATUS = "status";             // Legacy mirror, calculated dynamically
+        public static final String COLUMN_TOTAL_AMOUNT = "total_amount";
+        public static final String COLUMN_PAID_AMOUNT = "paid_amount";
+        public static final String COLUMN_STATUS = "status";
         public static final String COLUMN_NOTES = "notes";
         public static final String COLUMN_IS_VOID = "is_void";
         public static final String COLUMN_CREATED_AT = "created_at";
@@ -177,34 +182,6 @@ public final class TutorSyncContract {
         public static final String COLUMN_CREATED_AT = "created_at";
     }
 
-    public static class TransactionEntry implements BaseColumns {
-        public static final String TABLE_NAME = "financial_transactions";
-        public static final String COLUMN_ID = "id";
-        public static final String COLUMN_ACCOUNT_ID = "account_id";
-        public static final String COLUMN_STUDENT_ID = "student_id";
-        public static final String COLUMN_TXN_ID_DISPLAY = "txn_id_display"; // TXN-2026-000001
-        public static final String COLUMN_TYPE = "type"; // PAYMENT, REFUND
-        public static final String COLUMN_AMOUNT_MINOR = "amount_minor"; // Always > 0
-        public static final String COLUMN_TIMESTAMP = "timestamp";
-        public static final String COLUMN_METHOD = "method"; // Cash, bKash, Nagad, Bank Transfer
-        public static final String COLUMN_REFERENCE_NO = "reference_no";
-        public static final String COLUMN_NOTES = "notes";
-        public static final String COLUMN_PARENT_TXN_ID = "parent_txn_id"; // For refunds/reversals
-        public static final String COLUMN_IS_REVERSED = "is_reversed";
-        public static final String COLUMN_CREATED_AT = "created_at";
-    }
-
-    public static class PaymentAllocationEntry implements BaseColumns {
-        public static final String TABLE_NAME = "payment_allocations";
-        public static final String COLUMN_ID = "id";
-        public static final String COLUMN_ACCOUNT_ID = "account_id";
-        public static final String COLUMN_TRANSACTION_ID = "transaction_id";
-        public static final String COLUMN_INVOICE_ID = "invoice_id";
-        // Positive for PAYMENT allocation, Negative for REFUND/REVERSAL de-allocation
-        public static final String COLUMN_ALLOCATED_MINOR = "allocated_minor";
-        public static final String COLUMN_CREATED_AT = "created_at";
-    }
-
     public static class PaymentEntry implements BaseColumns {
         public static final String TABLE_NAME = "payments";
         public static final String COLUMN_ID = "id";
@@ -215,12 +192,39 @@ public final class TutorSyncContract {
         public static final String COLUMN_METHOD = "method";
     }
 
-    public static class AuditLogEntry implements BaseColumns {
-        public static final String TABLE_NAME = "financial_audit_logs";
+    public static class TransactionEntry implements BaseColumns {
+        public static final String TABLE_NAME = "financial_transactions";
         public static final String COLUMN_ID = "id";
         public static final String COLUMN_ACCOUNT_ID = "account_id";
         public static final String COLUMN_STUDENT_ID = "student_id";
-        public static final String COLUMN_ENTITY_TYPE = "entity_type"; // SCHEDULE_FEE, INVOICE, TRANSACTION
+        public static final String COLUMN_TXN_ID_DISPLAY = "txn_id_display";
+        public static final String COLUMN_TYPE = "type";
+        public static final String COLUMN_AMOUNT_MINOR = "amount_minor";
+        public static final String COLUMN_TIMESTAMP = "timestamp";
+        public static final String COLUMN_METHOD = "method";
+        public static final String COLUMN_REFERENCE_NO = "reference_no";
+        public static final String COLUMN_NOTES = "notes";
+        public static final String COLUMN_PARENT_TXN_ID = "parent_txn_id";
+        public static final String COLUMN_IS_REVERSED = "is_reversed";
+        public static final String COLUMN_CREATED_AT = "created_at";
+    }
+
+    public static class PaymentAllocationEntry implements BaseColumns {
+        public static final String TABLE_NAME = "payment_allocations";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_TRANSACTION_ID = "transaction_id";
+        public static final String COLUMN_INVOICE_ID = "invoice_id";
+        public static final String COLUMN_ALLOCATED_MINOR = "allocated_minor";
+        public static final String COLUMN_CREATED_AT = "created_at";
+    }
+
+    public static class AuditLogEntry implements BaseColumns {
+        public static final String TABLE_NAME = "audit_logs";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_STUDENT_ID = "student_id";
+        public static final String COLUMN_ENTITY_TYPE = "entity_type";
         public static final String COLUMN_ENTITY_ID = "entity_id";
         public static final String COLUMN_ACTION = "action";
         public static final String COLUMN_DETAILS = "details";

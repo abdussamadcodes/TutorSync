@@ -245,4 +245,48 @@
     <string name="ledger_btn_pay_multi">Record Payment Across Open Invoices</string>
     <string name="ledger_tap_to_open">[Tap to Open]</string>
     <string name="ledger_tap_for_receipt">[Tap for Receipt / Refund]</string>
+
+    <!-- Tutor Profile -->
+    <string name="profile_title">Tutor Profile</string>
+    <string name="profile_edit_action">Edit</string>
+    <string name="profile_tap_to_edit">Tap to view or edit profile details</string>
+    <string name="profile_change_photo">Select Photo</string>
+    <string name="profile_remove_photo">Remove</string>
+    <string name="profile_name_required_hint">Full Name *</string>
+    <string name="profile_phone_hint">Phone Number (Optional)</string>
+    <string name="profile_email_hint">Email Address (Optional)</string>
+    <string name="profile_dob_hint">Date of Birth (Optional)</string>
+    <string name="profile_address_hint">Address (Optional)</string>
+    <string name="profile_err_name_required">Name is required</string>
+    <string name="profile_photo_error">Unable to load selected image</string>
+    <string name="profile_save_failed">Failed to update profile</string>
+
+    <!-- App Lock -->
+    <string name="settings_section_security">Security</string>
+    <string name="settings_app_lock">App Lock</string>
+    <string name="app_lock_configure">Configure</string>
+    <string name="app_lock_status_off">Off</string>
+    <string name="app_lock_status_pin">PIN</string>
+    <string name="app_lock_status_pin_bio">PIN &amp; Biometric</string>
+    <string name="app_lock_current_pin_hint">Current PIN</string>
+    <string name="app_lock_new_pin_hint">New PIN (4–6 digits)</string>
+    <string name="app_lock_enable_biometric">Unlock with Biometrics (Fingerprint)</string>
+    <string name="app_lock_disable_action">Disable Lock</string>
+    <string name="app_lock_pin_length_err">Please enter a 4 to 6 digit PIN</string>
+    <string name="app_lock_incorrect_pin">Incorrect PIN</string>
+    <string name="app_lock_saved_msg">App Lock settings updated</string>
+    <string name="app_lock_disabled_msg">App Lock disabled</string>
+    <string name="app_lock_biometric_title">TutorSync Locked</string>
+    <string name="app_lock_biometric_subtitle">Authenticate with biometrics or cancel to use PIN</string>
+
+    <!-- Local Backup & Restore -->
+    <string name="settings_section_backup">Local Backup &amp; Restore</string>
+    <string name="backup_export_action">Export Account Backup (.json)</string>
+    <string name="backup_import_action">Restore from Backup File</string>
+    <string name="backup_export_success">Backup exported successfully!</string>
+    <string name="backup_export_failed">Failed to export backup.</string>
+    <string name="backup_import_confirm_title">Restore Backup?</string>
+    <string name="backup_import_confirm_msg">This will safely merge records from the backup into your current account without overwriting existing records or creating duplicates.</string>
+    <string name="backup_import_success">Backup restored successfully!</string>
+    <string name="backup_import_failed">Invalid or corrupted backup file.</string>
 </resources>

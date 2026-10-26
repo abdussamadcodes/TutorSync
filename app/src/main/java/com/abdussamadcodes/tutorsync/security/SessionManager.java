@@ -48,18 +48,40 @@ public class SessionManager {
         editor.apply();
     }
 
-    public boolean hasPinSetup() {
+    public void setBiometricEnabled(boolean useBiometric) {
         String accountId = getActiveAccountId();
-        return prefs.contains("pin_" + accountId);
+        if (accountId.isEmpty() || !hasPinSetup()) return;
+        prefs.edit().putBoolean("bio_" + accountId, useBiometric).apply();
     }
 
+    public boolean hasPinSetup() {
+        String accountId = getActiveAccountId();
+        if (accountId.isEmpty()) return false;
+        String hash = prefs.getString("pin_" + accountId, "");
+        return hash != null && !hash.isEmpty();
+    }
+
+    @NonNull
     public String getSavedPinHash() {
         String accountId = getActiveAccountId();
+        if (accountId.isEmpty()) return "";
         return prefs.getString("pin_" + accountId, "");
     }
 
     public boolean isBiometricEnabled() {
         String accountId = getActiveAccountId();
+        if (accountId.isEmpty()) return false;
         return prefs.getBoolean("bio_" + accountId, false);
+    }
+
+    public boolean verifyPin(@NonNull String rawPin) {
+        String savedHash = getSavedPinHash();
+        if (savedHash.isEmpty()) return false;
+        try {
+            String candidateHash = PasswordHasher.hashPassword(rawPin, PIN_SALT_BASE64);
+            return savedHash.equals(candidateHash);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

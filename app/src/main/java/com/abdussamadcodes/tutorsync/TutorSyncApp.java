@@ -4,6 +4,7 @@ import android.app.Application;
 
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncDbHelper;
+import com.abdussamadcodes.tutorsync.security.AppLockManager;
 import com.abdussamadcodes.tutorsync.util.GlobalExceptionHandler;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
 
@@ -14,8 +15,9 @@ public class TutorSyncApp extends Application {
         GlobalExceptionHandler.install(this);
         LocaleThemeHelper.applySavedLocaleAndTheme(this);
 
-        // Initialize Database Manager
         TutorSyncDbHelper dbHelper = new TutorSyncDbHelper(this);
         DatabaseManager.initializeInstance(dbHelper);
+
+        AppLockManager.init(this);
     }
 }

@@ -245,4 +245,48 @@
     <string name="ledger_btn_pay_multi">বকেয়া ইনভয়েসগুলোর পেমেন্ট রেকর্ড করুন</string>
     <string name="ledger_tap_to_open">[দেখতে ট্যাপ করুন]</string>
     <string name="ledger_tap_for_receipt">[রিসিট / রিফান্ডের জন্য ট্যাপ করুন]</string>
+
+    <!-- Tutor Profile -->
+    <string name="profile_title">টিউটর প্রোফাইল</string>
+    <string name="profile_edit_action">এডিট</string>
+    <string name="profile_tap_to_edit">প্রোফাইল দেখতে বা পরিবর্তন করতে ট্যাপ করুন</string>
+    <string name="profile_change_photo">ছবি নির্বাচন করুন</string>
+    <string name="profile_remove_photo">মুছুন</string>
+    <string name="profile_name_required_hint">পুরো নাম *</string>
+    <string name="profile_phone_hint">ফোন নম্বর (ঐচ্ছিক)</string>
+    <string name="profile_email_hint">ইমেইল (ঐচ্ছিক)</string>
+    <string name="profile_dob_hint">জন্ম তারিখ (ঐচ্ছিক)</string>
+    <string name="profile_address_hint">ঠিকানা (ঐচ্ছিক)</string>
+    <string name="profile_err_name_required">নাম লিখতে হবে</string>
+    <string name="profile_photo_error">ছবি লোড করা যায়নি</string>
+    <string name="profile_save_failed">প্রোফাইল আপডেট ব্যর্থ হয়েছে</string>
+
+    <!-- App Lock -->
+    <string name="settings_section_security">নিরাপত্তা</string>
+    <string name="settings_app_lock">অ্যাপ লক</string>
+    <string name="app_lock_configure">সেটআপ</string>
+    <string name="app_lock_status_off">বন্ধ</string>
+    <string name="app_lock_status_pin">পিন</string>
+    <string name="app_lock_status_pin_bio">পিন ও বায়োমেট্রিক</string>
+    <string name="app_lock_current_pin_hint">বর্তমান পিন</string>
+    <string name="app_lock_new_pin_hint">নতুন পিন (৪–৬ সংখ্যা)</string>
+    <string name="app_lock_enable_biometric">বায়োমেট্রিক (ফিঙ্গারপ্রিন্ট) ব্যবহার করুন</string>
+    <string name="app_lock_disable_action">লক বন্ধ করুন</string>
+    <string name="app_lock_pin_length_err">অনুগ্রহ করে ৪ থেকে ৬ সংখ্যার পিন দিন</string>
+    <string name="app_lock_incorrect_pin">ভুল পিন</string>
+    <string name="app_lock_saved_msg">অ্যাপ লক আপডেট হয়েছে</string>
+    <string name="app_lock_disabled_msg">অ্যাপ লক বন্ধ করা হয়েছে</string>
+    <string name="app_lock_biometric_title">TutorSync লক করা আছে</string>
+    <string name="app_lock_biometric_subtitle">ফিঙ্গারপ্রিন্ট দিন অথবা পিন ব্যবহার করতে বাতিল চাপুন</string>
+
+    <!-- Local Backup & Restore -->
+    <string name="settings_section_backup">লোকাল ব্যাকআপ ও রিস্টোর</string>
+    <string name="backup_export_action">ব্যাকআপ এক্সপোর্ট করুন (.json)</string>
+    <string name="backup_import_action">ব্যাকআপ ফাইল থেকে রিস্টোর করুন</string>
+    <string name="backup_export_success">ব্যাকআপ সফলভাবে সেভ হয়েছে!</string>
+    <string name="backup_export_failed">ব্যাকআপ সেভ করতে ব্যর্থ।</string>
+    <string name="backup_import_confirm_title">ব্যাকআপ রিস্টোর করবেন?</string>
+    <string name="backup_import_confirm_msg">এটি বর্তমান ডেটা সুরক্ষিত রেখে এবং ডুপ্লিকেট ছাড়াই ব্যাকআপের তথ্য আপনার অ্যাকাউন্টে যুক্ত করবে।</string>
+    <string name="backup_import_success">ব্যাকআপ সফলভাবে রিস্টোর হয়েছে!</string>
+    <string name="backup_import_failed">বেঠিক বা ত্রুটিপূর্ণ ব্যাকআপ ফাইল।</string>
 </resources>
