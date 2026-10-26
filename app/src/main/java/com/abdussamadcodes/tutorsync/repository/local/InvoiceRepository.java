@@ -10,6 +10,7 @@ import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
 import com.abdussamadcodes.tutorsync.model.AttendanceRecord;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.InvoiceItem;
+import com.abdussamadcodes.tutorsync.util.BackupRestoreManager;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -78,6 +79,9 @@ public class InvoiceRepository {
                 values.put(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY, newDisplayId);
                 db.update(InvoiceEntry.TABLE_NAME, values, InvoiceEntry.COLUMN_ID + " = ?", new String[]{internalId});
             }
+
+            // Reconcile any imported invoices whose paid_amount / status were restored without allocations
+            BackupRestoreManager.reconcileAccountFinancialData(db, accountId);
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
@@ -114,7 +118,6 @@ public class InvoiceRepository {
 
         db.beginTransaction();
         try {
-            // Heal any per-class attendance rows that were saved before fee or midnight fix
             AttendanceRepository.healPerClassAttendanceRecords(db, accountId, onlyStudentId);
 
             List<String> studentIds = new ArrayList<>();
@@ -201,7 +204,7 @@ public class InvoiceRepository {
                     }
                 }
 
-                // 2. Collect unbilled chargeable PER_CLASS occurrences (deduplicated per session date + start time)
+                // 2. Collect unbilled chargeable PER_CLASS occurrences
                 Set<String> billedSessionsInRun = new HashSet<>();
                 try (Cursor ac = db.rawQuery(
                         "SELECT a." + AttendanceEntry.COLUMN_ID + ", o." + OccurrenceEntry.COLUMN_ID + ", " +
@@ -235,7 +238,6 @@ public class InvoiceRepository {
 
                         String sessionKey = occDate + ":" + startMin;
                         if (billedSessionsInRun.contains(sessionKey)) {
-                            // Companion subject occurrence in the same class session: lock it to the same invoice without double-charging
                             if (!pendingItems.isEmpty()) {
                                 String lastItemId = pendingItems.get(pendingItems.size() - 1).getId();
                                 attendanceIdsToLock.add(attId + ":" + lastItemId);
@@ -405,12 +407,16 @@ public class InvoiceRepository {
     public int getTotalRevenueForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         int netRevenueMinor = 0;
-        String sql = "SELECT COALESCE(SUM(CASE WHEN " + TransactionEntry.COLUMN_TYPE + " = 'PAYMENT' THEN " +
-                TransactionEntry.COLUMN_AMOUNT_MINOR + " ELSE -" + TransactionEntry.COLUMN_AMOUNT_MINOR + " END), 0) " +
-                "FROM " + TransactionEntry.TABLE_NAME +
-                " WHERE " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_IS_REVERSED + " = 0";
-        try (Cursor c = db.rawQuery(sql, new String[]{accountId})) {
-            if (c.moveToFirst()) netRevenueMinor = c.getInt(0);
+        try {
+            BackupRestoreManager.reconcileAccountFinancialData(db, accountId);
+
+            String sql = "SELECT COALESCE(SUM(CASE WHEN " + TransactionEntry.COLUMN_TYPE + " = 'PAYMENT' THEN " +
+                    TransactionEntry.COLUMN_AMOUNT_MINOR + " ELSE -" + TransactionEntry.COLUMN_AMOUNT_MINOR + " END), 0) " +
+                    "FROM " + TransactionEntry.TABLE_NAME +
+                    " WHERE " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_IS_REVERSED + " = 0";
+            try (Cursor c = db.rawQuery(sql, new String[]{accountId})) {
+                if (c.moveToFirst()) netRevenueMinor = c.getInt(0);
+            }
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
@@ -419,6 +425,9 @@ public class InvoiceRepository {
 
     private Invoice mapCursorToInvoice(Cursor cursor) {
         int derivedPaid = cursor.getInt(cursor.getColumnIndexOrThrow("derived_paid_minor"));
+        int storedPaid = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_PAID_AMOUNT));
+        int effectivePaid = Math.max(derivedPaid, storedPaid);
+
         int totalAmount = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_TOTAL_AMOUNT));
         int subtotal = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_SUBTOTAL_MINOR));
         int discount = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_DISCOUNT_MINOR));
@@ -438,7 +447,7 @@ public class InvoiceRepository {
                 subtotal > 0 ? subtotal : totalAmount,
                 discount,
                 totalAmount,
-                derivedPaid,
+                effectivePaid,
                 cursor.getString(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_NOTES)),
                 created
         );
