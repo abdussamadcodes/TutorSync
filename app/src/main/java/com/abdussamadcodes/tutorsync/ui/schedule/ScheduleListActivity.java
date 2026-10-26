@@ -48,6 +48,10 @@ public class ScheduleListActivity extends BaseActivity {
         adapter = new ScheduleAdapter(this::showOptionsDialog);
         binding.rvSchedules.setLayoutManager(new LinearLayoutManager(this));
         binding.rvSchedules.setAdapter(adapter);
+
+        binding.fabAddSchedule.setOnClickListener(v ->
+                startActivity(new Intent(this, ScheduleFormActivity.class))
+        );
     }
 
     @Override
@@ -60,6 +64,7 @@ public class ScheduleListActivity extends BaseActivity {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
+        studentRepo.migrateLegacyStudentIds(accountId);
         List<RecurringSchedule> schedules = scheduleRepo.getSchedulesForAccount(accountId);
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
         List<Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);

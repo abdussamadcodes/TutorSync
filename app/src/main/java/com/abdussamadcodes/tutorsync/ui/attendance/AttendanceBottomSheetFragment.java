@@ -170,13 +170,13 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
             status = byTutor ? AttendanceRecord.STATUS_CANCELLED_BY_TUTOR : AttendanceRecord.STATUS_CANCELLED_BY_STUDENT;
         }
 
-        String chargeDecision;
+        String primaryChargeDecision;
         if (checkedId == R.id.btnStatusPresent) {
-            chargeDecision = AttendanceRecord.DECISION_CHARGE;
+            primaryChargeDecision = AttendanceRecord.DECISION_CHARGE;
         } else if (scheduleMakeup) {
-            chargeDecision = AttendanceRecord.DECISION_WAIVE;
+            primaryChargeDecision = AttendanceRecord.DECISION_WAIVE;
         } else {
-            chargeDecision = binding.switchChargeClass.isChecked()
+            primaryChargeDecision = binding.switchChargeClass.isChecked()
                     ? AttendanceRecord.DECISION_CHARGE : AttendanceRecord.DECISION_WAIVE;
         }
 
@@ -184,14 +184,19 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
         String homework = binding.etHomework.getText() != null ? binding.etHomework.getText().toString().trim() : "";
         String notes = binding.etNotes.getText() != null ? binding.etNotes.getText().toString().trim() : "";
 
-        for (String occId : occurrenceIds) {
+        for (int i = 0; i < occurrenceIds.size(); i++) {
+            String occId = occurrenceIds.get(i);
+            // Charge once per class session even if multiple subjects are taught in the same slot
+            String decisionForOccurrence = (i == 0) ? primaryChargeDecision : AttendanceRecord.DECISION_WAIVE;
+            boolean createMakeupForOccurrence = (i == 0) && scheduleMakeup;
+
             AttendanceRecord attendance = new AttendanceRecord(
                     UUID.randomUUID().toString(), accountId, occId, status,
-                    chargeDecision, 0, scheduleMakeup, null, null, System.currentTimeMillis()
+                    decisionForOccurrence, 0, createMakeupForOccurrence, null, null, System.currentTimeMillis()
             );
-            attendanceRepo.recordAttendanceWithBilling(attendance, scheduleMakeup, makeupDateMillis, makeupStartMinutes);
+            attendanceRepo.recordAttendanceWithBilling(attendance, createMakeupForOccurrence, makeupDateMillis, makeupStartMinutes);
 
-            if (!topic.isEmpty() || !homework.isEmpty() || !notes.isEmpty()) {
+            if (i == 0 && (!topic.isEmpty() || !homework.isEmpty() || !notes.isEmpty())) {
                 Lesson lesson = new Lesson(
                         UUID.randomUUID().toString(), accountId, studentId, occId,
                         topic.isEmpty() ? null : topic,

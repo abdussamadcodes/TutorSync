@@ -11,20 +11,20 @@ import com.abdussamadcodes.tutorsync.model.AttendanceRecord;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.InvoiceItem;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 public class InvoiceRepository {
 
-    // SQL expression that dynamically computes paid_amount from active payment_allocations
     private static final String SQL_SELECT_INVOICE_WITH_DERIVED_PAID =
             "SELECT i.*, " +
                     "COALESCE((SELECT SUM(pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + ") " +
@@ -34,9 +34,6 @@ public class InvoiceRepository {
                     "          AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0), 0) AS derived_paid_minor " +
                     "FROM " + InvoiceEntry.TABLE_NAME + " i ";
 
-    /**
-     * Generates a permanent, readable Invoice ID in the format TS-YYYY-NNNNNN (e.g. TS-2026-000001).
-     */
     public String generateNextInvoiceId(@NonNull String accountId, @NonNull SQLiteDatabase db) {
         int year = Calendar.getInstance().get(Calendar.YEAR);
         String prefix = String.format(Locale.US, "TS-%04d-", year);
@@ -86,11 +83,6 @@ public class InvoiceRepository {
         }
     }
 
-    /**
-     * Computes the anniversary-based monthly billing window [periodStartMillis, periodEndMillis]
-     * for a given anchorDay (1..31) and reference YearMonth, clamping month-end dates safely
-     * (e.g., anchor day 31 in February clamps to Feb 28/29).
-     */
     public static long[] computeAnniversaryBillingWindow(int anchorDay, @NonNull YearMonth targetMonth) {
         int clampedStartDay = Math.min(Math.max(1, anchorDay), targetMonth.lengthOfMonth());
         LocalDate startDate = targetMonth.atDay(clampedStartDay);
@@ -105,11 +97,15 @@ public class InvoiceRepository {
         return new long[]{startMillis, endMillis};
     }
 
-    /**
-     * Generates recurring monthly (anniversary-based) and confirmed per-class invoices for all active students.
-     * Prevents duplicate charges on both monthly schedule cycles and per-class attendance occurrences.
-     */
     public int generateDueInvoicesForAccount(@NonNull String accountId) {
+        return generateDueInvoicesInternal(accountId, null);
+    }
+
+    public int generateDueInvoicesForStudent(@NonNull String accountId, @NonNull String studentId) {
+        return generateDueInvoicesInternal(accountId, studentId);
+    }
+
+    private int generateDueInvoicesInternal(@NonNull String accountId, @Nullable String onlyStudentId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         int generatedInvoicesCount = 0;
         long now = System.currentTimeMillis();
@@ -118,13 +114,19 @@ public class InvoiceRepository {
 
         db.beginTransaction();
         try {
-            // Find all active students for account
+            // Heal any per-class attendance rows that were saved before fee or midnight fix
+            AttendanceRepository.healPerClassAttendanceRecords(db, accountId, onlyStudentId);
+
             List<String> studentIds = new ArrayList<>();
-            try (Cursor sc = db.query(StudentEntry.TABLE_NAME, new String[]{StudentEntry.COLUMN_ID},
-                    StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_IS_ACTIVE + " = 1 AND " + StudentEntry.COLUMN_IS_DELETED + " = 0",
-                    new String[]{accountId}, null, null, null)) {
-                while (sc.moveToNext()) {
-                    studentIds.add(sc.getString(0));
+            if (onlyStudentId != null) {
+                studentIds.add(onlyStudentId);
+            } else {
+                try (Cursor sc = db.query(StudentEntry.TABLE_NAME, new String[]{StudentEntry.COLUMN_ID},
+                        StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_IS_ACTIVE + " = 1 AND " + StudentEntry.COLUMN_IS_DELETED + " = 0",
+                        new String[]{accountId}, null, null, null)) {
+                    while (sc.moveToNext()) {
+                        studentIds.add(sc.getString(0));
+                    }
                 }
             }
 
@@ -135,7 +137,7 @@ public class InvoiceRepository {
                 long minPeriodStart = Long.MAX_VALUE;
                 long maxPeriodEnd = 0L;
 
-                // 1. Evaluate distinct schedule groups for this student
+                // 1. Evaluate MONTHLY schedule groups for this student
                 try (Cursor gc = db.rawQuery(
                         "SELECT " + ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + ", " +
                                 ScheduleEntry.COLUMN_BILLING_MODEL + ", " +
@@ -146,7 +148,7 @@ public class InvoiceRepository {
                                 " WHERE " + ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
                                 ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " +
                                 ScheduleEntry.COLUMN_IS_ACTIVE + " = 1 " +
-                                "GROUP BY " + ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID,
+                                "GROUP BY COALESCE(" + ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + ", " + ScheduleEntry.COLUMN_START_TIME_MINUTES + ")",
                         new String[]{accountId, studentId})) {
 
                     while (gc.moveToNext()) {
@@ -155,14 +157,20 @@ public class InvoiceRepository {
                         int feeMinor = gc.getInt(2);
                         int anchorDay = gc.getInt(3);
                         int startMin = gc.getInt(4);
-                        if (groupId == null || feeMinor <= 0) continue;
+
+                        if (feeMinor <= 0) {
+                            String[] fallback = AttendanceRepository.resolveBillingForOccurrence(db, studentId, null, groupId, startMin, now);
+                            model = fallback[0];
+                            feeMinor = Integer.parseInt(fallback[1]);
+                        }
+                        if (feeMinor <= 0) continue;
+                        if (groupId == null) groupId = "GRP-" + studentId + "-" + startMin;
 
                         if ("MONTHLY".equals(model)) {
                             long[] window = computeAnniversaryBillingWindow(anchorDay, currentYm);
                             long pStart = window[0];
                             long pEnd = window[1];
 
-                            // Check if this schedule group was already billed for this anniversary period
                             boolean alreadyBilled = false;
                             try (Cursor bc = db.rawQuery(
                                     "SELECT ii." + InvoiceItemEntry.COLUMN_ID +
@@ -193,10 +201,12 @@ public class InvoiceRepository {
                     }
                 }
 
-                // 2. Collect all unbilled, confirmed chargeable PER_CLASS occurrences for this student
+                // 2. Collect unbilled chargeable PER_CLASS occurrences (deduplicated per session date + start time)
+                Set<String> billedSessionsInRun = new HashSet<>();
                 try (Cursor ac = db.rawQuery(
                         "SELECT a." + AttendanceEntry.COLUMN_ID + ", o." + OccurrenceEntry.COLUMN_ID + ", " +
-                                "o." + OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID + ", o." + OccurrenceEntry.COLUMN_DATE + ", " +
+                                "o." + OccurrenceEntry.COLUMN_SCHEDULE_ID + ", o." + OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID + ", " +
+                                "o." + OccurrenceEntry.COLUMN_DATE + ", o." + OccurrenceEntry.COLUMN_START_TIME_MINUTES + ", " +
                                 "a." + AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR + ", a." + AttendanceEntry.COLUMN_STATUS + " " +
                                 "FROM " + AttendanceEntry.TABLE_NAME + " a " +
                                 "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
@@ -204,30 +214,46 @@ public class InvoiceRepository {
                                 "AND o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ? " +
                                 "AND a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = ? " +
                                 "AND a." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " IS NULL " +
-                                "ORDER BY o." + OccurrenceEntry.COLUMN_DATE + " ASC",
+                                "ORDER BY o." + OccurrenceEntry.COLUMN_DATE + " ASC, o." + OccurrenceEntry.COLUMN_START_TIME_MINUTES + " ASC",
                         new String[]{accountId, studentId, AttendanceRecord.DECISION_CHARGE})) {
 
                     while (ac.moveToNext()) {
                         String attId = ac.getString(0);
                         String occId = ac.getString(1);
-                        String groupId = ac.getString(2);
-                        long occDate = ac.getLong(3);
-                        int feeMinor = ac.getInt(4);
-                        String status = ac.getString(5);
+                        String schedId = ac.getString(2);
+                        String groupId = ac.getString(3);
+                        long occDate = ac.getLong(4);
+                        int startMin = ac.getInt(5);
+                        int feeMinor = ac.getInt(6);
+                        String status = ac.getString(7);
 
-                        if (feeMinor <= 0 && groupId != null) {
-                            try (Cursor sc = db.query(ScheduleEntry.TABLE_NAME, new String[]{ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR},
-                                    ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?", new String[]{groupId}, null, null, null, "1")) {
-                                if (sc.moveToFirst()) feeMinor = sc.getInt(0);
-                            }
+                        if (feeMinor <= 0) {
+                            String[] resolved = AttendanceRepository.resolveBillingForOccurrence(db, studentId, schedId, groupId, startMin, occDate);
+                            feeMinor = Integer.parseInt(resolved[1]);
                         }
                         if (feeMinor <= 0) continue;
+
+                        String sessionKey = occDate + ":" + startMin;
+                        if (billedSessionsInRun.contains(sessionKey)) {
+                            // Companion subject occurrence in the same class session: lock it to the same invoice without double-charging
+                            if (!pendingItems.isEmpty()) {
+                                String lastItemId = pendingItems.get(pendingItems.size() - 1).getId();
+                                attendanceIdsToLock.add(attId + ":" + lastItemId);
+                            }
+                            continue;
+                        }
+                        billedSessionsInRun.add(sessionKey);
 
                         minPeriodStart = Math.min(minPeriodStart, occDate);
                         maxPeriodEnd = Math.max(maxPeriodEnd, occDate);
 
                         String itemId = UUID.randomUUID().toString();
-                        String desc = "Class on " + dateFmt.format(new Date(occDate)) + " (" + status + ")";
+                        int h = (startMin / 60) % 12;
+                        if (h == 0) h = 12;
+                        String ampm = (startMin >= 720) ? "PM" : "AM";
+                        String desc = String.format(Locale.US, "Class on %s at %02d:%02d %s (%s)",
+                                dateFmt.format(new Date(occDate)), h, startMin % 60, ampm, status);
+
                         pendingItems.add(new InvoiceItem(
                                 itemId, accountId, invoiceId, groupId, occId, desc,
                                 "PER_CLASS", 1, feeMinor, feeMinor, now
@@ -244,8 +270,10 @@ public class InvoiceRepository {
                 }
 
                 String displayId = generateNextInvoiceId(accountId, db);
-                String periodLabel = dateFmt.format(new Date(minPeriodStart)) + " – " + dateFmt.format(new Date(maxPeriodEnd));
-                long dueDate = now + (7L * 24L * 60L * 60L * 1000L); // Due in 7 days
+                String periodLabel = (minPeriodStart == maxPeriodEnd)
+                        ? dateFmt.format(new Date(minPeriodStart))
+                        : dateFmt.format(new Date(minPeriodStart)) + " – " + dateFmt.format(new Date(maxPeriodEnd));
+                long dueDate = now + (7L * 24L * 60L * 60L * 1000L);
 
                 ContentValues iv = new ContentValues();
                 iv.put(InvoiceEntry.COLUMN_ID, invoiceId);
@@ -308,10 +336,6 @@ public class InvoiceRepository {
         return getFilteredInvoicesForAccount(accountId, "ALL");
     }
 
-    /**
-     * Supports filters: ALL, PAID, UNPAID, PARTIAL, OVERDUE.
-     * Calculates paid_amount and status directly from underlying payment_allocations.
-     */
     @NonNull
     public List<Invoice> getFilteredInvoicesForAccount(@NonNull String accountId, @NonNull String filterStatus) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
