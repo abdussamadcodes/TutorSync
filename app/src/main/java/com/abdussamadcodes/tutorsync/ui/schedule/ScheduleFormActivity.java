@@ -31,18 +31,22 @@ public class ScheduleFormActivity extends BaseActivity {
     private SessionManager sessionManager;
 
     private List<Student> allStudents;
-    private List<Student> selectedStudents = new ArrayList<>();
+    private final List<Student> selectedStudents = new ArrayList<>();
     private List<Subject> availableSubjects = new ArrayList<>();
-    private List<Subject> selectedSubjects = new ArrayList<>();
+    private final List<Subject> selectedSubjects = new ArrayList<>();
 
     private int selectedStartMinute = 960;
     private long selectedDateMillis = -1;
 
     private boolean isEditMode = false;
+    private String editScheduleGroupId;
     private String editStudentId;
     private ArrayList<String> editSubjectIds;
     private int editStartTime;
     private int editDuration;
+    private String editBillingModel = RecurringSchedule.MODEL_MONTHLY;
+    private int editFeeMinor = 0;
+    private int editAnchorDay = 1;
     private ArrayList<Integer> editDays;
     private ArrayList<String> editScheduleIds;
 
@@ -54,19 +58,33 @@ public class ScheduleFormActivity extends BaseActivity {
         applySystemBarInsets(binding.scheduleFormRoot);
 
         sessionManager = new SessionManager(this);
+        binding.toggleGroupBillingModel.check(R.id.btnBillingMonthly);
 
         if (getIntent().hasExtra("edit_student_id")) {
             isEditMode = true;
+            editScheduleGroupId = getIntent().getStringExtra("edit_schedule_group_id");
             editStudentId = getIntent().getStringExtra("edit_student_id");
             editSubjectIds = getIntent().getStringArrayListExtra("edit_subject_ids");
             editStartTime = getIntent().getIntExtra("edit_start_time", 960);
             editDuration = getIntent().getIntExtra("edit_duration", 60);
+            editBillingModel = getIntent().getStringExtra("edit_billing_model");
+            editFeeMinor = getIntent().getIntExtra("edit_fee_minor", 0);
+            editAnchorDay = getIntent().getIntExtra("edit_anchor_day", 1);
             editDays = getIntent().getIntegerArrayListExtra("edit_days");
             editScheduleIds = getIntent().getStringArrayListExtra("edit_schedule_ids");
 
             binding.toolbar.setTitle("Edit Schedule Group");
             binding.switchRecurring.setChecked(true);
             binding.switchRecurring.setEnabled(false);
+
+            if (RecurringSchedule.MODEL_PER_CLASS.equals(editBillingModel)) {
+                binding.toggleGroupBillingModel.check(R.id.btnBillingPerClass);
+            } else {
+                binding.toggleGroupBillingModel.check(R.id.btnBillingMonthly);
+            }
+            if (editFeeMinor > 0) {
+                binding.etScheduleFee.setText(String.format(Locale.US, "%.2f", editFeeMinor / 100.0));
+            }
         }
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
@@ -111,7 +129,9 @@ public class ScheduleFormActivity extends BaseActivity {
 
     private void loadInitialData() {
         String accountId = sessionManager.getActiveAccountId();
-        allStudents = new StudentRepository().getActiveStudentsForAccount(accountId);
+        StudentRepository studentRepo = new StudentRepository();
+        studentRepo.migrateLegacyStudentIds(accountId);
+        allStudents = studentRepo.getActiveStudentsForAccount(accountId);
 
         if (isEditMode) {
             for (Student s : allStudents) {
@@ -167,10 +187,7 @@ public class ScheduleFormActivity extends BaseActivity {
         }
 
         if (isEditMode) {
-            int checkedItem = -1;
-            if (!selectedStudents.isEmpty()) {
-                checkedItem = allStudents.indexOf(selectedStudents.get(0));
-            }
+            int checkedItem = selectedStudents.isEmpty() ? -1 : allStudents.indexOf(selectedStudents.get(0));
             new AlertDialog.Builder(this)
                     .setTitle(R.string.schedule_select_student)
                     .setSingleChoiceItems(studentNames, checkedItem, (dialog, which) -> {
@@ -210,13 +227,11 @@ public class ScheduleFormActivity extends BaseActivity {
 
     private void filterSubjectsBySelectedStudents() {
         String accountId = sessionManager.getActiveAccountId();
-
         if (selectedStudents.isEmpty()) {
             availableSubjects = new SubjectRepository().getActiveSubjectsForAccount(accountId);
         } else {
             EnrollmentRepository enrollRepo = new EnrollmentRepository();
             List<String> commonSubjectIds = null;
-
             for (Student s : selectedStudents) {
                 List<String> enrolledIds = enrollRepo.getEnrolledSubjectIdsForStudent(s.getId());
                 if (commonSubjectIds == null) {
@@ -225,7 +240,6 @@ public class ScheduleFormActivity extends BaseActivity {
                     commonSubjectIds.retainAll(enrolledIds);
                 }
             }
-
             List<Subject> allActive = new SubjectRepository().getActiveSubjectsForAccount(accountId);
             availableSubjects.clear();
             if (commonSubjectIds != null) {
@@ -234,7 +248,6 @@ public class ScheduleFormActivity extends BaseActivity {
                 }
             }
         }
-
         if (!isEditMode) {
             selectedSubjects.clear();
             updateSubjectSelectionUI();
@@ -246,14 +259,12 @@ public class ScheduleFormActivity extends BaseActivity {
             showMessage(binding.getRoot(), "No subjects available for the selected students.");
             return;
         }
-
         String[] subjectTitles = new String[availableSubjects.size()];
         boolean[] checkedItems = new boolean[availableSubjects.size()];
         for (int i = 0; i < availableSubjects.size(); i++) {
             subjectTitles[i] = availableSubjects.get(i).getTitle();
             checkedItems[i] = selectedSubjects.contains(availableSubjects.get(i));
         }
-
         new AlertDialog.Builder(this)
                 .setTitle(R.string.schedule_select_subject)
                 .setMultiChoiceItems(subjectTitles, checkedItems, (dialog, which, isChecked) -> {
@@ -282,6 +293,20 @@ public class ScheduleFormActivity extends BaseActivity {
             return;
         }
 
+        String feeStr = binding.etScheduleFee.getText() != null ? binding.etScheduleFee.getText().toString().trim() : "";
+        int feeMinor = 0;
+        if (!feeStr.isEmpty()) {
+            try {
+                feeMinor = (int) Math.round(Double.parseDouble(feeStr) * 100);
+            } catch (NumberFormatException e) {
+                binding.etScheduleFee.setError("Invalid fee amount");
+                return;
+            }
+        }
+
+        String billingModel = binding.toggleGroupBillingModel.getCheckedButtonId() == R.id.btnBillingPerClass
+                ? RecurringSchedule.MODEL_PER_CLASS : RecurringSchedule.MODEL_MONTHLY;
+
         String accountId = sessionManager.getActiveAccountId();
         String durationStr = binding.etDuration.getText() != null ? binding.etDuration.getText().toString() : "";
         int duration = Integer.parseInt(durationStr.isEmpty() ? "60" : durationStr);
@@ -290,7 +315,7 @@ public class ScheduleFormActivity extends BaseActivity {
         ScheduleRepository scheduleRepo = new ScheduleRepository();
         OccurrenceRepository occurrenceRepo = new OccurrenceRepository();
 
-        if (isEditMode) {
+        if (isEditMode && editScheduleIds != null) {
             for (String oldId : editScheduleIds) {
                 scheduleRepo.deleteScheduleSafely(oldId);
                 occurrenceRepo.deleteFutureOccurrencesByScheduleId(oldId);
@@ -298,8 +323,17 @@ public class ScheduleFormActivity extends BaseActivity {
         }
 
         boolean success = true;
+        int defaultAnchorDay = isEditMode ? editAnchorDay : Calendar.getInstance().get(Calendar.DAY_OF_MONTH);
 
         for (Student student : selectedStudents) {
+            // Preserve the same scheduleGroupId when editing so historical fee history remains linked
+            String groupId = (isEditMode && editScheduleGroupId != null && !editScheduleGroupId.isEmpty())
+                    ? editScheduleGroupId : UUID.randomUUID().toString();
+
+            if (isEditMode && (feeMinor != editFeeMinor || !billingModel.equals(editBillingModel))) {
+                scheduleRepo.updateScheduleGroupFee(accountId, student.getId(), groupId, billingModel, feeMinor, defaultAnchorDay);
+            }
+
             for (Subject subject : selectedSubjects) {
                 if (isRecurring) {
                     List<Integer> selectedDays = new ArrayList<>();
@@ -318,13 +352,14 @@ public class ScheduleFormActivity extends BaseActivity {
 
                     for (int dayOfWeek : selectedDays) {
                         String scheduleId = UUID.randomUUID().toString();
+                        long now = System.currentTimeMillis();
                         RecurringSchedule schedule = new RecurringSchedule(
-                                scheduleId, accountId, student.getId(),
-                                subject.getId(), dayOfWeek, selectedStartMinute, duration,
-                                System.currentTimeMillis(), System.currentTimeMillis() + 31536000000L);
+                                scheduleId, accountId, student.getId(), subject.getId(),
+                                groupId, dayOfWeek, selectedStartMinute, duration,
+                                now, now + 31536000000L, billingModel, feeMinor, defaultAnchorDay);
 
-                        if (scheduleRepo.insertSchedule(schedule)) {
-                            generateOccurrences(schedule, occurrenceRepo);
+                        if (scheduleRepo.insertScheduleWithFee(schedule, groupId, billingModel, feeMinor, defaultAnchorDay)) {
+                            generateOccurrences(schedule, groupId, occurrenceRepo);
                         } else {
                             success = false;
                         }
@@ -336,7 +371,7 @@ public class ScheduleFormActivity extends BaseActivity {
                     }
                     ClassOccurrence occurrence = new ClassOccurrence(UUID.randomUUID().toString(), accountId,
                             student.getId(), subject.getId(), null, selectedDateMillis, selectedStartMinute, duration);
-                    if (!occurrenceRepo.insertOccurrence(occurrence)) {
+                    if (!occurrenceRepo.insertOccurrenceWithGroup(occurrence, groupId)) {
                         success = false;
                     }
                 }
@@ -351,7 +386,7 @@ public class ScheduleFormActivity extends BaseActivity {
         }
     }
 
-    private void generateOccurrences(RecurringSchedule schedule, OccurrenceRepository occurrenceRepo) {
+    private void generateOccurrences(RecurringSchedule schedule, String groupId, OccurrenceRepository occurrenceRepo) {
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MINUTE, 0);
@@ -362,8 +397,9 @@ public class ScheduleFormActivity extends BaseActivity {
             if (cal.get(Calendar.DAY_OF_WEEK) == schedule.getDayOfWeek()) {
                 ClassOccurrence occ = new ClassOccurrence(
                         UUID.randomUUID().toString(), schedule.getAccountId(), schedule.getStudentId(),
-                        schedule.getSubjectId(), schedule.getId(), cal.getTimeInMillis(), schedule.getStartTimeMinutes(), schedule.getDurationMinutes());
-                occurrenceRepo.insertOccurrence(occ);
+                        schedule.getSubjectId(), schedule.getId(), cal.getTimeInMillis(),
+                        schedule.getStartTimeMinutes(), schedule.getDurationMinutes());
+                occurrenceRepo.insertOccurrenceWithGroup(occ, groupId);
             }
             cal.add(Calendar.DATE, 1);
         }

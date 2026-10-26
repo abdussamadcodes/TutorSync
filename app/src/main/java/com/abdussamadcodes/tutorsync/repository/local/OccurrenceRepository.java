@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
@@ -15,6 +16,10 @@ import java.util.List;
 public class OccurrenceRepository {
 
     public boolean insertOccurrence(@NonNull ClassOccurrence occurrence) {
+        return insertOccurrenceWithGroup(occurrence, null);
+    }
+
+    public boolean insertOccurrenceWithGroup(@NonNull ClassOccurrence occurrence, @Nullable String scheduleGroupId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
             ContentValues values = new ContentValues();
@@ -23,6 +28,7 @@ public class OccurrenceRepository {
             values.put(OccurrenceEntry.COLUMN_STUDENT_ID, occurrence.getStudentId());
             values.put(OccurrenceEntry.COLUMN_SUBJECT_ID, occurrence.getSubjectId());
             values.put(OccurrenceEntry.COLUMN_SCHEDULE_ID, occurrence.getScheduleId());
+            values.put(OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID, scheduleGroupId);
             values.put(OccurrenceEntry.COLUMN_DATE, occurrence.getDate());
             values.put(OccurrenceEntry.COLUMN_START_TIME_MINUTES, occurrence.getStartTimeMinutes());
             values.put(OccurrenceEntry.COLUMN_DURATION_MINUTES, occurrence.getDurationMinutes());
@@ -75,7 +81,6 @@ public class OccurrenceRepository {
         cal.set(Calendar.MILLISECOND, 0);
         long todayMillis = cal.getTimeInMillis();
 
-        // Filters out classes that ALREADY have an attendance record
         String selection = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
                 OccurrenceEntry.COLUMN_DATE + " = ? AND " +
                 OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +

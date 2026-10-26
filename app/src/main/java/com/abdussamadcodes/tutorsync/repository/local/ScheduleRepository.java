@@ -40,23 +40,43 @@ public class ScheduleRepository {
             values.put(ScheduleEntry.COLUMN_IS_ACTIVE, 1);
             values.put(ScheduleEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
 
-            return db.insert(ScheduleEntry.TABLE_NAME, null, values) != -1;
+            boolean inserted = db.insert(ScheduleEntry.TABLE_NAME, null, values) != -1;
+            if (inserted && feeAmountMinor > 0) {
+                ensureInitialFeeHistoryExists(db, schedule.getAccountId(), scheduleGroupId, billingModel, feeAmountMinor, schedule.getStartDate());
+            }
+            return inserted;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
+    private void ensureInitialFeeHistoryExists(SQLiteDatabase db, String accountId, String groupId,
+                                               String billingModel, int feeMinor, long effectiveFrom) {
+        try (Cursor c = db.query(ScheduleFeeHistoryEntry.TABLE_NAME, new String[]{ScheduleFeeHistoryEntry.COLUMN_ID},
+                ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?", new String[]{groupId}, null, null, null)) {
+            if (!c.moveToFirst()) {
+                ContentValues hv = new ContentValues();
+                hv.put(ScheduleFeeHistoryEntry.COLUMN_ID, UUID.randomUUID().toString());
+                hv.put(ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID, accountId);
+                hv.put(ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID, groupId);
+                hv.put(ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, billingModel);
+                hv.put(ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR, feeMinor);
+                hv.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, effectiveFrom);
+                hv.putNull(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO);
+                hv.put(ScheduleFeeHistoryEntry.COLUMN_CREATED_AT, System.currentTimeMillis());
+                db.insert(ScheduleFeeHistoryEntry.TABLE_NAME, null, hv);
+            }
         }
     }
 
     public boolean insertSchedule(@NonNull RecurringSchedule schedule) {
         Calendar cal = Calendar.getInstance();
         cal.setTimeInMillis(schedule.getStartDate());
-        return insertScheduleWithFee(schedule, UUID.randomUUID().toString(),
-                "MONTHLY", 0, cal.get(Calendar.DAY_OF_MONTH));
+        String groupId = schedule.getScheduleGroupId() != null ? schedule.getScheduleGroupId() : UUID.randomUUID().toString();
+        return insertScheduleWithFee(schedule, groupId, schedule.getBillingModel(),
+                schedule.getFeeAmountMinor(), cal.get(Calendar.DAY_OF_MONTH));
     }
 
-    /**
-     * Updates the fee and/or billing model for a schedule group while preserving historical fee rates
-     * in schedule_fee_history so previously generated invoices and past occurrences are never altered.
-     */
     public boolean updateScheduleGroupFee(
             @NonNull String accountId,
             @NonNull String studentId,
@@ -69,7 +89,6 @@ public class ScheduleRepository {
         try {
             long now = System.currentTimeMillis();
 
-            // Close current open rate history entry
             ContentValues closeHist = new ContentValues();
             closeHist.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO, now - 1);
             db.update(ScheduleFeeHistoryEntry.TABLE_NAME, closeHist,
@@ -77,7 +96,6 @@ public class ScheduleRepository {
                             ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL",
                     new String[]{scheduleGroupId});
 
-            // Insert new rate history entry
             ContentValues newHist = new ContentValues();
             newHist.put(ScheduleFeeHistoryEntry.COLUMN_ID, UUID.randomUUID().toString());
             newHist.put(ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID, accountId);
@@ -89,7 +107,6 @@ public class ScheduleRepository {
             newHist.put(ScheduleFeeHistoryEntry.COLUMN_CREATED_AT, now);
             db.insertOrThrow(ScheduleFeeHistoryEntry.TABLE_NAME, null, newHist);
 
-            // Update schedule rows
             ContentValues sv = new ContentValues();
             sv.put(ScheduleEntry.COLUMN_BILLING_MODEL, newBillingModel);
             sv.put(ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR, newFeeAmountMinor);
@@ -143,11 +160,15 @@ public class ScheduleRepository {
                         cursor.getString(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_ACCOUNT_ID)),
                         cursor.getString(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_STUDENT_ID)),
                         cursor.getString(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_SUBJECT_ID)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID)),
                         cursor.getInt(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_DAY_OF_WEEK)),
                         cursor.getInt(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_START_TIME_MINUTES)),
                         cursor.getInt(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_DURATION_MINUTES)),
                         cursor.getLong(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_START_DATE)),
-                        cursor.getLong(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_END_DATE))
+                        cursor.getLong(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_END_DATE)),
+                        cursor.getString(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_BILLING_MODEL)),
+                        cursor.getInt(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR)),
+                        cursor.getInt(cursor.getColumnIndexOrThrow(ScheduleEntry.COLUMN_ANCHOR_DAY))
                 ));
             }
         } finally {

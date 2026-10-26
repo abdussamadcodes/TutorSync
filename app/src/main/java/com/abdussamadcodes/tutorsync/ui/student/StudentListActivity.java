@@ -10,22 +10,18 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivityStudentListBinding;
-import com.abdussamadcodes.tutorsync.model.FeeAgreement;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import com.abdussamadcodes.tutorsync.repository.local.EnrollmentRepository;
-import com.abdussamadcodes.tutorsync.repository.local.FeeAgreementRepository;
 import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import com.abdussamadcodes.tutorsync.ui.finance.StudentTransactionsActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectAdapter;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
-import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.textfield.TextInputEditText;
 import java.util.List;
-import java.util.UUID;
 
 public class StudentListActivity extends BaseActivity {
 
@@ -34,7 +30,6 @@ public class StudentListActivity extends BaseActivity {
     private StudentRepository studentRepo;
     private SubjectRepository subjectRepo;
     private EnrollmentRepository enrollmentRepo;
-    private FeeAgreementRepository feeRepo;
     private SessionManager sessionManager;
 
     @Override
@@ -47,7 +42,6 @@ public class StudentListActivity extends BaseActivity {
         studentRepo = new StudentRepository();
         subjectRepo = new SubjectRepository();
         enrollmentRepo = new EnrollmentRepository();
-        feeRepo = new FeeAgreementRepository();
         sessionManager = new SessionManager(this);
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
@@ -68,10 +62,7 @@ public class StudentListActivity extends BaseActivity {
     private void loadStudents() {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
-
-        // Ensure all legacy students have an ID before loading
         studentRepo.migrateLegacyStudentIds(accountId);
-
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
         adapter.setStudents(students);
         if (students.isEmpty()) {
@@ -89,7 +80,7 @@ public class StudentListActivity extends BaseActivity {
         bottomSheet.setContentView(view);
 
         TextView tvName = view.findViewById(R.id.tvStudentName);
-        tvName.setText(student.getName());
+        tvName.setText(student.getFormattedDisplayName());
 
         view.findViewById(R.id.btnEditProfile).setOnClickListener(v -> {
             bottomSheet.dismiss();
@@ -103,9 +94,12 @@ public class StudentListActivity extends BaseActivity {
             showEnrollmentDialog(student);
         });
 
+        // Opens the student's dedicated Financial History & Multi-Invoice Payment screen
         view.findViewById(R.id.btnManageFees).setOnClickListener(v -> {
             bottomSheet.dismiss();
-            showFeeAgreementDialog(student);
+            Intent intent = new Intent(this, StudentTransactionsActivity.class);
+            intent.putExtra("student_id", student.getId());
+            startActivity(intent);
         });
 
         view.findViewById(R.id.btnDeleteStudent).setOnClickListener(v -> {
@@ -125,54 +119,6 @@ public class StudentListActivity extends BaseActivity {
         bottomSheet.show();
     }
 
-    private void showFeeAgreementDialog(Student student) {
-        BottomSheetDialog feeDialog = new BottomSheetDialog(this);
-        View view = getLayoutInflater().inflate(R.layout.bottom_sheet_fee_agreement, null);
-        feeDialog.setContentView(view);
-
-        MaterialButtonToggleGroup toggleGroup = view.findViewById(R.id.toggleGroupFeeType);
-        TextInputEditText etAmount = view.findViewById(R.id.etFeeAmount);
-
-        FeeAgreement existing = feeRepo.getAgreementForStudent(student.getId());
-        if (existing != null) {
-            if (FeeAgreement.TYPE_PER_CLASS.equals(existing.getFeeType())) {
-                toggleGroup.check(R.id.btnFeePerClass);
-            } else {
-                toggleGroup.check(R.id.btnFeeMonthly);
-            }
-            etAmount.setText(String.valueOf(existing.getAmountMinorUnits() / 100));
-        } else {
-            toggleGroup.check(R.id.btnFeeMonthly);
-        }
-
-        view.findViewById(R.id.btnSaveFee).setOnClickListener(v -> {
-            String amtStr = etAmount.getText() != null ? etAmount.getText().toString().trim() : "";
-            if (amtStr.isEmpty()) {
-                etAmount.setError("Required");
-                return;
-            }
-
-            int amountMinor = Integer.parseInt(amtStr) * 100;
-            String type = toggleGroup.getCheckedButtonId() == R.id.btnFeePerClass ? FeeAgreement.TYPE_PER_CLASS : FeeAgreement.TYPE_MONTHLY;
-
-            FeeAgreement agreement = new FeeAgreement(
-                    existing != null ? existing.getId() : UUID.randomUUID().toString(),
-                    sessionManager.getActiveAccountId(),
-                    student.getId(),
-                    type,
-                    amountMinor,
-                    System.currentTimeMillis()
-            );
-
-            if (feeRepo.saveAgreement(agreement)) {
-                showMessage(binding.getRoot(), getString(R.string.fee_saved_success));
-                feeDialog.dismiss();
-            }
-        });
-
-        feeDialog.show();
-    }
-
     private void showEnrollmentDialog(Student student) {
         String accountId = sessionManager.getActiveAccountId();
         List<Subject> availableSubjects = subjectRepo.getActiveSubjectsForAccount(accountId);
@@ -180,7 +126,9 @@ public class StudentListActivity extends BaseActivity {
 
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_enroll_subject, null);
         AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(dialogView).create();
-        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
 
         RecyclerView rvAvailableSubjects = dialogView.findViewById(R.id.rvAvailableSubjects);
         View tvEmptySubjects = dialogView.findViewById(R.id.tvEmptySubjects);

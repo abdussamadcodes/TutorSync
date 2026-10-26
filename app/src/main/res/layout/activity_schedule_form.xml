@@ -51,7 +51,7 @@
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="20dp"
                 android:hint="@string/schedule_select_subject">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etSubjectSelection"
@@ -60,6 +60,52 @@
                     android:focusable="false"
                     android:clickable="true"
                     app:drawableEndCompat="@android:drawable/arrow_down_float" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Schedule Billing Model &amp; Fee"
+                android:textStyle="bold"
+                android:textColor="?attr/colorPrimary"
+                android:layout_marginBottom="8dp"/>
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/toggleGroupBillingModel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBillingMonthly"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/fee_type_monthly" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBillingPerClass"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/fee_type_per_class" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:hint="Schedule Fee in BDT (e.g. 2000)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etScheduleFee"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.materialswitch.MaterialSwitch
@@ -76,7 +122,7 @@
                 android:text="@string/schedule_is_recurring_desc"
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="?android:attr/textColorSecondary"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="20dp"/>
 
             <LinearLayout
                 android:id="@+id/layoutRecurringOptions"

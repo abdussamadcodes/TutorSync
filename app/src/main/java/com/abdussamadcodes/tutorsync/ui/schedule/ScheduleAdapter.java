@@ -76,7 +76,6 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
             String studentName = context.getString(R.string.unknown_student);
             for (Student s : students) {
                 if (s.getId().equals(group.getStudentId())) {
-                    // Use the new centralized helper
                     studentName = s.getFormattedDisplayName();
                     break;
                 }
@@ -93,7 +92,9 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
                 }
             }
             String subjectName = subjectNamesList.isEmpty() ? context.getString(R.string.subject_level_general) : TextUtils.join(", ", subjectNamesList);
-            binding.tvSubjectName.setText(subjectName);
+            String modelLabel = "PER_CLASS".equals(group.getBillingModel()) ? "Per Class" : "Monthly";
+            String feeLabel = String.format(Locale.US, " · ৳%.0f (%s)", group.getFeeAmountMinor() / 100.0, modelLabel);
+            binding.tvSubjectName.setText(subjectName + feeLabel);
 
             int hours = group.getStartTimeMinutes() / 60;
             int mins = group.getStartTimeMinutes() % 60;

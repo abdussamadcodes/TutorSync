@@ -1,108 +1,169 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="24dp"
     android:background="?attr/colorSurface">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/attendance_title"
-        android:textAppearance="?attr/textAppearanceTitleLarge"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
+        android:orientation="vertical"
+        android:padding="24dp">
 
-    <com.google.android.material.button.MaterialButtonToggleGroup
-        android:id="@+id/toggleGroupStatus"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:singleSelection="true"
-        app:selectionRequired="true">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnStatusPresent"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/attendance_status_present" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnStatusAbsent"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/attendance_status_absent" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnStatusCancelled"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/attendance_status_cancelled" />
-    </com.google.android.material.button.MaterialButtonToggleGroup>
-
-    <com.google.android.material.textfield.TextInputLayout
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="@string/attendance_topic_hint"
-        android:layout_marginBottom="12dp">
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etTopic"
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textCapSentences"/>
-    </com.google.android.material.textfield.TextInputLayout>
+            android:text="@string/attendance_title"
+            android:textAppearance="?attr/textAppearanceTitleLarge"
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp"/>
 
-    <com.google.android.material.textfield.TextInputLayout
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="@string/attendance_homework_hint"
-        android:layout_marginBottom="12dp">
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etHomework"
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/toggleGroupStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textCapSentences"/>
-    </com.google.android.material.textfield.TextInputLayout>
+            android:layout_marginBottom="8dp"
+            app:singleSelection="true"
+            app:selectionRequired="true">
 
-    <com.google.android.material.textfield.TextInputLayout
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="@string/attendance_notes_hint"
-        android:layout_marginBottom="16dp">
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etNotes"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStatusPresent"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/attendance_status_present" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStatusAbsent"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Student Absent" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStatusCancelled"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/attendance_status_cancelled" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupCancelActor"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textMultiLine"
-            android:minLines="2"/>
-    </com.google.android.material.textfield.TextInputLayout>
+            android:visibility="gone"
+            app:singleSelection="true"
+            app:selectionRequired="true"
+            android:layout_marginBottom="8dp">
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnRemoveClass"
-        style="@style/Widget.Material3.Button.OutlinedButton"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:layout_marginBottom="8dp"
-        android:textColor="?attr/colorError"
-        app:strokeColor="?attr/colorError"
-        android:text="@string/attendance_remove_class" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipByStudent"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="By Student" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnSaveAttendance"
-        style="@style/Widget.Material3.Button"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="@string/attendance_save" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipByTutor"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="By Tutor" />
+        </com.google.android.material.chip.ChipGroup>
 
-</LinearLayout>
+        <LinearLayout
+            android:id="@+id/layoutBillingAndReschedule"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="12dp">
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchChargeClass"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="Charge Per-Class Fee (if applicable)" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchRescheduleMakeup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:text="Reschedule / Add Makeup Class" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPickMakeupDateTime"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:text="Select Makeup Date &amp; Time" />
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/attendance_topic_hint"
+            android:layout_marginBottom="12dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etTopic"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textCapSentences"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/attendance_homework_hint"
+            android:layout_marginBottom="12dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etHomework"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textCapSentences"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/attendance_notes_hint"
+            android:layout_marginBottom="16dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etNotes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textMultiLine"
+                android:minLines="2"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRemoveClass"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginBottom="8dp"
+            android:textColor="?attr/colorError"
+            app:strokeColor="?attr/colorError"
+            android:text="@string/attendance_remove_class" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveAttendance"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/attendance_save" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

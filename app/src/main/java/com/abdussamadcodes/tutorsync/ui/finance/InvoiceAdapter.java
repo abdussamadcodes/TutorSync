@@ -6,18 +6,21 @@ import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ItemInvoiceBinding;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.Student;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class InvoiceAdapter extends RecyclerView.Adapter<InvoiceAdapter.ViewHolder> {
 
     private final List<Invoice> invoices = new ArrayList<>();
     private final List<Student> students = new ArrayList<>();
     private final OnInvoiceClickListener listener;
+    private final SimpleDateFormat df = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
 
     public interface OnInvoiceClickListener {
         void onInvoiceClick(Invoice invoice);
@@ -67,32 +70,42 @@ public class InvoiceAdapter extends RecyclerView.Adapter<InvoiceAdapter.ViewHold
         }
 
         void bind(Invoice invoice) {
+            binding.tvInvoiceId.setText(invoice.getInvoiceIdDisplay());
+
             String studentName = "Unknown Student";
             for (Student s : students) {
                 if (s.getId().equals(invoice.getStudentId())) {
-                    // Use the new centralized helper
                     studentName = s.getFormattedDisplayName();
                     break;
                 }
             }
             binding.tvStudentName.setText(studentName);
-            binding.tvBillingPeriod.setText(invoice.getBillingPeriod());
 
-            String amountText = String.format("৳ %.2f", invoice.getTotalAmount() / 100.0);
-            if (invoice.getPaidAmount() > 0 && invoice.getPaidAmount() < invoice.getTotalAmount()) {
-                amountText += String.format(" (Paid: ৳ %.2f)", invoice.getPaidAmount() / 100.0);
-            }
+            String datesInfo = invoice.getBillingPeriod() +
+                    "\nIssued: " + df.format(new Date(invoice.getIssueDate())) +
+                    " · Due: " + df.format(new Date(invoice.getDueDate()));
+            binding.tvBillingPeriod.setText(datesInfo);
+
+            String amountText = String.format(Locale.US,
+                    "Total: ৳%.2f | Paid: ৳%.2f | Due: ৳%.2f",
+                    invoice.getTotalAmount() / 100.0,
+                    invoice.getPaidAmount() / 100.0,
+                    invoice.getOutstandingBalance() / 100.0);
             binding.tvAmount.setText(amountText);
 
-            binding.chipStatus.setText(invoice.getStatus());
-            if (Invoice.STATUS_PAID.equals(invoice.getStatus())) {
-                binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#4CAF50"))); // Green
+            String status = invoice.getStatus();
+            binding.chipStatus.setText(status);
+            if (Invoice.STATUS_PAID.equals(status)) {
+                binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#2E7D32")));
                 binding.chipStatus.setTextColor(Color.WHITE);
-            } else if (Invoice.STATUS_PARTIAL.equals(invoice.getStatus())) {
-                binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#FF9800"))); // Orange
+            } else if (Invoice.STATUS_PARTIAL.equals(status)) {
+                binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#EF6C00")));
+                binding.chipStatus.setTextColor(Color.WHITE);
+            } else if (Invoice.STATUS_OVERDUE.equals(status)) {
+                binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#B71C1C")));
                 binding.chipStatus.setTextColor(Color.WHITE);
             } else {
-                binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#F44336"))); // Red
+                binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#D32F2F")));
                 binding.chipStatus.setTextColor(Color.WHITE);
             }
         }
