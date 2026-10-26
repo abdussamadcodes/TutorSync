@@ -14,6 +14,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
@@ -104,6 +105,17 @@ public class MainActivity extends BaseActivity {
         defaultSettingsPicPaddingBottom = binding.ivSettingsProfilePic.getPaddingBottom();
         defaultSettingsPicScaleType = binding.ivSettingsProfilePic.getScaleType();
         defaultSettingsPicTintList = ImageViewCompat.getImageTintList(binding.ivSettingsProfilePic);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (binding.bottomNavigation.getSelectedItemId() != R.id.nav_home) {
+                    binding.bottomNavigation.setSelectedItemId(R.id.nav_home);
+                } else {
+                    moveTaskToBack(true);
+                }
+            }
+        });
 
         setupUI();
         setupListeners();
@@ -428,6 +440,7 @@ public class MainActivity extends BaseActivity {
                     return;
                 }
                 sessionManager.savePinSetup(null, false);
+                AppLockManager.getInstance().markUnlocked();
                 refreshStatusLabels();
                 showMessage(binding.getRoot(), R.string.app_lock_disabled_msg);
             });

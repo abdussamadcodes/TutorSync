@@ -33,6 +33,15 @@ public class WelcomeActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         isReopenedFromInsideApp = getIntent().getBooleanExtra(EXTRA_REOPEN_FOR_LANGUAGE_CHANGE, false);
 
+        if (!isReopenedFromInsideApp && !isTaskRoot()) {
+            Intent intent = getIntent();
+            if (intent != null && Intent.ACTION_MAIN.equals(intent.getAction())
+                    && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+                finish();
+                return;
+            }
+        }
+
         if (appPreferences.isOnboardingCompleted() && !isReopenedFromInsideApp) {
             navigateToMainAndFinish();
             return;
@@ -104,9 +113,10 @@ public class WelcomeActivity extends BaseActivity {
     }
 
     private void navigateToMainAndFinish() {
-        startActivity(new Intent(this, MainActivity.class));
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
         finish();
-        // Applies a smooth crossfade when navigating to the next screen
         if (android.os.Build.VERSION.SDK_INT >= 34) {
             overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out);
         } else {

@@ -2,6 +2,9 @@ package com.abdussamadcodes.tutorsync.security;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.SystemClock;
+import android.provider.Settings;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -9,32 +12,34 @@ public class SessionManager {
     private static final String PREF_NAME = "tutorsync_session";
     private static final String KEY_ACTIVE_ACCOUNT_ID = "active_account_id";
     private static final String KEY_SESSION_UNLOCKED = "session_unlocked";
-    private static final String KEY_LAST_BACKGROUND_TS = "last_background_ts";
-    private static final String KEY_EXTERNAL_FLOW_TS = "external_flow_ts";
+    private static final String KEY_UNLOCKED_BOOT_COUNT = "unlocked_boot_count";
+    private static final String KEY_LAST_APP_UNLOCK_REALTIME = "last_app_unlock_realtime";
     public static final String PIN_SALT_BASE64 = "VHV0b3JTeW5jUGluU2FsdA==";
 
+    private final Context appContext;
     private final SharedPreferences prefs;
 
     public SessionManager(@NonNull Context context) {
-        this.prefs = context.getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        this.appContext = context.getApplicationContext();
+        this.prefs = this.appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
 
     public void login(@NonNull String accountId) {
         prefs.edit()
                 .putString(KEY_ACTIVE_ACCOUNT_ID, accountId)
                 .putBoolean(KEY_SESSION_UNLOCKED, true)
-                .putLong(KEY_LAST_BACKGROUND_TS, 0L)
-                .putLong(KEY_EXTERNAL_FLOW_TS, 0L)
-                .apply();
+                .putInt(KEY_UNLOCKED_BOOT_COUNT, getCurrentBootCount())
+                .putLong(KEY_LAST_APP_UNLOCK_REALTIME, SystemClock.elapsedRealtime())
+                .commit();
     }
 
     public void logout() {
         prefs.edit()
                 .remove(KEY_ACTIVE_ACCOUNT_ID)
                 .putBoolean(KEY_SESSION_UNLOCKED, false)
-                .putLong(KEY_LAST_BACKGROUND_TS, 0L)
-                .putLong(KEY_EXTERNAL_FLOW_TS, 0L)
-                .apply();
+                .remove(KEY_UNLOCKED_BOOT_COUNT)
+                .remove(KEY_LAST_APP_UNLOCK_REALTIME)
+                .commit();
     }
 
     public boolean hasActiveSession() {
@@ -58,13 +63,21 @@ public class SessionManager {
             editor.putString("pin_" + accountId, hashedPin);
             editor.putBoolean("bio_" + accountId, useBiometric);
         }
-        editor.apply();
+        editor.putBoolean(KEY_SESSION_UNLOCKED, true);
+        editor.putInt(KEY_UNLOCKED_BOOT_COUNT, getCurrentBootCount());
+        editor.putLong(KEY_LAST_APP_UNLOCK_REALTIME, SystemClock.elapsedRealtime());
+        editor.commit();
     }
 
     public void setBiometricEnabled(boolean useBiometric) {
         String accountId = getActiveAccountId();
         if (accountId.isEmpty() || !hasPinSetup()) return;
-        prefs.edit().putBoolean("bio_" + accountId, useBiometric).apply();
+        prefs.edit()
+                .putBoolean("bio_" + accountId, useBiometric)
+                .putBoolean(KEY_SESSION_UNLOCKED, true)
+                .putInt(KEY_UNLOCKED_BOOT_COUNT, getCurrentBootCount())
+                .putLong(KEY_LAST_APP_UNLOCK_REALTIME, SystemClock.elapsedRealtime())
+                .commit();
     }
 
     public boolean hasPinSetup() {
@@ -99,26 +112,39 @@ public class SessionManager {
     }
 
     public void setSessionUnlockedState(boolean unlocked) {
-        prefs.edit().putBoolean(KEY_SESSION_UNLOCKED, unlocked).apply();
+        SharedPreferences.Editor editor = prefs.edit().putBoolean(KEY_SESSION_UNLOCKED, unlocked);
+        if (unlocked) {
+            editor.putInt(KEY_UNLOCKED_BOOT_COUNT, getCurrentBootCount());
+            editor.putLong(KEY_LAST_APP_UNLOCK_REALTIME, SystemClock.elapsedRealtime());
+        } else {
+            editor.remove(KEY_LAST_APP_UNLOCK_REALTIME);
+        }
+        editor.commit();
     }
 
-    public boolean isSessionUnlockedState() {
-        return prefs.getBoolean(KEY_SESSION_UNLOCKED, false);
+    public boolean isSessionUnlockedForCurrentBoot() {
+        if (!prefs.getBoolean(KEY_SESSION_UNLOCKED, false)) {
+            return false;
+        }
+        int savedBootCount = prefs.getInt(KEY_UNLOCKED_BOOT_COUNT, -1);
+        int currentBootCount = getCurrentBootCount();
+        if (savedBootCount != currentBootCount) {
+            return false;
+        }
+        long lastUnlockRealtime = getLastAppUnlockRealtime();
+        long nowRealtime = SystemClock.elapsedRealtime();
+        return lastUnlockRealtime > 0L && nowRealtime >= lastUnlockRealtime;
     }
 
-    public void setLastBackgroundTimestamp(long timestampMillis) {
-        prefs.edit().putLong(KEY_LAST_BACKGROUND_TS, timestampMillis).apply();
+    public long getLastAppUnlockRealtime() {
+        return prefs.getLong(KEY_LAST_APP_UNLOCK_REALTIME, 0L);
     }
 
-    public long getLastBackgroundTimestamp() {
-        return prefs.getLong(KEY_LAST_BACKGROUND_TS, 0L);
-    }
-
-    public void setExternalFlowTimestamp(long timestampMillis) {
-        prefs.edit().putLong(KEY_EXTERNAL_FLOW_TS, timestampMillis).apply();
-    }
-
-    public long getExternalFlowTimestamp() {
-        return prefs.getLong(KEY_EXTERNAL_FLOW_TS, 0L);
+    private int getCurrentBootCount() {
+        try {
+            return Settings.Global.getInt(appContext.getContentResolver(), Settings.Global.BOOT_COUNT, 0);
+        } catch (Exception e) {
+            return 0;
+        }
     }
 }

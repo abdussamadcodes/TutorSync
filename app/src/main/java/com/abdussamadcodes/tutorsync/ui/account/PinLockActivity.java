@@ -1,7 +1,11 @@
 package com.abdussamadcodes.tutorsync.ui.account;
 
+import android.app.KeyguardManager;
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -21,6 +25,24 @@ import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 public class PinLockActivity extends BaseActivity {
     private ActivityPinLockBinding binding;
     private SessionManager sessionManager;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private boolean biometricAvailable = false;
+    private boolean hasAutoPromptedBiometric = false;
+
+    private final Runnable checkAndPromptBiometricRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || isDestroyed() || hasAutoPromptedBiometric || !biometricAvailable) {
+                return;
+            }
+            if (isDeviceReadyForBiometricPrompt()) {
+                hasAutoPromptedBiometric = true;
+                promptFingerprint();
+            } else {
+                mainHandler.postDelayed(this, 150L);
+            }
+        }
+    };
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -38,15 +60,12 @@ public class PinLockActivity extends BaseActivity {
             }
         });
 
-        boolean biometricAvailable = sessionManager.isBiometricEnabled()
+        biometricAvailable = sessionManager.isBiometricEnabled()
                 && BiometricAuthHelper.isBiometricReady(this);
 
         if (biometricAvailable) {
             binding.btnBiometric.setVisibility(View.VISIBLE);
             binding.btnBiometric.setOnClickListener(v -> promptFingerprint());
-            if (savedInstanceState == null) {
-                promptFingerprint();
-            }
         } else {
             binding.btnBiometric.setVisibility(View.GONE);
             focusPinInput();
@@ -81,6 +100,53 @@ public class PinLockActivity extends BaseActivity {
         });
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (biometricAvailable && !hasAutoPromptedBiometric) {
+            mainHandler.removeCallbacks(checkAndPromptBiometricRunnable);
+            mainHandler.post(checkAndPromptBiometricRunnable);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && biometricAvailable && !hasAutoPromptedBiometric) {
+            mainHandler.removeCallbacks(checkAndPromptBiometricRunnable);
+            mainHandler.post(checkAndPromptBiometricRunnable);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mainHandler.removeCallbacks(checkAndPromptBiometricRunnable);
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        boolean screenOff = pm != null && !pm.isInteractive();
+        boolean keyguardLocked = km != null && (km.isKeyguardLocked() || km.isDeviceLocked());
+        if (screenOff || keyguardLocked) {
+            // Reset so biometric prompt triggers fresh when the user unlocks the phone again
+            hasAutoPromptedBiometric = false;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
+    }
+
+    private boolean isDeviceReadyForBiometricPrompt() {
+        if (!hasWindowFocus()) return false;
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        boolean screenInteractive = pm == null || pm.isInteractive();
+        boolean keyguardLocked = km != null && (km.isKeyguardLocked() || km.isDeviceLocked());
+        return screenInteractive && !keyguardLocked;
+    }
+
     private void promptFingerprint() {
         BiometricAuthHelper.promptBiometric(
                 this,
@@ -94,7 +160,6 @@ public class PinLockActivity extends BaseActivity {
 
                     @Override
                     public void onError(@NonNull String errString) {
-                        // Fall back to PIN input seamlessly
                         focusPinInput();
                     }
                 }
