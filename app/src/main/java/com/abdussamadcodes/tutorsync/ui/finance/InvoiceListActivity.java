@@ -14,7 +14,6 @@ import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import java.util.List;
-import java.util.Locale;
 
 public class InvoiceListActivity extends BaseActivity {
 
@@ -62,10 +61,10 @@ public class InvoiceListActivity extends BaseActivity {
             String accountId = sessionManager.getActiveAccountId();
             int count = invoiceRepo.generateDueInvoicesForAccount(accountId);
             if (count > 0) {
-                showMessage(binding.getRoot(), "Generated " + count + " new invoice(s).");
+                showMessage(binding.getRoot(), getString(R.string.invoice_generated_count_fmt, count));
                 loadInvoices();
             } else {
-                showMessage(binding.getRoot(), "All active schedules and confirmed classes are already billed.");
+                showMessage(binding.getRoot(), getString(R.string.invoice_none_needed));
             }
         });
     }
@@ -96,8 +95,7 @@ public class InvoiceListActivity extends BaseActivity {
         }
         int totalReceivedMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
 
-        binding.tvFinancialSummary.setText(String.format(Locale.US,
-                "Billed: ৳%.2f  |  Received: ৳%.2f\nOutstanding Dues: ৳%.2f  |  Overdue Invoices: %d",
+        binding.tvFinancialSummary.setText(getString(R.string.invoice_summary_dashboard_fmt,
                 totalBilledMinor / 100.0,
                 totalReceivedMinor / 100.0,
                 totalOutstandingMinor / 100.0,

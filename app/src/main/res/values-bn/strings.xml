@@ -122,11 +122,29 @@
     <string name="schedule_err_select_day">অন্তত একটি দিন নির্বাচন করুন</string>
     <string name="schedule_success">রুটিন সেভ হয়েছে!</string>
     <string name="schedule_failed">রুটিন সেভ করতে ব্যর্থ।</string>
+    <string name="schedule_billing_header">রুটিনের বিলিং মডেল ও ফি</string>
+    <string name="schedule_fee_hint">রুটিনের ফি (টাকায়, যেমন ২০০০)</string>
+    <string name="schedule_edit_group_title">রুটিন গ্রুপ এডিট করুন</string>
+    <string name="schedule_picker_student_single_sub">এই রুটিন গ্রুপের জন্য একজন শিক্ষার্থী নির্বাচন করুন</string>
+    <string name="schedule_picker_student_multi_sub">এই রুটিনের জন্য এক বা একাধিক শিক্ষার্থী নির্বাচন করুন</string>
+    <string name="schedule_picker_subject_sub">এই রুটিনে পড়ানো বিষয়গুলো নির্বাচন করুন</string>
+    <string name="schedule_confirm_selection">নির্বাচন নিশ্চিত করুন</string>
+    <string name="schedule_confirm_subjects">বিষয় নিশ্চিত করুন</string>
+    <string name="schedule_students_selected_fmt">%d জন শিক্ষার্থী নির্বাচিত</string>
+    <string name="schedule_subjects_selected_fmt">%d টি বিষয় নির্বাচিত</string>
 
     <string name="attendance_title">এটেন্ডেন্স রেকর্ড করুন</string>
     <string name="attendance_status_present">উপস্থিত</string>
-    <string name="attendance_status_absent">অনুপস্থিত</string>
+    <string name="attendance_status_absent">শিক্ষার্থী অনুপস্থিত</string>
     <string name="attendance_status_cancelled">বাতিল</string>
+    <string name="attendance_by_student">শিক্ষার্থী কর্তৃক</string>
+    <string name="attendance_by_tutor">টিউটর কর্তৃক</string>
+    <string name="attendance_charge_per_class">প্রতি ক্লাসের ফি চার্জ করুন (প্রযোজ্য হলে)</string>
+    <string name="attendance_reschedule_makeup">রিশিডিউল / মেকআপ ক্লাস যোগ করুন</string>
+    <string name="attendance_pick_makeup_datetime">মেকআপ ক্লাসের তারিখ ও সময় নির্বাচন করুন</string>
+    <string name="attendance_makeup_selected_fmt">মেকআপ: %1$s, %2$s</string>
+    <string name="attendance_err_select_makeup">অনুগ্রহ করে মেকআপ ক্লাসের তারিখ ও সময় নির্বাচন করুন</string>
+    <string name="attendance_saved_msg">এটেন্ডেন্স ও বিলিং সিদ্ধান্ত সেভ হয়েছে</string>
     <string name="attendance_topic_hint">পড়ানো টপিক (ঐচ্ছিক)</string>
     <string name="attendance_homework_hint">হোমওয়ার্ক (ঐচ্ছিক)</string>
     <string name="attendance_notes_hint">টিউটর নোটস (গোপন)</string>
@@ -136,7 +154,6 @@
     <string name="cd_app_logo">App Logo</string>
     <string name="cd_selected_indicator">Selected</string>
 
-    <!-- New Dynamic Translation Strings -->
     <string name="student_no_details">কোনো বিস্তারিত তথ্য নেই</string>
     <string name="subject_level_general">সাধারণ</string>
     <string name="dialog_manage_enrollments">এনরোলমেন্ট পরিচালনা</string>
@@ -157,31 +174,75 @@
     <string name="unknown_student">অজানা শিক্ষার্থী</string>
     <string name="unknown_subject">অজানা বিষয়</string>
     <string name="dialog_edit_student_profile">শিক্ষার্থীর প্রোফাইল এডিট করুন</string>
+
     <!-- Fees -->
     <string name="dialog_manage_fees">ফি ম্যানেজমেন্ট</string>
-    <string name="fee_agreement_title">ফি নির্ধারণ করুন</string>
+    <string name="fee_agreement_title">রুটিনের ফি নির্ধারণ / আপডেট করুন</string>
+    <string name="fee_select_schedule_label">কোন রুটিনের ফি পরিবর্তন করবেন তা নির্বাচন করুন</string>
     <string name="fee_type_monthly">মাসিক ফি</string>
     <string name="fee_type_per_class">প্রতি ক্লাসের ফি</string>
     <string name="fee_amount_hint">পরিমাণ (যেমন ২০০০)</string>
-    <string name="fee_save">এগ্রিমেন্ট সেভ করুন</string>
-    <string name="fee_saved_success">ফি এগ্রিমেন্ট সেভ হয়েছে!</string>
+    <string name="fee_save">ফি সেভ করুন</string>
+    <string name="fee_saved_success">ফি সফলভাবে আপডেট হয়েছে!</string>
+
     <!-- Invoices -->
     <string name="invoice_list_title">ইনভয়েস এবং পেমেন্ট</string>
     <string name="invoice_empty">কোনো ইনভয়েস নেই। একটি তৈরি করুন।</string>
-    <string name="invoice_generate">মাসিক ইনভয়েস তৈরি করুন</string>
+    <string name="invoice_generate">ইনভয়েস তৈরি করুন</string>
     <string name="invoice_status_unpaid">বকেয়া</string>
     <string name="invoice_status_partial">আংশিক</string>
     <string name="invoice_status_paid">পরিশোধিত</string>
+    <string name="invoice_status_overdue">মেয়াদোত্তীর্ণ</string>
+    <string name="invoice_filter_all">সব</string>
+    <string name="invoice_filter_paid">পরিশোধিত</string>
+    <string name="invoice_filter_unpaid">বকেয়া</string>
+    <string name="invoice_filter_partial">আংশিক পরিশোধিত</string>
+    <string name="invoice_filter_overdue">মেয়াদোত্তীর্ণ</string>
+    <string name="invoice_summary_dashboard_fmt">মোট বিল: ৳%1$.2f  |  আদায়কৃত: ৳%2$.2f\nবকেয়া পাওনা: ৳%3$.2f  |  মেয়াদোত্তীর্ণ ইনভয়েস: %4$d টি</string>
+    <string name="invoice_card_dates_fmt">%1$s\nইস্যু: %2$s · শেষ তারিখ: %3$s</string>
+    <string name="invoice_card_amounts_fmt">মোট: ৳%1$.2f | পরিশোধিত: ৳%2$.2f | বকেয়া: ৳%3$.2f</string>
+    <string name="invoice_generated_count_fmt">%d টি নতুন ইনভয়েস তৈরি হয়েছে।</string>
     <string name="invoice_generated_success">ইনভয়েস সফলভাবে তৈরি হয়েছে!</string>
-    <string name="invoice_none_needed">এই মুহূর্তে নতুন ইনভয়েসের প্রয়োজন নেই।</string>
+    <string name="invoice_none_needed">সব সক্রিয় রুটিন ও ক্লাসের ইনভয়েস ইতিমধ্যে তৈরি করা হয়েছে।</string>
 
-    <!-- Invoice Details -->
+    <!-- Invoice Details & Student Ledger -->
     <string name="invoice_detail_title">ইনভয়েস বিস্তারিত</string>
     <string name="invoice_total_amount">মোট পরিমাণ:</string>
     <string name="invoice_paid_amount">পরিশোধিত পরিমাণ:</string>
     <string name="invoice_due_amount">বকেয়া পরিমাণ:</string>
-    <string name="invoice_payment_history">পেমেন্টের ইতিহাস</string>
-    <string name="invoice_no_payments">এখনো কোনো পেমেন্ট রেকর্ড করা হয়নি।</string>
-    <string name="invoice_record_payment">নতুন পেমেন্ট রেকর্ড করুন</string>
-    <string name="invoice_payment_amount">পেমেন্টের পরিমাণ</string>
+    <string name="invoice_payment_history">পেমেন্ট ও রিফান্ড ইতিহাস</string>
+    <string name="invoice_no_payments">এখনো কোনো পেমেন্ট বা রিফান্ড রেকর্ড করা হয়নি।</string>
+    <string name="invoice_record_payment">পেমেন্ট রেকর্ড করুন</string>
+    <string name="invoice_payment_amount">পেমেন্টের পরিমাণ (টাকায়)</string>
+    <string name="invoice_itemized_charges">বিস্তারিত চার্জসমূহ</string>
+    <string name="invoice_send_reminder">রিমাইন্ডার পাঠান (বাংলা / English)</string>
+    <string name="invoice_export_pdf">ইনভয়েস PDF এক্সপোর্ট / শেয়ার করুন</string>
+    <string name="invoice_share_receipt_pdf">পেমেন্ট রিসিট PDF শেয়ার করুন</string>
+    <string name="invoice_issue_refund">রিফান্ড / সংশোধন করুন</string>
+    <string name="invoice_ref_hint">রেফারেন্স / TrxID (ঐচ্ছিক)</string>
+    <string name="invoice_notes_hint">নোট (ঐচ্ছিক)</string>
+    <string name="invoice_err_invalid_amount">পরিমাণ অবশ্যই ৳০.০১ থেকে বকেয়া পরিমাণের মধ্যে হতে হবে।</string>
+    <string name="invoice_payment_saved_fmt">পেমেন্ট রেকর্ড হয়েছে: %s</string>
+    <string name="invoice_refund_saved_msg">রিফান্ড রেকর্ড হয়েছে এবং ইনভয়েস ব্যালেন্স আপডেট করা হয়েছে।</string>
+
+    <string name="ledger_title">শিক্ষার্থীর ফি ও হিসাব</string>
+    <string name="ledger_financial_overview">আর্থিক সংক্ষিপ্ত বিবরণ</string>
+    <string name="ledger_unbilled_classes_fmt">আনবিল্ড ক্লাস চার্জ: ৳ %1$.2f (%2$d টি ক্লাস)</string>
+    <string name="ledger_invoiced_due_fmt">ইনভয়েসকৃত বকেয়া পাওনা: ৳ %1$.2f</string>
+    <string name="ledger_total_billed_paid_fmt">মোট বিল: ৳ %1$.2f   |   মোট পরিশোধিত: ৳ %2$.2f</string>
+    <string name="ledger_fee_rate_header">ফি হার ও বিলিং মডেল</string>
+    <string name="ledger_schedule_fee_row_fmt">• রুটিন (%1$s): ৳ %2$.2f (%3$s)</string>
+    <string name="ledger_default_fee_row_fmt">• ডিফল্ট ফি এগ্রিমেন্ট: ৳ %1$.2f (%2$s)</string>
+    <string name="ledger_no_fee_configured">এখনো কোনো ফি নির্ধারণ করা হয়নি।</string>
+    <string name="ledger_btn_set_update_fee">ফি নির্ধারণ / আপডেট করুন</string>
+    <string name="ledger_attended_classes_header">উপস্থিত ক্লাস ও প্রতি ক্লাসের চার্জ</string>
+    <string name="ledger_no_per_class_sessions">এখনো চার্জযোগ্য কোনো ক্লাস রেকর্ড করা হয়নি।</string>
+    <string name="ledger_badge_billed">[ইনভয়েসকৃত]</string>
+    <string name="ledger_badge_unbilled">[আনবিল্ড বকেয়া]</string>
+    <string name="ledger_btn_generate_invoice_amt_fmt">এখনই ইনভয়েস তৈরি করুন (৳ %1$.2f)</string>
+    <string name="ledger_btn_generate_due_invoice">বকেয়া ইনভয়েস তৈরি করুন</string>
+    <string name="ledger_student_invoices_header">শিক্ষার্থীর ইনভয়েসসমূহ</string>
+    <string name="ledger_btn_pay_multi">বকেয়া ইনভয়েসগুলোর পেমেন্ট রেকর্ড করুন</string>
+    <string name="ledger_tap_to_open">[দেখতে ট্যাপ করুন]</string>
+    <string name="ledger_tap_for_receipt">[রিসিট / রিফান্ডের জন্য ট্যাপ করুন]</string>
 </resources>

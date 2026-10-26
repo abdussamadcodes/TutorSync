@@ -43,8 +43,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textStyle="bold"
-                    android:text="Billed: ৳0.00 | Received: ৳0.00 | Due: ৳0.00" />
+                    android:textStyle="bold" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -68,35 +67,35 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:checked="true"
-                    android:text="All" />
+                    android:text="@string/invoice_filter_all" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipFilterPaid"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Paid" />
+                    android:text="@string/invoice_filter_paid" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipFilterUnpaid"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Unpaid" />
+                    android:text="@string/invoice_filter_unpaid" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipFilterPartial"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Partially Paid" />
+                    android:text="@string/invoice_filter_partial" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipFilterOverdue"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Overdue" />
+                    android:text="@string/invoice_filter_overdue" />
             </com.google.android.material.chip.ChipGroup>
         </HorizontalScrollView>
 

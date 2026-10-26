@@ -1,13 +1,10 @@
 package com.abdussamadcodes.tutorsync.ui.finance;
 
 import android.content.Intent;
-import android.content.res.ColorStateList;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -41,6 +38,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import java.io.File;
@@ -88,7 +86,7 @@ public class StudentTransactionsActivity extends BaseActivity {
 
         AppBarLayout appBar = new AppBarLayout(this);
         toolbar = new MaterialToolbar(this);
-        toolbar.setTitle("Student Fee & Ledger");
+        toolbar.setTitle(getString(R.string.ledger_title));
         TypedValue navIcon = new TypedValue();
         if (getTheme().resolveAttribute(androidx.appcompat.R.attr.homeAsUpIndicator, navIcon, true)) {
             toolbar.setNavigationIcon(navIcon.resourceId);
@@ -121,6 +119,19 @@ public class StudentTransactionsActivity extends BaseActivity {
         refreshHistory();
     }
 
+    private String formatTimeMinutes(int startTimeMinutes) {
+        int h = (startTimeMinutes / 60) % 12;
+        if (h == 0) h = 12;
+        String ampm = startTimeMinutes >= 720 ? "PM" : "AM";
+        return String.format(Locale.getDefault(), "%02d:%02d %s", h, startTimeMinutes % 60, ampm);
+    }
+
+    private String formatBillingModelLabel(String billingModel) {
+        return "PER_CLASS".equals(billingModel)
+                ? getString(R.string.fee_type_per_class)
+                : getString(R.string.fee_type_monthly);
+    }
+
     private void refreshHistory() {
         contentContainer.removeAllViews();
         String accountId = sessionManager.getActiveAccountId();
@@ -145,7 +156,7 @@ public class StudentTransactionsActivity extends BaseActivity {
         }
         FeeAgreement fallbackAgreement = feeRepo.getAgreementForStudent(studentId);
 
-        // 2. Fetch attended per-class charges (auto-heals any pending per-class records)
+        // 2. Fetch attended per-class charges
         List<UnbilledClassCharge> classCharges = attendanceRepo.getPerClassAttendanceChargesForStudent(accountId, studentId);
         int unbilledClassTotalMinor = 0;
         int unbilledClassCount = 0;
@@ -180,84 +191,81 @@ public class StudentTransactionsActivity extends BaseActivity {
         // --- CARD 1: Financial Summary Overview ---
         MaterialCardView summaryCard = createSectionCard();
         LinearLayout summaryCol = createCardBody(summaryCard);
-        addCardHeader(summaryCol, "Financial Overview");
-        addBodyLine(summaryCol, String.format(Locale.US,
-                "Unbilled Class Charges: ৳ %.2f (%d class%s)",
-                unbilledClassTotalMinor / 100.0, unbilledClassCount, unbilledClassCount == 1 ? "" : "es"), true);
-        addBodyLine(summaryCol, String.format(Locale.US,
-                "Invoiced Outstanding Due: ৳ %.2f", totalInvoiceDueMinor / 100.0), true);
-        addBodyLine(summaryCol, String.format(Locale.US,
-                "Total Billed: ৳ %.2f   |   Total Paid: ৳ %.2f",
+        addCardHeader(summaryCol, getString(R.string.ledger_financial_overview));
+        addBodyLine(summaryCol, getString(R.string.ledger_unbilled_classes_fmt,
+                unbilledClassTotalMinor / 100.0, unbilledClassCount), true);
+        addBodyLine(summaryCol, getString(R.string.ledger_invoiced_due_fmt,
+                totalInvoiceDueMinor / 100.0), true);
+        addBodyLine(summaryCol, getString(R.string.ledger_total_billed_paid_fmt,
                 totalInvoicedMinor / 100.0, totalPaidMinor / 100.0), false);
         contentContainer.addView(summaryCard);
 
         // --- CARD 2: Active Fee Rate & Schedules ---
         MaterialCardView feeCard = createSectionCard();
         LinearLayout feeCol = createCardBody(feeCard);
-        addCardHeader(feeCol, "Fee Rate & Billing Model");
+        addCardHeader(feeCol, getString(R.string.ledger_fee_rate_header));
 
         if (!studentScheduleGroups.isEmpty()) {
-            for (RecurringSchedule rs : studentScheduleGroups.values()) {
-                int h = (rs.getStartTimeMinutes() / 60) % 12;
-                if (h == 0) h = 12;
-                String ampm = rs.getStartTimeMinutes() >= 720 ? "PM" : "AM";
-                String modelStr = "PER_CLASS".equals(rs.getBillingModel()) ? "Per Class" : "Fixed Monthly";
+            for (Map.Entry<String, RecurringSchedule> entry : studentScheduleGroups.entrySet()) {
+                final String groupKey = entry.getKey();
+                RecurringSchedule rs = entry.getValue();
+                String timeStr = formatTimeMinutes(rs.getStartTimeMinutes());
                 int feeVal = rs.getFeeAmountMinor();
+                String modelCode = rs.getBillingModel();
                 if (feeVal <= 0 && fallbackAgreement != null) {
                     feeVal = fallbackAgreement.getAmountMinorUnits();
-                    modelStr = "PER_CLASS".equals(fallbackAgreement.getFeeType()) ? "Per Class" : "Fixed Monthly";
+                    modelCode = fallbackAgreement.getFeeType();
                 }
-                addBodyLine(feeCol, String.format(Locale.US,
-                        "• Schedule (%02d:%02d %s): ৳ %.2f (%s)",
-                        h, rs.getStartTimeMinutes() % 60, ampm, feeVal / 100.0, modelStr), false);
+                String modelStr = formatBillingModelLabel(modelCode);
+                TextView row = addBodyLine(feeCol, getString(R.string.ledger_schedule_fee_row_fmt,
+                        timeStr, feeVal / 100.0, modelStr), false);
+                // Tapping a schedule row opens the fee sheet pre-selected to that schedule
+                row.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, groupKey));
             }
         } else if (fallbackAgreement != null) {
-            String modelStr = FeeAgreement.TYPE_PER_CLASS.equals(fallbackAgreement.getFeeType()) ? "Per Class" : "Fixed Monthly";
-            addBodyLine(feeCol, String.format(Locale.US,
-                    "• Default Fee Agreement: ৳ %.2f (%s)",
+            String modelStr = formatBillingModelLabel(fallbackAgreement.getFeeType());
+            addBodyLine(feeCol, getString(R.string.ledger_default_fee_row_fmt,
                     fallbackAgreement.getAmountMinorUnits() / 100.0, modelStr), false);
         } else {
-            addBodyLine(feeCol, "No fee rate configured yet.", false);
+            addBodyLine(feeCol, getString(R.string.ledger_no_fee_configured), false);
         }
 
         MaterialButton btnEditFee = new MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
-        btnEditFee.setText("Set / Update Fee Rate");
-        btnEditFee.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement));
+        btnEditFee.setText(getString(R.string.ledger_btn_set_update_fee));
+        btnEditFee.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, null));
         feeCol.addView(btnEditFee);
         contentContainer.addView(feeCard);
 
         // --- CARD 3: Attended Classes & Per-Class Charges ---
         MaterialCardView attendanceCard = createSectionCard();
         LinearLayout attCol = createCardBody(attendanceCard);
-        addCardHeader(attCol, "Attended Classes & Per-Class Charges");
+        addCardHeader(attCol, getString(R.string.ledger_attended_classes_header));
 
         SimpleDateFormat df = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
         if (classCharges.isEmpty()) {
-            addBodyLine(attCol, "No chargeable per-class sessions recorded yet.", false);
+            addBodyLine(attCol, getString(R.string.ledger_no_per_class_sessions), false);
         } else {
             for (UnbilledClassCharge cc : classCharges) {
-                int h = (cc.startTimeMinutes / 60) % 12;
-                if (h == 0) h = 12;
-                String ampm = cc.startTimeMinutes >= 720 ? "PM" : "AM";
-                String badge = cc.isBilled ? "[BILLED]" : "[UNBILLED DUE]";
-                addBodyLine(attCol, String.format(Locale.US,
-                        "%s · %02d:%02d %s (%s) — ৳ %.2f  %s",
-                        df.format(new Date(cc.dateMillis)), h, cc.startTimeMinutes % 60, ampm,
+                String timeStr = formatTimeMinutes(cc.startTimeMinutes);
+                String badge = cc.isBilled ? getString(R.string.ledger_badge_billed) : getString(R.string.ledger_badge_unbilled);
+                addBodyLine(attCol, String.format(Locale.getDefault(),
+                        "%s · %s (%s) — ৳ %.2f  %s",
+                        df.format(new Date(cc.dateMillis)), timeStr,
                         cc.status, cc.feeMinor / 100.0, badge), !cc.isBilled);
             }
         }
 
         MaterialButton btnGenInvoice = new MaterialButton(this);
         btnGenInvoice.setText(unbilledClassCount > 0
-                ? String.format(Locale.US, "Generate Invoice Now (৳ %.2f)", unbilledClassTotalMinor / 100.0)
-                : "Generate Due Invoice");
+                ? getString(R.string.ledger_btn_generate_invoice_amt_fmt, unbilledClassTotalMinor / 100.0)
+                : getString(R.string.ledger_btn_generate_due_invoice));
         btnGenInvoice.setOnClickListener(v -> {
             int created = invoiceRepo.generateDueInvoicesForStudent(accountId, studentId);
             if (created > 0) {
-                showMessage(contentContainer, "Invoice generated successfully!");
+                showMessage(contentContainer, getString(R.string.invoice_generated_success));
                 refreshHistory();
             } else {
-                showMessage(contentContainer, "No unbilled classes or due monthly cycles to invoice.");
+                showMessage(contentContainer, getString(R.string.invoice_none_needed));
             }
         });
         attCol.addView(btnGenInvoice);
@@ -266,16 +274,18 @@ public class StudentTransactionsActivity extends BaseActivity {
         // --- CARD 4: Student Invoices ---
         MaterialCardView invCard = createSectionCard();
         LinearLayout invCol = createCardBody(invCard);
-        addCardHeader(invCol, "Student Invoices");
+        addCardHeader(invCol, getString(R.string.ledger_student_invoices_header));
 
         if (studentInvoices.isEmpty()) {
-            addBodyLine(invCol, "No invoices generated yet.", false);
+            addBodyLine(invCol, getString(R.string.invoice_empty), false);
         } else {
             for (Invoice inv : studentInvoices) {
-                TextView row = addBodyLine(invCol, String.format(Locale.US,
-                                "%s (%s) · %s\nTotal: ৳%.2f | Paid: ৳%.2f | Due: ৳%.2f   [Tap to Open]",
+                String summaryLine = getString(R.string.invoice_card_amounts_fmt,
+                        inv.getTotalAmount() / 100.0, inv.getPaidAmount() / 100.0, inv.getOutstandingBalance() / 100.0);
+                TextView row = addBodyLine(invCol, String.format(Locale.getDefault(),
+                                "%s (%s) · %s\n%s   %s",
                                 inv.getInvoiceIdDisplay(), inv.getStatus(), inv.getBillingPeriod(),
-                                inv.getTotalAmount() / 100.0, inv.getPaidAmount() / 100.0, inv.getOutstandingBalance() / 100.0),
+                                summaryLine, getString(R.string.ledger_tap_to_open)),
                         inv.getOutstandingBalance() > 0);
                 row.setOnClickListener(v -> {
                     Intent intent = new Intent(this, InvoiceDetailActivity.class);
@@ -288,7 +298,7 @@ public class StudentTransactionsActivity extends BaseActivity {
         if (totalInvoiceDueMinor > 0) {
             final int maxPayableMinor = totalInvoiceDueMinor;
             MaterialButton btnPayMulti = new MaterialButton(this);
-            btnPayMulti.setText("Record Payment Across Open Invoices");
+            btnPayMulti.setText(getString(R.string.ledger_btn_pay_multi));
             btnPayMulti.setOnClickListener(v -> showMultiInvoicePaymentDialog(studentOpenInvoices, maxPayableMinor));
             invCol.addView(btnPayMulti);
         }
@@ -297,20 +307,21 @@ public class StudentTransactionsActivity extends BaseActivity {
         // --- CARD 5: Transactions (Payments & Refunds) ---
         MaterialCardView txnCard = createSectionCard();
         LinearLayout txnCol = createCardBody(txnCard);
-        addCardHeader(txnCol, "Payment & Refund History");
+        addCardHeader(txnCol, getString(R.string.invoice_payment_history));
 
         List<FinancialTransaction> txns = txnRepo.getTransactionsForStudent(accountId, studentId);
         SimpleDateFormat dtf = new SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault());
         if (txns.isEmpty()) {
-            addBodyLine(txnCol, "No payments or refunds recorded yet.", false);
+            addBodyLine(txnCol, getString(R.string.invoice_no_payments), false);
         } else {
             for (FinancialTransaction txn : txns) {
                 String invoicesStr = txn.getRelatedInvoiceDisplayIds().isEmpty()
                         ? "N/A" : String.join(", ", txn.getRelatedInvoiceDisplayIds());
-                String text = String.format(Locale.US,
-                        "%s (%s) — ৳%.2f\n%s · %s | Invoices: %s   [Tap for Receipt / Refund]",
+                String text = String.format(Locale.getDefault(),
+                        "%s (%s) — ৳%.2f\n%s · %s | %s   %s",
                         txn.getTxnIdDisplay(), txn.getType(), txn.getAmountMinor() / 100.0,
-                        dtf.format(new Date(txn.getTimestamp())), txn.getMethod(), invoicesStr);
+                        dtf.format(new Date(txn.getTimestamp())), txn.getMethod(),
+                        invoicesStr, getString(R.string.ledger_tap_for_receipt));
                 TextView tv = addBodyLine(txnCol, text, false);
                 tv.setOnClickListener(v -> showTransactionOptions(txn));
             }
@@ -318,46 +329,97 @@ public class StudentTransactionsActivity extends BaseActivity {
         contentContainer.addView(txnCard);
     }
 
-    private void showFeeRateBottomSheet(Map<String, RecurringSchedule> scheduleGroups, @Nullable FeeAgreement existing) {
+    /**
+     * Displays the bottom sheet to update a student's fee rate.
+     * When the student has schedules, shows selectable chips so the tutor chooses which schedule to update.
+     */
+    private void showFeeRateBottomSheet(
+            Map<String, RecurringSchedule> scheduleGroups,
+            @Nullable FeeAgreement existing,
+            @Nullable String preselectedGroupKey) {
+
         BottomSheetDialog feeDialog = new BottomSheetDialog(this);
         View view = getLayoutInflater().inflate(R.layout.bottom_sheet_fee_agreement, null);
         feeDialog.setContentView(view);
 
+        View layoutScheduleSelector = view.findViewById(R.id.layoutScheduleSelector);
+        ChipGroup chipGroupSchedules = view.findViewById(R.id.chipGroupSchedules);
         MaterialButtonToggleGroup toggleGroup = view.findViewById(R.id.toggleGroupFeeType);
         TextInputEditText etAmount = view.findViewById(R.id.etFeeAmount);
 
-        String currentModel = FeeAgreement.TYPE_MONTHLY;
-        int currentMinor = 0;
-        if (!scheduleGroups.isEmpty()) {
-            RecurringSchedule first = scheduleGroups.values().iterator().next();
-            currentModel = first.getBillingModel();
-            currentMinor = first.getFeeAmountMinor();
-        }
-        if (currentMinor <= 0 && existing != null) {
-            currentModel = existing.getFeeType();
-            currentMinor = existing.getAmountMinorUnits();
-        }
+        final List<RecurringSchedule> scheduleList = new ArrayList<>(scheduleGroups.values());
+        final int[] selectedIndex = {0};
 
-        if (FeeAgreement.TYPE_PER_CLASS.equals(currentModel)) {
-            toggleGroup.check(R.id.btnFeePerClass);
+        if (!scheduleList.isEmpty()) {
+            layoutScheduleSelector.setVisibility(View.VISIBLE);
+            chipGroupSchedules.removeAllViews();
+
+            for (int i = 0; i < scheduleList.size(); i++) {
+                RecurringSchedule rs = scheduleList.get(i);
+                String key = rs.getScheduleGroupId() != null ? rs.getScheduleGroupId() : ("TIME-" + rs.getStartTimeMinutes());
+                if (preselectedGroupKey != null && preselectedGroupKey.equals(key)) {
+                    selectedIndex[0] = i;
+                }
+
+                Chip chip = new Chip(this);
+                chip.setId(View.generateViewId());
+                chip.setCheckable(true);
+                chip.setClickable(true);
+                int feeVal = rs.getFeeAmountMinor();
+                if (feeVal <= 0 && existing != null) feeVal = existing.getAmountMinorUnits();
+                chip.setText(String.format(Locale.getDefault(), "%s (৳%.0f)",
+                        formatTimeMinutes(rs.getStartTimeMinutes()), feeVal / 100.0));
+
+                final int idx = i;
+                chip.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                    if (isChecked) {
+                        selectedIndex[0] = idx;
+                        RecurringSchedule chosen = scheduleList.get(idx);
+                        String model = chosen.getBillingModel();
+                        int minor = chosen.getFeeAmountMinor();
+                        if (minor <= 0 && existing != null) {
+                            model = existing.getFeeType();
+                            minor = existing.getAmountMinorUnits();
+                        }
+                        if (FeeAgreement.TYPE_PER_CLASS.equals(model)) {
+                            toggleGroup.check(R.id.btnFeePerClass);
+                        } else {
+                            toggleGroup.check(R.id.btnFeeMonthly);
+                        }
+                        etAmount.setText(minor > 0 ? String.valueOf(minor / 100) : "");
+                    }
+                });
+
+                chipGroupSchedules.addView(chip);
+                if (i == selectedIndex[0]) {
+                    chip.setChecked(true);
+                }
+            }
         } else {
-            toggleGroup.check(R.id.btnFeeMonthly);
-        }
-        if (currentMinor > 0) {
-            etAmount.setText(String.valueOf(currentMinor / 100));
+            layoutScheduleSelector.setVisibility(View.GONE);
+            if (existing != null) {
+                if (FeeAgreement.TYPE_PER_CLASS.equals(existing.getFeeType())) {
+                    toggleGroup.check(R.id.btnFeePerClass);
+                } else {
+                    toggleGroup.check(R.id.btnFeeMonthly);
+                }
+                etAmount.setText(String.valueOf(existing.getAmountMinorUnits() / 100));
+            } else {
+                toggleGroup.check(R.id.btnFeeMonthly);
+            }
         }
 
         view.findViewById(R.id.btnSaveFee).setOnClickListener(v -> {
             String amtStr = etAmount.getText() != null ? etAmount.getText().toString().trim() : "";
             if (amtStr.isEmpty()) {
-                etAmount.setError("Required");
+                etAmount.setError(getString(R.string.auth_err_empty));
                 return;
             }
             int amountMinor;
             try {
                 amountMinor = (int) Math.round(Double.parseDouble(amtStr) * 100);
             } catch (NumberFormatException e) {
-                etAmount.setError("Invalid amount");
+                etAmount.setError(getString(R.string.invoice_err_invalid_amount));
                 return;
             }
 
@@ -365,18 +427,22 @@ public class StudentTransactionsActivity extends BaseActivity {
                     ? FeeAgreement.TYPE_PER_CLASS : FeeAgreement.TYPE_MONTHLY;
             String accountId = sessionManager.getActiveAccountId();
 
-            // Save to legacy fee_agreements AND update all active schedule groups for this student
-            FeeAgreement agreement = new FeeAgreement(
-                    existing != null ? existing.getId() : UUID.randomUUID().toString(),
-                    accountId, studentId, type, amountMinor, System.currentTimeMillis()
-            );
-            feeRepo.saveAgreement(agreement);
-
-            int anchorDay = Calendar.getInstance().get(Calendar.DAY_OF_MONTH);
-            for (RecurringSchedule rs : scheduleGroups.values()) {
-                if (rs.getScheduleGroupId() != null) {
-                    scheduleRepo.updateScheduleGroupFee(accountId, studentId, rs.getScheduleGroupId(), type, amountMinor, anchorDay);
+            if (!scheduleList.isEmpty()) {
+                RecurringSchedule chosenSchedule = scheduleList.get(selectedIndex[0]);
+                int anchorDay = chosenSchedule.getAnchorDay() > 0
+                        ? chosenSchedule.getAnchorDay()
+                        : Calendar.getInstance().get(Calendar.DAY_OF_MONTH);
+                if (chosenSchedule.getScheduleGroupId() != null) {
+                    scheduleRepo.updateScheduleGroupFee(
+                            accountId, studentId, chosenSchedule.getScheduleGroupId(),
+                            type, amountMinor, anchorDay);
                 }
+            } else {
+                FeeAgreement agreement = new FeeAgreement(
+                        existing != null ? existing.getId() : UUID.randomUUID().toString(),
+                        accountId, studentId, type, amountMinor, System.currentTimeMillis()
+                );
+                feeRepo.saveAgreement(agreement);
             }
 
             feeDialog.dismiss();
@@ -394,7 +460,7 @@ public class StudentTransactionsActivity extends BaseActivity {
         layout.setPadding(pad, pad, pad, 0);
 
         EditText etAmount = new EditText(this);
-        etAmount.setHint("Payment Amount in BDT");
+        etAmount.setHint(getString(R.string.invoice_payment_amount));
         etAmount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         etAmount.setText(String.format(Locale.US, "%.2f", totalDueMinor / 100.0));
         layout.addView(etAmount);
@@ -405,22 +471,22 @@ public class StudentTransactionsActivity extends BaseActivity {
         layout.addView(spMethod);
 
         EditText etRef = new EditText(this);
-        etRef.setHint("Reference / TrxID (Optional)");
+        etRef.setHint(getString(R.string.invoice_ref_hint));
         layout.addView(etRef);
 
         EditText etNotes = new EditText(this);
-        etNotes.setHint("Notes (Optional)");
+        etNotes.setHint(getString(R.string.invoice_notes_hint));
         layout.addView(etNotes);
 
         new MaterialAlertDialogBuilder(this)
-                .setTitle("Allocate Payment Across Open Invoices")
+                .setTitle(getString(R.string.ledger_btn_pay_multi))
                 .setView(layout)
-                .setPositiveButton("Save Payment", (d, w) -> {
+                .setPositiveButton(getString(R.string.action_save), (d, w) -> {
                     try {
                         double bdt = Double.parseDouble(etAmount.getText().toString().trim());
                         int amountMinor = (int) Math.round(bdt * 100);
                         if (amountMinor <= 0 || amountMinor > totalDueMinor) {
-                            showMessage(contentContainer, "Amount must be between ৳0.01 and total outstanding balance.");
+                            showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
                             return;
                         }
                         FinancialTransaction created = txnRepo.recordStudentLumpSumPaymentFIFO(
@@ -433,34 +499,37 @@ public class StudentTransactionsActivity extends BaseActivity {
                                 openInvoicesChronological
                         );
                         if (created != null) {
-                            showMessage(contentContainer, "Payment recorded: " + created.getTxnIdDisplay());
+                            showMessage(contentContainer, getString(R.string.invoice_payment_saved_fmt, created.getTxnIdDisplay()));
                             refreshHistory();
                         }
                     } catch (NumberFormatException e) {
-                        showMessage(contentContainer, "Invalid amount.");
+                        showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
                     }
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.action_cancel), null)
                 .show();
     }
 
     private void showTransactionOptions(FinancialTransaction txn) {
-        String[] items = {"Export / Share Payment Receipt PDF", "Issue Refund / Correction"};
+        String[] items = {
+                getString(R.string.invoice_share_receipt_pdf),
+                getString(R.string.invoice_issue_refund)
+        };
         new MaterialAlertDialogBuilder(this)
                 .setTitle(txn.getTxnIdDisplay())
                 .setItems(items, (d, which) -> {
                     if (which == 0) {
                         try {
                             File pdf = FinancialPdfGenerator.generatePaymentReceiptPdf(this, "Tutor", currentStudent, txn);
-                            FinancialPdfGenerator.sharePdf(this, pdf, "Share Payment Receipt PDF");
+                            FinancialPdfGenerator.sharePdf(this, pdf, getString(R.string.invoice_share_receipt_pdf));
                         } catch (Exception e) {
-                            showMessage(contentContainer, "Failed to generate receipt PDF.");
+                            showMessage(contentContainer, e.getMessage());
                         }
                     } else if (which == 1 && FinancialTransaction.TYPE_PAYMENT.equals(txn.getType())) {
                         boolean ok = txnRepo.recordRefundForTransaction(
                                 sessionManager.getActiveAccountId(), txn.getId(), txn.getAmountMinor(), "Tutor refund");
                         if (ok) {
-                            showMessage(contentContainer, "Refund recorded and invoice balances updated.");
+                            showMessage(contentContainer, getString(R.string.invoice_refund_saved_msg));
                             refreshHistory();
                         }
                     }

@@ -41,7 +41,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Student Absent" />
+                android:text="@string/attendance_status_absent" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnStatusCancelled"
@@ -67,14 +67,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked="true"
-                android:text="By Student" />
+                android:text="@string/attendance_by_student" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipByTutor"
                 style="@style/Widget.Material3.Chip.Filter"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="By Tutor" />
+                android:text="@string/attendance_by_tutor" />
         </com.google.android.material.chip.ChipGroup>
 
         <LinearLayout
@@ -90,14 +90,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:checked="true"
-                android:text="Charge Per-Class Fee (if applicable)" />
+                android:text="@string/attendance_charge_per_class" />
 
             <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/switchRescheduleMakeup"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:checked="false"
-                android:text="Reschedule / Add Makeup Class" />
+                android:text="@string/attendance_reschedule_makeup" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPickMakeupDateTime"
@@ -105,7 +105,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:text="Select Makeup Date &amp; Time" />
+                android:text="@string/attendance_pick_makeup_datetime" />
         </LinearLayout>
 
         <com.google.android.material.textfield.TextInputLayout

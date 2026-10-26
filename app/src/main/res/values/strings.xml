@@ -122,11 +122,29 @@
     <string name="schedule_err_select_day">Please select at least one day</string>
     <string name="schedule_success">Schedule saved successfully!</string>
     <string name="schedule_failed">Failed to save schedule.</string>
+    <string name="schedule_billing_header">Schedule Billing Model &amp; Fee</string>
+    <string name="schedule_fee_hint">Schedule Fee in BDT (e.g. 2000)</string>
+    <string name="schedule_edit_group_title">Edit Schedule Group</string>
+    <string name="schedule_picker_student_single_sub">Tap a student for this schedule group</string>
+    <string name="schedule_picker_student_multi_sub">Select one or more students for this schedule</string>
+    <string name="schedule_picker_subject_sub">Tap subjects covered in this schedule</string>
+    <string name="schedule_confirm_selection">Confirm Selection</string>
+    <string name="schedule_confirm_subjects">Confirm Subjects</string>
+    <string name="schedule_students_selected_fmt">%d Students Selected</string>
+    <string name="schedule_subjects_selected_fmt">%d Subjects Selected</string>
 
     <string name="attendance_title">Record Attendance</string>
     <string name="attendance_status_present">Present</string>
-    <string name="attendance_status_absent">Absent</string>
+    <string name="attendance_status_absent">Student Absent</string>
     <string name="attendance_status_cancelled">Cancelled</string>
+    <string name="attendance_by_student">By Student</string>
+    <string name="attendance_by_tutor">By Tutor</string>
+    <string name="attendance_charge_per_class">Charge Per-Class Fee (if applicable)</string>
+    <string name="attendance_reschedule_makeup">Reschedule / Add Makeup Class</string>
+    <string name="attendance_pick_makeup_datetime">Select Makeup Date &amp; Time</string>
+    <string name="attendance_makeup_selected_fmt">Makeup: %1$s at %2$s</string>
+    <string name="attendance_err_select_makeup">Please select the makeup class date and time</string>
+    <string name="attendance_saved_msg">Attendance &amp; billing decision saved</string>
     <string name="attendance_topic_hint">Topic Covered (Optional)</string>
     <string name="attendance_homework_hint">Homework Assigned (Optional)</string>
     <string name="attendance_notes_hint">Tutor Notes (Private)</string>
@@ -136,7 +154,6 @@
     <string name="cd_app_logo">App Logo</string>
     <string name="cd_selected_indicator">Selected</string>
 
-    <!-- New Dynamic Translation Strings -->
     <string name="student_no_details">No details added</string>
     <string name="subject_level_general">General</string>
     <string name="dialog_manage_enrollments">Manage Enrollments</string>
@@ -157,30 +174,75 @@
     <string name="unknown_student">Unknown Student</string>
     <string name="unknown_subject">Unknown Subject</string>
     <string name="dialog_edit_student_profile">Edit Student Profile</string>
+
     <!-- Fees -->
     <string name="dialog_manage_fees">Manage Fees</string>
-    <string name="fee_agreement_title">Set Fee Agreement</string>
+    <string name="fee_agreement_title">Set / Update Schedule Fee</string>
+    <string name="fee_select_schedule_label">Select Schedule to Update</string>
     <string name="fee_type_monthly">Monthly Rate</string>
     <string name="fee_type_per_class">Per Class</string>
     <string name="fee_amount_hint">Amount (e.g. 2000)</string>
     <string name="fee_save">Save Agreement</string>
-    <string name="fee_saved_success">Fee Agreement Saved!</string>
+    <string name="fee_saved_success">Fee updated successfully!</string>
+
     <!-- Invoices -->
     <string name="invoice_list_title">Invoices &amp; Payments</string>
     <string name="invoice_empty">No invoices found. Generate one to get started.</string>
-    <string name="invoice_generate">Generate Monthly Invoices</string>
+    <string name="invoice_generate">Generate Invoices</string>
     <string name="invoice_status_unpaid">UNPAID</string>
     <string name="invoice_status_partial">PARTIAL</string>
     <string name="invoice_status_paid">PAID</string>
+    <string name="invoice_status_overdue">OVERDUE</string>
+    <string name="invoice_filter_all">All</string>
+    <string name="invoice_filter_paid">Paid</string>
+    <string name="invoice_filter_unpaid">Unpaid</string>
+    <string name="invoice_filter_partial">Partially Paid</string>
+    <string name="invoice_filter_overdue">Overdue</string>
+    <string name="invoice_summary_dashboard_fmt">Billed: ৳%1$.2f  |  Received: ৳%2$.2f\nOutstanding Dues: ৳%3$.2f  |  Overdue Invoices: %4$d</string>
+    <string name="invoice_card_dates_fmt">%1$s\nIssued: %2$s · Due: %3$s</string>
+    <string name="invoice_card_amounts_fmt">Total: ৳%1$.2f | Paid: ৳%2$.2f | Due: ৳%3$.2f</string>
+    <string name="invoice_generated_count_fmt">Generated %d new invoice(s).</string>
     <string name="invoice_generated_success">Invoices generated successfully!</string>
-    <string name="invoice_none_needed">No new invoices needed right now.</string>
-    <!-- Invoice Details -->
+    <string name="invoice_none_needed">All active schedules and confirmed classes are already billed.</string>
+
+    <!-- Invoice Details & Student Ledger -->
     <string name="invoice_detail_title">Invoice Details</string>
     <string name="invoice_total_amount">Total Amount:</string>
     <string name="invoice_paid_amount">Paid Amount:</string>
     <string name="invoice_due_amount">Due Amount:</string>
-    <string name="invoice_payment_history">Payment History</string>
-    <string name="invoice_no_payments">No payments recorded yet.</string>
-    <string name="invoice_record_payment">Record New Payment</string>
-    <string name="invoice_payment_amount">Amount to Pay</string>
+    <string name="invoice_payment_history">Payments &amp; Refunds</string>
+    <string name="invoice_no_payments">No payments or refunds recorded yet.</string>
+    <string name="invoice_record_payment">Record Payment</string>
+    <string name="invoice_payment_amount">Payment Amount in BDT</string>
+    <string name="invoice_itemized_charges">Itemized Charges</string>
+    <string name="invoice_send_reminder">Send Reminder (Bangla / English)</string>
+    <string name="invoice_export_pdf">Export / Share Invoice PDF</string>
+    <string name="invoice_share_receipt_pdf">Export / Share Payment Receipt PDF</string>
+    <string name="invoice_issue_refund">Issue Refund / Correction</string>
+    <string name="invoice_ref_hint">Reference / TrxID (Optional)</string>
+    <string name="invoice_notes_hint">Notes (Optional)</string>
+    <string name="invoice_err_invalid_amount">Amount must be between ৳0.01 and outstanding balance.</string>
+    <string name="invoice_payment_saved_fmt">Payment recorded: %s</string>
+    <string name="invoice_refund_saved_msg">Refund recorded and invoice balances updated.</string>
+
+    <string name="ledger_title">Student Fee &amp; Ledger</string>
+    <string name="ledger_financial_overview">Financial Overview</string>
+    <string name="ledger_unbilled_classes_fmt">Unbilled Class Charges: ৳ %1$.2f (%2$d class(es))</string>
+    <string name="ledger_invoiced_due_fmt">Invoiced Outstanding Due: ৳ %1$.2f</string>
+    <string name="ledger_total_billed_paid_fmt">Total Billed: ৳ %1$.2f   |   Total Paid: ৳ %2$.2f</string>
+    <string name="ledger_fee_rate_header">Fee Rate &amp; Billing Model</string>
+    <string name="ledger_schedule_fee_row_fmt">• Schedule (%1$s): ৳ %2$.2f (%3$s)</string>
+    <string name="ledger_default_fee_row_fmt">• Default Fee Agreement: ৳ %1$.2f (%2$s)</string>
+    <string name="ledger_no_fee_configured">No fee rate configured yet.</string>
+    <string name="ledger_btn_set_update_fee">Set / Update Fee Rate</string>
+    <string name="ledger_attended_classes_header">Attended Classes &amp; Per-Class Charges</string>
+    <string name="ledger_no_per_class_sessions">No chargeable per-class sessions recorded yet.</string>
+    <string name="ledger_badge_billed">[BILLED]</string>
+    <string name="ledger_badge_unbilled">[UNBILLED DUE]</string>
+    <string name="ledger_btn_generate_invoice_amt_fmt">Generate Invoice Now (৳ %1$.2f)</string>
+    <string name="ledger_btn_generate_due_invoice">Generate Due Invoice</string>
+    <string name="ledger_student_invoices_header">Student Invoices</string>
+    <string name="ledger_btn_pay_multi">Record Payment Across Open Invoices</string>
+    <string name="ledger_tap_to_open">[Tap to Open]</string>
+    <string name="ledger_tap_for_receipt">[Tap for Receipt / Refund]</string>
 </resources>

@@ -15,6 +15,31 @@
         android:textStyle="bold"
         android:layout_marginBottom="16dp"/>
 
+    <LinearLayout
+        android:id="@+id/layoutScheduleSelector"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/fee_select_schedule_label"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupSchedules"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:singleSelection="true"
+            app:selectionRequired="true"/>
+    </LinearLayout>
+
     <com.google.android.material.button.MaterialButtonToggleGroup
         android:id="@+id/toggleGroupFeeType"
         android:layout_width="match_parent"

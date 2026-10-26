@@ -65,7 +65,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Schedule Billing Model &amp; Fee"
+                android:text="@string/schedule_billing_header"
                 android:textStyle="bold"
                 android:textColor="?attr/colorPrimary"
                 android:layout_marginBottom="8dp"/>
@@ -100,7 +100,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="20dp"
-                android:hint="Schedule Fee in BDT (e.g. 2000)">
+                android:hint="@string/schedule_fee_hint">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etScheduleFee"
                     android:layout_width="match_parent"

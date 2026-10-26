@@ -1,11 +1,13 @@
 package com.abdussamadcodes.tutorsync.ui.finance;
 
+import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ItemInvoiceBinding;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -70,9 +72,10 @@ public class InvoiceAdapter extends RecyclerView.Adapter<InvoiceAdapter.ViewHold
         }
 
         void bind(Invoice invoice) {
+            Context context = binding.getRoot().getContext();
             binding.tvInvoiceId.setText(invoice.getInvoiceIdDisplay());
 
-            String studentName = "Unknown Student";
+            String studentName = context.getString(R.string.unknown_student);
             for (Student s : students) {
                 if (s.getId().equals(invoice.getStudentId())) {
                     studentName = s.getFormattedDisplayName();
@@ -81,30 +84,33 @@ public class InvoiceAdapter extends RecyclerView.Adapter<InvoiceAdapter.ViewHold
             }
             binding.tvStudentName.setText(studentName);
 
-            String datesInfo = invoice.getBillingPeriod() +
-                    "\nIssued: " + df.format(new Date(invoice.getIssueDate())) +
-                    " · Due: " + df.format(new Date(invoice.getDueDate()));
+            String datesInfo = context.getString(R.string.invoice_card_dates_fmt,
+                    invoice.getBillingPeriod(),
+                    df.format(new Date(invoice.getIssueDate())),
+                    df.format(new Date(invoice.getDueDate())));
             binding.tvBillingPeriod.setText(datesInfo);
 
-            String amountText = String.format(Locale.US,
-                    "Total: ৳%.2f | Paid: ৳%.2f | Due: ৳%.2f",
+            String amountText = context.getString(R.string.invoice_card_amounts_fmt,
                     invoice.getTotalAmount() / 100.0,
                     invoice.getPaidAmount() / 100.0,
                     invoice.getOutstandingBalance() / 100.0);
             binding.tvAmount.setText(amountText);
 
             String status = invoice.getStatus();
-            binding.chipStatus.setText(status);
             if (Invoice.STATUS_PAID.equals(status)) {
+                binding.chipStatus.setText(context.getString(R.string.invoice_status_paid));
                 binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#2E7D32")));
                 binding.chipStatus.setTextColor(Color.WHITE);
             } else if (Invoice.STATUS_PARTIAL.equals(status)) {
+                binding.chipStatus.setText(context.getString(R.string.invoice_status_partial));
                 binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#EF6C00")));
                 binding.chipStatus.setTextColor(Color.WHITE);
             } else if (Invoice.STATUS_OVERDUE.equals(status)) {
+                binding.chipStatus.setText(context.getString(R.string.invoice_status_overdue));
                 binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#B71C1C")));
                 binding.chipStatus.setTextColor(Color.WHITE);
             } else {
+                binding.chipStatus.setText(context.getString(R.string.invoice_status_unpaid));
                 binding.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#D32F2F")));
                 binding.chipStatus.setTextColor(Color.WHITE);
             }

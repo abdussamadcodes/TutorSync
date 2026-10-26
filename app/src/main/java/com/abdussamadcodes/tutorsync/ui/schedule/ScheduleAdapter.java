@@ -92,8 +92,10 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
                 }
             }
             String subjectName = subjectNamesList.isEmpty() ? context.getString(R.string.subject_level_general) : TextUtils.join(", ", subjectNamesList);
-            String modelLabel = "PER_CLASS".equals(group.getBillingModel()) ? "Per Class" : "Monthly";
-            String feeLabel = String.format(Locale.US, " · ৳%.0f (%s)", group.getFeeAmountMinor() / 100.0, modelLabel);
+            String modelLabel = "PER_CLASS".equals(group.getBillingModel())
+                    ? context.getString(R.string.fee_type_per_class)
+                    : context.getString(R.string.fee_type_monthly);
+            String feeLabel = String.format(Locale.getDefault(), " · ৳%.0f (%s)", group.getFeeAmountMinor() / 100.0, modelLabel);
             binding.tvSubjectName.setText(subjectName + feeLabel);
 
             int hours = group.getStartTimeMinutes() / 60;
