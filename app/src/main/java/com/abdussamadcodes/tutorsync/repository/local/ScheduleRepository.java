@@ -5,16 +5,22 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import androidx.annotation.NonNull;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.ScheduleEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
 import com.abdussamadcodes.tutorsync.model.RecurringSchedule;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 public class ScheduleRepository {
 
-    public boolean insertSchedule(@NonNull RecurringSchedule schedule) {
+    public boolean insertScheduleWithFee(
+            @NonNull RecurringSchedule schedule,
+            @NonNull String scheduleGroupId,
+            @NonNull String billingModel,
+            int feeAmountMinor,
+            int anchorDay) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
             ContentValues values = new ContentValues();
@@ -22,11 +28,16 @@ public class ScheduleRepository {
             values.put(ScheduleEntry.COLUMN_ACCOUNT_ID, schedule.getAccountId());
             values.put(ScheduleEntry.COLUMN_STUDENT_ID, schedule.getStudentId());
             values.put(ScheduleEntry.COLUMN_SUBJECT_ID, schedule.getSubjectId());
+            values.put(ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID, scheduleGroupId);
             values.put(ScheduleEntry.COLUMN_DAY_OF_WEEK, schedule.getDayOfWeek());
             values.put(ScheduleEntry.COLUMN_START_TIME_MINUTES, schedule.getStartTimeMinutes());
             values.put(ScheduleEntry.COLUMN_DURATION_MINUTES, schedule.getDurationMinutes());
             values.put(ScheduleEntry.COLUMN_START_DATE, schedule.getStartDate());
             values.put(ScheduleEntry.COLUMN_END_DATE, schedule.getEndDate());
+            values.put(ScheduleEntry.COLUMN_BILLING_MODEL, billingModel);
+            values.put(ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR, feeAmountMinor);
+            values.put(ScheduleEntry.COLUMN_ANCHOR_DAY, anchorDay);
+            values.put(ScheduleEntry.COLUMN_IS_ACTIVE, 1);
             values.put(ScheduleEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
 
             return db.insert(ScheduleEntry.TABLE_NAME, null, values) != -1;
@@ -35,10 +46,74 @@ public class ScheduleRepository {
         }
     }
 
+    public boolean insertSchedule(@NonNull RecurringSchedule schedule) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(schedule.getStartDate());
+        return insertScheduleWithFee(schedule, UUID.randomUUID().toString(),
+                "MONTHLY", 0, cal.get(Calendar.DAY_OF_MONTH));
+    }
+
+    /**
+     * Updates the fee and/or billing model for a schedule group while preserving historical fee rates
+     * in schedule_fee_history so previously generated invoices and past occurrences are never altered.
+     */
+    public boolean updateScheduleGroupFee(
+            @NonNull String accountId,
+            @NonNull String studentId,
+            @NonNull String scheduleGroupId,
+            @NonNull String newBillingModel,
+            int newFeeAmountMinor,
+            int anchorDay) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        db.beginTransaction();
+        try {
+            long now = System.currentTimeMillis();
+
+            // Close current open rate history entry
+            ContentValues closeHist = new ContentValues();
+            closeHist.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO, now - 1);
+            db.update(ScheduleFeeHistoryEntry.TABLE_NAME, closeHist,
+                    ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
+                            ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL",
+                    new String[]{scheduleGroupId});
+
+            // Insert new rate history entry
+            ContentValues newHist = new ContentValues();
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_ID, UUID.randomUUID().toString());
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID, accountId);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID, scheduleGroupId);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, newBillingModel);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR, newFeeAmountMinor);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, now);
+            newHist.putNull(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_CREATED_AT, now);
+            db.insertOrThrow(ScheduleFeeHistoryEntry.TABLE_NAME, null, newHist);
+
+            // Update schedule rows
+            ContentValues sv = new ContentValues();
+            sv.put(ScheduleEntry.COLUMN_BILLING_MODEL, newBillingModel);
+            sv.put(ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR, newFeeAmountMinor);
+            sv.put(ScheduleEntry.COLUMN_ANCHOR_DAY, anchorDay);
+            sv.put(ScheduleEntry.COLUMN_UPDATED_AT, now);
+            db.update(ScheduleEntry.TABLE_NAME, sv,
+                    ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?", new String[]{scheduleGroupId});
+
+            InvoiceRepository.logAudit(db, accountId, studentId, "SCHEDULE_FEE", scheduleGroupId, "FEE_UPDATED",
+                    String.format(Locale.US, "Updated schedule fee to %s ৳%.2f", newBillingModel, newFeeAmountMinor / 100.0));
+
+            db.setTransactionSuccessful();
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            db.endTransaction();
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
     public boolean deleteScheduleSafely(@NonNull String scheduleId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
-            // Detach past occurrences so billing data isn't lost on cascade delete
             ContentValues occValues = new ContentValues();
             occValues.put(OccurrenceEntry.COLUMN_SCHEDULE_ID, (String) null);
             Calendar cal = Calendar.getInstance();
