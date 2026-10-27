@@ -22,7 +22,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.abdussamadcodes.tutorsync.R;
@@ -91,6 +90,10 @@ public class MainActivity extends BaseActivity {
 
     private boolean isPinVerifiedThisSession = false;
     private static final String STATE_PIN_VERIFIED = "state_pin_verified";
+    private static final String STATE_ACTIVE_TAB = "state_active_tab";
+
+    // Remembers the active tab across theme/language recreations
+    private static int lastActiveTabId = R.id.nav_home;
 
     @Nullable
     private ImageView activeDialogProfileImageView;
@@ -143,6 +146,7 @@ public class MainActivity extends BaseActivity {
         invoiceRepo = new InvoiceRepository();
 
         if (!sessionManager.hasActiveSession()) {
+            lastActiveTabId = R.id.nav_home;
             startActivity(new Intent(this, SignInActivity.class));
             finish();
             return;
@@ -152,20 +156,39 @@ public class MainActivity extends BaseActivity {
         setContentView(binding.getRoot());
         applySystemBarInsets(binding.mainRoot);
 
+        // 1. Attach listeners and adapters FIRST
         setupUI();
         setupListeners();
+
+        // 2. Restore the active tab AFTER setupUI() so the tab visibility updates properly
+        int restoredTabId = savedInstanceState != null
+                ? savedInstanceState.getInt(STATE_ACTIVE_TAB, lastActiveTabId)
+                : lastActiveTabId;
+        binding.bottomNavigation.setSelectedItemId(restoredTabId);
+        switchToTab(restoredTabId);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        int restoredTabId = savedInstanceState.getInt(STATE_ACTIVE_TAB, lastActiveTabId);
+        binding.bottomNavigation.setSelectedItemId(restoredTabId);
+        switchToTab(restoredTabId);
     }
 
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putBoolean(STATE_PIN_VERIFIED, isPinVerifiedThisSession);
+        outState.putInt(STATE_ACTIVE_TAB, lastActiveTabId);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         if (sessionManager.hasActiveSession()) {
+            // Ensure visible tab container always matches the active tab
+            switchToTab(lastActiveTabId);
             refreshStatusLabels();
             loadDashboardData();
 
@@ -196,24 +219,18 @@ public class MainActivity extends BaseActivity {
             }
         });
 
-        binding.bottomNavigation.setOnItemSelectedListener(item -> {
-            binding.tabHome.setVisibility(View.GONE);
-            binding.tabDirectory.setVisibility(View.GONE);
-            binding.tabSettings.setVisibility(View.GONE);
+        binding.bottomNavigation.setOnItemSelectedListener(item -> switchToTab(item.getItemId()));
+    }
 
-            int id = item.getItemId();
-            if (id == R.id.nav_home) {
-                binding.tabHome.setVisibility(View.VISIBLE);
-                return true;
-            } else if (id == R.id.nav_directory) {
-                binding.tabDirectory.setVisibility(View.VISIBLE);
-                return true;
-            } else if (id == R.id.nav_settings) {
-                binding.tabSettings.setVisibility(View.VISIBLE);
-                return true;
-            }
+    private boolean switchToTab(int itemId) {
+        if (itemId != R.id.nav_home && itemId != R.id.nav_directory && itemId != R.id.nav_settings) {
             return false;
-        });
+        }
+        lastActiveTabId = itemId;
+        binding.tabHome.setVisibility(itemId == R.id.nav_home ? View.VISIBLE : View.GONE);
+        binding.tabDirectory.setVisibility(itemId == R.id.nav_directory ? View.VISIBLE : View.GONE);
+        binding.tabSettings.setVisibility(itemId == R.id.nav_settings ? View.VISIBLE : View.GONE);
+        return true;
     }
 
     private void loadDashboardData() {
@@ -393,14 +410,16 @@ public class MainActivity extends BaseActivity {
         binding.rowChangePassword.setOnClickListener(v -> showChangePasswordBottomSheet());
 
         // 3. Preferences Section
-        binding.btnOpenLanguageSettings.setOnClickListener(v ->
-                startActivity(WelcomeActivity.createReopenIntent(this))
-        );
+        binding.btnOpenLanguageSettings.setOnClickListener(v -> {
+            lastActiveTabId = R.id.nav_settings;
+            startActivity(WelcomeActivity.createReopenIntent(this));
+        });
         binding.rowLanguageSettings.setOnClickListener(v ->
                 binding.btnOpenLanguageSettings.performClick()
         );
 
         binding.btnCycleTheme.setOnClickListener(v -> {
+            lastActiveTabId = R.id.nav_settings;
             String current = appPreferences.getThemeMode();
             String next = AppPreferences.THEME_SYSTEM.equals(current) ? AppPreferences.THEME_LIGHT :
                     AppPreferences.THEME_LIGHT.equals(current) ? AppPreferences.THEME_DARK : AppPreferences.THEME_SYSTEM;
@@ -423,6 +442,7 @@ public class MainActivity extends BaseActivity {
 
         // 5. Sign Out
         binding.btnSignOut.setOnClickListener(v -> {
+            lastActiveTabId = R.id.nav_home;
             sessionManager.logout();
             startActivity(new Intent(this, SignInActivity.class));
             finish();
@@ -507,7 +527,6 @@ public class MainActivity extends BaseActivity {
 
         sheetView.findViewById(R.id.btnCancelProfile).setOnClickListener(v -> bottomSheet.dismiss());
 
-        final String existingPicPath = currentPicPath;
         sheetView.findViewById(R.id.btnSaveProfile).setOnClickListener(v -> {
             tilFullName.setError(null);
             String newFullName = etFullName.getText() != null ? etFullName.getText().toString().trim() : "";
@@ -515,37 +534,27 @@ public class MainActivity extends BaseActivity {
             String newEmail = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
             String newDob = etDob.getText() != null ? etDob.getText().toString().trim() : "";
             String newAddress = etAddress.getText() != null ? etAddress.getText().toString().trim() : "";
+            String existingUsername = etUsername.getText() != null ? etUsername.getText().toString() : "";
 
             if (newFullName.isEmpty()) {
                 tilFullName.setError(getString(R.string.auth_err_empty));
                 return;
             }
 
-            SQLiteDatabase writeDb = DatabaseManager.getInstance().openDatabase();
-            try {
-                ContentValues values = new ContentValues();
-                // Username is intentionally never updated (read-only)
-                values.put(AccountEntry.COLUMN_FULL_NAME, newFullName);
-                values.put(AccountEntry.COLUMN_PHONE, newPhone);
-                values.put(AccountEntry.COLUMN_EMAIL, newEmail);
-                values.put(AccountEntry.COLUMN_DOB, newDob);
-                values.put(AccountEntry.COLUMN_ADDRESS, newAddress);
-                values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH,
-                        pendingProfilePicPath != null ? pendingProfilePicPath : existingPicPath);
-                values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
-
-                writeDb.update(
-                        AccountEntry.TABLE_NAME,
-                        values,
-                        AccountEntry.COLUMN_ID + " = ?",
-                        new String[]{accountId}
-                );
-            } finally {
-                DatabaseManager.getInstance().closeDatabase();
+            if (pendingProfilePicPath != null) {
+                accountStore.updateProfilePicPath(accountId, pendingProfilePicPath);
             }
 
-            bottomSheet.dismiss();
-            loadDashboardData();
+            boolean updated = accountStore.updateProfile(
+                    accountId, newFullName, newPhone, newEmail, newAddress, newDob, existingUsername
+            );
+
+            if (updated) {
+                bottomSheet.dismiss();
+                loadDashboardData();
+            } else {
+                showMessage(binding.getRoot(), "Failed to save profile");
+            }
         });
 
         bottomSheet.setOnDismissListener(d -> activeDialogProfileImageView = null);
@@ -765,7 +774,6 @@ public class MainActivity extends BaseActivity {
             root.put("backup_version", 1);
             root.put("exported_at", System.currentTimeMillis());
 
-            // Export Tutor Profile metadata & Base64 avatar
             try (Cursor c = db.query(AccountEntry.TABLE_NAME, null,
                     AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}, null, null, null)) {
                 if (c.moveToFirst()) {
@@ -813,7 +821,6 @@ public class MainActivity extends BaseActivity {
                 }
             }
 
-            // Export student_subjects for this account's students
             try (Cursor c = db.rawQuery(
                     "SELECT ss.* FROM " + TutorSyncContract.StudentSubjectEntry.TABLE_NAME + " ss " +
                             "INNER JOIN " + TutorSyncContract.StudentEntry.TABLE_NAME + " s ON ss.student_id = s.id " +
@@ -860,7 +867,6 @@ public class MainActivity extends BaseActivity {
 
             JSONObject root = new JSONObject(sb.toString());
 
-            // Restore Profile details (keeping current account ID, username, and password intact)
             JSONObject profile = root.optJSONObject("profile");
             if (profile != null) {
                 ContentValues pv = new ContentValues();
