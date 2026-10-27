@@ -289,4 +289,24 @@
     <string name="backup_import_confirm_msg">এটি বর্তমান ডেটা সুরক্ষিত রেখে এবং ডুপ্লিকেট ছাড়াই ব্যাকআপের তথ্য আপনার অ্যাকাউন্টে যুক্ত করবে।</string>
     <string name="backup_import_success">ব্যাকআপ সফলভাবে রিস্টোর হয়েছে!</string>
     <string name="backup_import_failed">বেঠিক বা ত্রুটিপূর্ণ ব্যাকআপ ফাইল।</string>
+
+    <!-- Premium Settings & Security Additions -->
+    <string name="settings_subtitle">আপনার অ্যাকাউন্ট, নিরাপত্তা এবং পছন্দসমূহ পরিচালনা করুন</string>
+    <string name="settings_action_change">পরিবর্তন</string>
+    <string name="settings_action_switch">বদলান</string>
+    <string name="settings_app_lock_sub">পিন বা বায়োমেট্রিক দিয়ে অ্যাপ সুরক্ষিত রাখুন</string>
+    <string name="settings_change_password">পাসওয়ার্ড পরিবর্তন</string>
+    <string name="settings_change_password_sub">আপনার অ্যাকাউন্টের পাসওয়ার্ড আপডেট করুন</string>
+    <string name="settings_change_password_action">আপডেট</string>
+    <string name="change_password_subtitle">নতুন পাসওয়ার্ড সেট করার আগে বর্তমান পাসওয়ার্ড যাচাই করুন।</string>
+    <string name="change_password_current_hint">বর্তমান পাসওয়ার্ড</string>
+    <string name="change_password_new_hint">নতুন পাসওয়ার্ড</string>
+    <string name="change_password_confirm_hint">নতুন পাসওয়ার্ড নিশ্চিত করুন</string>
+    <string name="change_password_helper">বড় ও ছোট হাতের অক্ষর, সংখ্যা এবং চিহ্নসহ অন্তত ৮ অক্ষর ব্যবহার করুন</string>
+    <string name="change_password_save_action">পাসওয়ার্ড আপডেট করুন</string>
+    <string name="err_incorrect_current_password">বর্তমান পাসওয়ার্ডটি সঠিক নয়</string>
+    <string name="err_new_password_same">নতুন পাসওয়ার্ড বর্তমান পাসওয়ার্ডের থেকে আলাদা হতে হবে</string>
+    <string name="msg_password_updated">পাসওয়ার্ড সফলভাবে আপডেট হয়েছে!</string>
+    <string name="profile_username_readonly_helper">ইউজারনেম স্থায়ী এবং এটি পরিবর্তন করা যাবে না</string>
+    <string name="settings_backup_sub">আপনার অফলাইন ডাটাবেস এক্সপোর্ট বা রিস্টোর করুন</string>
 </resources>

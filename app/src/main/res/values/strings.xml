@@ -289,4 +289,24 @@
     <string name="backup_import_confirm_msg">This will safely merge records from the backup into your current account without overwriting existing records or creating duplicates.</string>
     <string name="backup_import_success">Backup restored successfully!</string>
     <string name="backup_import_failed">Invalid or corrupted backup file.</string>
+
+    <!-- Premium Settings & Security Additions -->
+    <string name="settings_subtitle">Manage your account, security, and app preferences</string>
+    <string name="settings_action_change">Change</string>
+    <string name="settings_action_switch">Switch</string>
+    <string name="settings_app_lock_sub">Protect app access with PIN or biometrics</string>
+    <string name="settings_change_password">Change Password</string>
+    <string name="settings_change_password_sub">Update your account login password</string>
+    <string name="settings_change_password_action">Update</string>
+    <string name="change_password_subtitle">Verify your current password before setting a new one.</string>
+    <string name="change_password_current_hint">Current Password</string>
+    <string name="change_password_new_hint">New Password</string>
+    <string name="change_password_confirm_hint">Confirm New Password</string>
+    <string name="change_password_helper">Use 8+ characters with uppercase, lowercase, number &amp; symbol</string>
+    <string name="change_password_save_action">Update Password</string>
+    <string name="err_incorrect_current_password">Current password is incorrect</string>
+    <string name="err_new_password_same">New password must be different from current password</string>
+    <string name="msg_password_updated">Password updated successfully!</string>
+    <string name="profile_username_readonly_helper">Username is permanent and cannot be changed</string>
+    <string name="settings_backup_sub">Export or restore your offline database and profile</string>
 </resources>

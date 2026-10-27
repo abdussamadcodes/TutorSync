@@ -15,7 +15,7 @@ import com.abdussamadcodes.tutorsync.model.Account;
 public class LocalAccountStore {
 
     public LocalAccountStore(@NonNull Context context) {
-        // SQLite backed
+        // SharedPreferences no longer used for accounts
     }
 
     public boolean saveAccount(@NonNull Account account) {
@@ -29,16 +29,12 @@ public class LocalAccountStore {
             values.put(AccountEntry.COLUMN_USERNAME, account.getUsername().toLowerCase());
             values.put(AccountEntry.COLUMN_PASSWORD_HASH, account.getPasswordHash());
             values.put(AccountEntry.COLUMN_SALT, account.getSalt());
-            values.put(AccountEntry.COLUMN_PHONE, account.getPhone());
-            values.put(AccountEntry.COLUMN_EMAIL, account.getEmail());
-            values.put(AccountEntry.COLUMN_ADDRESS, account.getAddress());
-            values.put(AccountEntry.COLUMN_DOB, account.getDob());
-            values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, account.getProfilePicPath());
 
             long currentTime = System.currentTimeMillis();
             values.put(AccountEntry.COLUMN_CREATED_AT, currentTime);
             values.put(AccountEntry.COLUMN_UPDATED_AT, currentTime);
 
+            // insert returns -1 if an error occurred (e.g., username already exists due to UNIQUE constraint)
             long newRowId = db.insert(AccountEntry.TABLE_NAME, null, values);
             success = newRowId != -1;
         } finally {
@@ -50,40 +46,137 @@ public class LocalAccountStore {
     @Nullable
     public Account getAccountByUsername(@NonNull String username) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        Account account = null;
+
         String selection = AccountEntry.COLUMN_USERNAME + " = ?";
         String[] selectionArgs = { username.toLowerCase() };
 
-        try (Cursor cursor = db.query(AccountEntry.TABLE_NAME, null, selection, selectionArgs, null, null, null)) {
+        Cursor cursor = null;
+        try {
+            cursor = db.query(
+                    AccountEntry.TABLE_NAME,
+                    null,
+                    selection,
+                    selectionArgs,
+                    null,
+                    null,
+                    null
+            );
+
             if (cursor != null && cursor.moveToFirst()) {
-                return mapCursorToAccount(cursor);
+                String id = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_ID));
+                String fullName = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_FULL_NAME));
+                String savedUsername = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_USERNAME));
+                String passwordHash = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_PASSWORD_HASH));
+                String salt = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_SALT));
+
+                account = new Account(id, fullName, savedUsername, passwordHash, salt);
             }
         } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
             DatabaseManager.getInstance().closeDatabase();
         }
-        return null;
+
+        return account;
     }
 
     @Nullable
     public Account getAccountById(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        Account account = null;
+
         String selection = AccountEntry.COLUMN_ID + " = ?";
         String[] selectionArgs = { accountId };
 
-        try (Cursor cursor = db.query(AccountEntry.TABLE_NAME, null, selection, selectionArgs, null, null, null)) {
+        Cursor cursor = null;
+        try {
+            cursor = db.query(
+                    AccountEntry.TABLE_NAME,
+                    null,
+                    selection,
+                    selectionArgs,
+                    null,
+                    null,
+                    null
+            );
+
             if (cursor != null && cursor.moveToFirst()) {
-                return mapCursorToAccount(cursor);
+                String id = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_ID));
+                String fullName = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_FULL_NAME));
+                String savedUsername = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_USERNAME));
+                String passwordHash = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_PASSWORD_HASH));
+                String salt = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_SALT));
+
+                account = new Account(id, fullName, savedUsername, passwordHash, salt);
             }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+            DatabaseManager.getInstance().closeDatabase();
+        }
+
+        return account;
+    }
+
+    public boolean updatePassword(@NonNull String accountId, @NonNull String newPasswordHash, @NonNull String newSalt) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        boolean success = false;
+
+        try {
+            ContentValues values = new ContentValues();
+            values.put(AccountEntry.COLUMN_PASSWORD_HASH, newPasswordHash);
+            values.put(AccountEntry.COLUMN_SALT, newSalt);
+            values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+
+            int rowsAffected = db.update(
+                    AccountEntry.TABLE_NAME,
+                    values,
+                    AccountEntry.COLUMN_ID + " = ?",
+                    new String[]{ accountId }
+            );
+            success = rowsAffected > 0;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
-        return null;
+
+        return success;
     }
 
-    public boolean updateProfile(@NonNull String accountId, @NonNull String fullName,
-                                 @Nullable String phone, @Nullable String email,
-                                 @Nullable String address, @Nullable String dob,
-                                 @Nullable String profilePicPath) {
+    public boolean updateProfilePicPath(@NonNull String accountId, @Nullable String path) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        boolean success = false;
+        try {
+            ContentValues values = new ContentValues();
+            if (path == null) {
+                values.putNull(AccountEntry.COLUMN_PROFILE_PIC_PATH);
+            } else {
+                values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, path);
+            }
+            values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+
+            int rowsAffected = db.update(
+                    AccountEntry.TABLE_NAME,
+                    values,
+                    AccountEntry.COLUMN_ID + " = ?",
+                    new String[]{ accountId }
+            );
+            success = rowsAffected > 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+        return success;
+    }
+
+    // FIX: Method signature now accepts 7 arguments to match TutorProfileActivity
+    public boolean updateProfile(@NonNull String accountId, @NonNull String fullName,
+                                 @NonNull String phone, @NonNull String email,
+                                 @NonNull String address, @NonNull String dob,
+                                 @NonNull String username) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        boolean success = false;
         try {
             ContentValues values = new ContentValues();
             values.put(AccountEntry.COLUMN_FULL_NAME, fullName);
@@ -91,54 +184,19 @@ public class LocalAccountStore {
             values.put(AccountEntry.COLUMN_EMAIL, email);
             values.put(AccountEntry.COLUMN_ADDRESS, address);
             values.put(AccountEntry.COLUMN_DOB, dob);
-            values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, profilePicPath);
+            // We intentionally do not update the username here as it is read-only
             values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
 
-            return db.update(AccountEntry.TABLE_NAME, values,
-                    AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}) > 0;
-        } catch (Exception e) {
-            return false;
+            int rowsAffected = db.update(
+                    AccountEntry.TABLE_NAME,
+                    values,
+                    AccountEntry.COLUMN_ID + " = ?",
+                    new String[]{ accountId }
+            );
+            success = rowsAffected > 0;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
-    }
-
-    public boolean updateProfilePicPath(@NonNull String accountId, @Nullable String profilePicPath) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try {
-            ContentValues values = new ContentValues();
-            values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, profilePicPath);
-            values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
-
-            return db.update(AccountEntry.TABLE_NAME, values,
-                    AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}) > 0;
-        } catch (Exception e) {
-            return false;
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-    }
-
-    private Account mapCursorToAccount(Cursor cursor) {
-        String id = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_ID));
-        String fullName = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_FULL_NAME));
-        String savedUsername = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_USERNAME));
-        String passwordHash = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_PASSWORD_HASH));
-        String salt = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_SALT));
-
-        int phoneIdx = cursor.getColumnIndex(AccountEntry.COLUMN_PHONE);
-        int emailIdx = cursor.getColumnIndex(AccountEntry.COLUMN_EMAIL);
-        int addressIdx = cursor.getColumnIndex(AccountEntry.COLUMN_ADDRESS);
-        int dobIdx = cursor.getColumnIndex(AccountEntry.COLUMN_DOB);
-        int picIdx = cursor.getColumnIndex(AccountEntry.COLUMN_PROFILE_PIC_PATH);
-
-        String phone = phoneIdx >= 0 ? cursor.getString(phoneIdx) : null;
-        String email = emailIdx >= 0 ? cursor.getString(emailIdx) : null;
-        String address = addressIdx >= 0 ? cursor.getString(addressIdx) : null;
-        String dob = dobIdx >= 0 ? cursor.getString(dobIdx) : null;
-        String profilePicPath = picIdx >= 0 ? cursor.getString(picIdx) : null;
-
-        return new Account(id, fullName, savedUsername, passwordHash, salt,
-                phone, email, address, dob, profilePicPath);
+        return success;
     }
 }
