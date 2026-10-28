@@ -823,7 +823,6 @@ public class MainActivity extends BaseActivity {
             if (profile != null) {
                 backupSourceAccountId = profile.optString(AccountEntry.COLUMN_ID, "");
 
-                // Only overwrite profile if this backup belongs to the current account
                 if (backupSourceAccountId.equals(accountId)) {
                     ContentValues pv = new ContentValues();
                     if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
@@ -880,8 +879,9 @@ public class MainActivity extends BaseActivity {
                         TutorSyncContract.AuditLogEntry.TABLE_NAME
                 };
 
-                boolean needsCrossAccountRemap = (!backupSourceAccountId.isEmpty() && !backupSourceAccountId.equals(accountId))
-                        || hasCrossAccountCollisionInBackup(db, tablesJson, restoreOrder, accountId);
+                // FIX: Only remap if the backup explicitly states it belongs to a different account.
+                // Removes the overly aggressive hasCrossAccountCollisionInBackup check that caused duplicates.
+                boolean needsCrossAccountRemap = !backupSourceAccountId.isEmpty() && !backupSourceAccountId.equals(accountId);
 
                 String[] remapColumns = new String[]{
                         "id",
@@ -930,39 +930,6 @@ public class MainActivity extends BaseActivity {
         loadDashboardData();
     }
 
-    private boolean hasCrossAccountCollisionInBackup(
-            @NonNull SQLiteDatabase db,
-            @NonNull JSONObject tablesJson,
-            @NonNull String[] restoreOrder,
-            @NonNull String activeAccountId) {
-        for (String table : restoreOrder) {
-            if (TutorSyncContract.StudentSubjectEntry.TABLE_NAME.equals(table)) continue;
-            JSONArray rows = tablesJson.optJSONArray(table);
-            if (rows == null) continue;
-            for (int i = 0; i < rows.length(); i++) {
-                JSONObject row = rows.optJSONObject(i);
-                if (row == null) continue;
-                String rowAccId = row.optString("account_id", "");
-                if (!rowAccId.isEmpty() && !rowAccId.equals(activeAccountId)) {
-                    return true;
-                }
-                String rowId = row.optString("id", "");
-                if (!rowId.isEmpty()) {
-                    try (Cursor c = db.query(table, new String[]{"account_id"},
-                            "id = ?", new String[]{rowId}, null, null, null)) {
-                        if (c.moveToFirst()) {
-                            String existingOwner = c.getString(0);
-                            if (existingOwner != null && !existingOwner.equals(activeAccountId)) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
     private void remapEntityIdsForAccount(
             @NonNull ContentValues cv,
             @NonNull String[] remapColumns,
@@ -998,6 +965,8 @@ public class MainActivity extends BaseActivity {
             @NonNull String activeAccountId) {
         String id = cv.getAsString("id");
         if (id == null || id.isEmpty()) {
+            id = UUID.randomUUID().toString();
+            cv.put("id", id);
             db.insert(table, null, cv);
             return;
         }
