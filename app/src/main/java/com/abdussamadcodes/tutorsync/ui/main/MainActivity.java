@@ -77,6 +77,7 @@ import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 public class MainActivity extends BaseActivity {
     private ActivityMainBinding binding;
@@ -237,33 +238,13 @@ public class MainActivity extends BaseActivity {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
-        String accountName = "Tutor";
-        String username = "";
-        String phone = "";
-        String email = "";
-        String profilePicPath = "";
-
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try (Cursor cursor = db.query(
-                AccountEntry.TABLE_NAME,
-                null,
-                AccountEntry.COLUMN_ID + " = ?",
-                new String[]{accountId}, null, null, null)) {
-            if (cursor.moveToFirst()) {
-                accountName = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_FULL_NAME);
-                username = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_USERNAME);
-                phone = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_PHONE);
-                email = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_EMAIL);
-                profilePicPath = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_PROFILE_PIC_PATH);
-            }
-        } catch (Exception ignored) {
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-
-        if (accountName.isEmpty()) {
-            accountName = "Tutor";
-        }
+        Account account = accountStore.getAccountById(accountId);
+        String accountName = (account != null && !account.getFullName().trim().isEmpty())
+                ? account.getFullName() : "Tutor";
+        String username = (account != null) ? account.getUsername() : "";
+        String phone = (account != null && account.getPhone() != null) ? account.getPhone() : "";
+        String email = (account != null && account.getEmail() != null) ? account.getEmail() : "";
+        String profilePicPath = (account != null && account.getProfilePicPath() != null) ? account.getProfilePicPath() : "";
 
         String currentLang = appPreferences.getLanguageCode();
         if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
@@ -477,33 +458,14 @@ public class MainActivity extends BaseActivity {
         etUsername.setEnabled(false);
         etUsername.setFocusable(false);
 
-        String currentFullName = "";
-        String currentUsername = "";
-        String currentPhone = "";
-        String currentEmail = "";
-        String currentDob = "";
-        String currentAddress = "";
-        String currentPicPath = "";
-
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try (Cursor cursor = db.query(
-                AccountEntry.TABLE_NAME,
-                null,
-                AccountEntry.COLUMN_ID + " = ?",
-                new String[]{accountId}, null, null, null)) {
-            if (cursor.moveToFirst()) {
-                currentFullName = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_FULL_NAME);
-                currentUsername = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_USERNAME);
-                currentPhone = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_PHONE);
-                currentEmail = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_EMAIL);
-                currentDob = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_DOB);
-                currentAddress = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_ADDRESS);
-                currentPicPath = getColumnStringOrEmpty(cursor, AccountEntry.COLUMN_PROFILE_PIC_PATH);
-            }
-        } catch (Exception ignored) {
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
+        Account account = accountStore.getAccountById(accountId);
+        String currentFullName = account != null ? account.getFullName() : "";
+        String currentUsername = account != null ? account.getUsername() : "";
+        String currentPhone = (account != null && account.getPhone() != null) ? account.getPhone() : "";
+        String currentEmail = (account != null && account.getEmail() != null) ? account.getEmail() : "";
+        String currentDob = (account != null && account.getDob() != null) ? account.getDob() : "";
+        String currentAddress = (account != null && account.getAddress() != null) ? account.getAddress() : "";
+        String currentPicPath = (account != null && account.getProfilePicPath() != null) ? account.getProfilePicPath() : "";
 
         etUsername.setText(currentUsername);
         etFullName.setText(currentFullName);
@@ -534,7 +496,6 @@ public class MainActivity extends BaseActivity {
             String newEmail = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
             String newDob = etDob.getText() != null ? etDob.getText().toString().trim() : "";
             String newAddress = etAddress.getText() != null ? etAddress.getText().toString().trim() : "";
-            String existingUsername = etUsername.getText() != null ? etUsername.getText().toString() : "";
 
             if (newFullName.isEmpty()) {
                 tilFullName.setError(getString(R.string.auth_err_empty));
@@ -546,7 +507,7 @@ public class MainActivity extends BaseActivity {
             }
 
             boolean updated = accountStore.updateProfile(
-                    accountId, newFullName, newPhone, newEmail, newAddress, newDob, existingUsername
+                    accountId, newFullName, newPhone, newEmail, newAddress, newDob
             );
 
             if (updated) {
@@ -868,34 +829,46 @@ public class MainActivity extends BaseActivity {
             JSONObject root = new JSONObject(sb.toString());
 
             JSONObject profile = root.optJSONObject("profile");
+            String backupSourceAccountId = "";
+
             if (profile != null) {
-                ContentValues pv = new ContentValues();
-                if (profile.has(AccountEntry.COLUMN_FULL_NAME)) {
-                    pv.put(AccountEntry.COLUMN_FULL_NAME, profile.optString(AccountEntry.COLUMN_FULL_NAME));
-                }
-                if (profile.has(AccountEntry.COLUMN_PHONE)) {
-                    pv.put(AccountEntry.COLUMN_PHONE, profile.optString(AccountEntry.COLUMN_PHONE));
-                }
-                if (profile.has(AccountEntry.COLUMN_EMAIL)) {
-                    pv.put(AccountEntry.COLUMN_EMAIL, profile.optString(AccountEntry.COLUMN_EMAIL));
-                }
-                if (profile.has(AccountEntry.COLUMN_DOB)) {
-                    pv.put(AccountEntry.COLUMN_DOB, profile.optString(AccountEntry.COLUMN_DOB));
-                }
-                if (profile.has(AccountEntry.COLUMN_ADDRESS)) {
-                    pv.put(AccountEntry.COLUMN_ADDRESS, profile.optString(AccountEntry.COLUMN_ADDRESS));
-                }
-                String base64Pic = profile.optString("profile_pic_base64", "");
-                if (!base64Pic.isEmpty()) {
-                    byte[] imgBytes = Base64.decode(base64Pic, Base64.NO_WRAP);
-                    File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
-                    try (FileOutputStream fos = new FileOutputStream(destFile)) {
-                        fos.write(imgBytes);
-                        pv.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, destFile.getAbsolutePath());
+                backupSourceAccountId = profile.optString(AccountEntry.COLUMN_ID, "");
+
+                // FIX: Only overwrite the profile if this backup belongs to the current account.
+                // This prevents cross-account imports from stealing another user's name and photo!
+                if (backupSourceAccountId.equals(accountId)) {
+                    ContentValues pv = new ContentValues();
+                    if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
+                        pv.put(AccountEntry.COLUMN_FULL_NAME, profile.optString(AccountEntry.COLUMN_FULL_NAME));
                     }
-                }
-                if (pv.size() > 0) {
-                    db.update(AccountEntry.TABLE_NAME, pv, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
+                    if (profile.has(AccountEntry.COLUMN_PHONE)) {
+                        if (profile.isNull(AccountEntry.COLUMN_PHONE)) pv.putNull(AccountEntry.COLUMN_PHONE);
+                        else pv.put(AccountEntry.COLUMN_PHONE, profile.optString(AccountEntry.COLUMN_PHONE));
+                    }
+                    if (profile.has(AccountEntry.COLUMN_EMAIL)) {
+                        if (profile.isNull(AccountEntry.COLUMN_EMAIL)) pv.putNull(AccountEntry.COLUMN_EMAIL);
+                        else pv.put(AccountEntry.COLUMN_EMAIL, profile.optString(AccountEntry.COLUMN_EMAIL));
+                    }
+                    if (profile.has(AccountEntry.COLUMN_DOB)) {
+                        if (profile.isNull(AccountEntry.COLUMN_DOB)) pv.putNull(AccountEntry.COLUMN_DOB);
+                        else pv.put(AccountEntry.COLUMN_DOB, profile.optString(AccountEntry.COLUMN_DOB));
+                    }
+                    if (profile.has(AccountEntry.COLUMN_ADDRESS)) {
+                        if (profile.isNull(AccountEntry.COLUMN_ADDRESS)) pv.putNull(AccountEntry.COLUMN_ADDRESS);
+                        else pv.put(AccountEntry.COLUMN_ADDRESS, profile.optString(AccountEntry.COLUMN_ADDRESS));
+                    }
+                    String base64Pic = profile.optString("profile_pic_base64", "");
+                    if (!base64Pic.isEmpty()) {
+                        byte[] imgBytes = Base64.decode(base64Pic, Base64.NO_WRAP);
+                        File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
+                        try (FileOutputStream fos = new FileOutputStream(destFile)) {
+                            fos.write(imgBytes);
+                            pv.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, destFile.getAbsolutePath());
+                        }
+                    }
+                    if (pv.size() > 0) {
+                        db.update(AccountEntry.TABLE_NAME, pv, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
+                    }
                 }
             }
 
@@ -919,6 +892,25 @@ public class MainActivity extends BaseActivity {
                         TutorSyncContract.AuditLogEntry.TABLE_NAME
                 };
 
+                boolean needsCrossAccountRemap = (!backupSourceAccountId.isEmpty() && !backupSourceAccountId.equals(accountId))
+                        || hasCrossAccountCollisionInBackup(db, tablesJson, restoreOrder, accountId);
+
+                String[] remapColumns = new String[]{
+                        "id",
+                        "student_id",
+                        "subject_id",
+                        "schedule_id",
+                        "schedule_group_id",
+                        "occurrence_id",
+                        "rescheduled_from_id",
+                        "makeup_occurrence_id",
+                        "billed_invoice_item_id",
+                        "invoice_id",
+                        "transaction_id",
+                        "parent_txn_id",
+                        "entity_id"
+                };
+
                 for (String table : restoreOrder) {
                     JSONArray rows = tablesJson.optJSONArray(table);
                     if (rows == null) continue;
@@ -928,7 +920,10 @@ public class MainActivity extends BaseActivity {
                         if (!TutorSyncContract.StudentSubjectEntry.TABLE_NAME.equals(table)) {
                             cv.put("account_id", accountId);
                         }
-                        db.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                        if (needsCrossAccountRemap) {
+                            remapEntityIdsForAccount(cv, remapColumns, accountId);
+                        }
+                        upsertRowWithoutCascadeDelete(db, table, cv, accountId);
                     }
                 }
             }
@@ -942,7 +937,163 @@ public class MainActivity extends BaseActivity {
             DatabaseManager.getInstance().closeDatabase();
         }
 
+        studentRepo.migrateLegacyStudentIds(accountId);
+        invoiceRepo.migrateLegacyInvoiceIds(accountId);
         loadDashboardData();
+    }
+
+    /**
+     * Checks whether any row in the backup belongs to a different account_id or collides with
+     * an existing primary key owned by another account on this device.
+     */
+    private boolean hasCrossAccountCollisionInBackup(
+            @NonNull SQLiteDatabase db,
+            @NonNull JSONObject tablesJson,
+            @NonNull String[] restoreOrder,
+            @NonNull String activeAccountId) {
+        for (String table : restoreOrder) {
+            if (TutorSyncContract.StudentSubjectEntry.TABLE_NAME.equals(table)) continue;
+            JSONArray rows = tablesJson.optJSONArray(table);
+            if (rows == null) continue;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.optJSONObject(i);
+                if (row == null) continue;
+                String rowAccId = row.optString("account_id", "");
+                if (!rowAccId.isEmpty() && !rowAccId.equals(activeAccountId)) {
+                    return true;
+                }
+                String rowId = row.optString("id", "");
+                if (!rowId.isEmpty()) {
+                    try (Cursor c = db.query(table, new String[]{"account_id"},
+                            "id = ?", new String[]{rowId}, null, null, null)) {
+                        if (c.moveToFirst()) {
+                            String existingOwner = c.getString(0);
+                            if (existingOwner != null && !existingOwner.equals(activeAccountId)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Deterministically remaps primary and foreign key UUIDs when importing a backup created by a different account.
+     */
+    private void remapEntityIdsForAccount(
+            @NonNull ContentValues cv,
+            @NonNull String[] remapColumns,
+            @NonNull String activeAccountId) {
+        for (String col : remapColumns) {
+            if (!cv.containsKey(col)) continue;
+            String rawVal = cv.getAsString(col);
+            if (rawVal == null || rawVal.trim().isEmpty()) continue;
+
+            if ("schedule_group_id".equals(col) && rawVal.startsWith("GRP-")) {
+                int lastDash = rawVal.lastIndexOf('-');
+                if (lastDash > 4) {
+                    String oldStuId = rawVal.substring(4, lastDash);
+                    String suffix = rawVal.substring(lastDash);
+                    String mappedStuId = deterministicAccountScopedId(activeAccountId, oldStuId);
+                    cv.put(col, "GRP-" + mappedStuId + suffix);
+                    continue;
+                }
+            }
+            cv.put(col, deterministicAccountScopedId(activeAccountId, rawVal));
+        }
+    }
+
+    @NonNull
+    private String deterministicAccountScopedId(@NonNull String activeAccountId, @NonNull String originalId) {
+        return UUID.nameUUIDFromBytes((activeAccountId + ":" + originalId).getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    /**
+     * Updates existing rows in-place and inserts missing rows without using CONFLICT_REPLACE,
+     * preventing SQLite from deleting parent rows and triggering ON DELETE CASCADE on child tables.
+     */
+    private void upsertRowWithoutCascadeDelete(
+            @NonNull SQLiteDatabase db,
+            @NonNull String table,
+            @NonNull ContentValues cv,
+            @NonNull String activeAccountId) {
+        String id = cv.getAsString("id");
+        if (id == null || id.isEmpty()) {
+            db.insert(table, null, cv);
+            return;
+        }
+
+        // Handle unique constraints that could collide when restoring into an account that already has data
+        if (TutorSyncContract.StudentSubjectEntry.TABLE_NAME.equals(table)) {
+            String stuId = cv.getAsString(TutorSyncContract.StudentSubjectEntry.COLUMN_STUDENT_ID);
+            String subId = cv.getAsString(TutorSyncContract.StudentSubjectEntry.COLUMN_SUBJECT_ID);
+            if (stuId != null && subId != null) {
+                try (Cursor c = db.query(table, new String[]{"id"},
+                        TutorSyncContract.StudentSubjectEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                                TutorSyncContract.StudentSubjectEntry.COLUMN_SUBJECT_ID + " = ?",
+                        new String[]{stuId, subId}, null, null, null)) {
+                    if (c.moveToFirst()) {
+                        return; // Enrollment pair already exists
+                    }
+                }
+            }
+        } else if (TutorSyncContract.AttendanceEntry.TABLE_NAME.equals(table)) {
+            String occId = cv.getAsString(TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID);
+            if (occId != null) {
+                try (Cursor c = db.query(table, new String[]{"id"},
+                        TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " = ?",
+                        new String[]{occId}, null, null, null)) {
+                    if (c.moveToFirst()) {
+                        String existingId = c.getString(0);
+                        cv.put("id", existingId);
+                        db.update(table, cv, "id = ?", new String[]{existingId});
+                        return;
+                    }
+                }
+            }
+        } else if (TutorSyncContract.FeeAgreementEntry.TABLE_NAME.equals(table)) {
+            String stuId = cv.getAsString(TutorSyncContract.FeeAgreementEntry.COLUMN_STUDENT_ID);
+            if (stuId != null) {
+                try (Cursor c = db.query(table, new String[]{"id"},
+                        TutorSyncContract.FeeAgreementEntry.COLUMN_STUDENT_ID + " = ?",
+                        new String[]{stuId}, null, null, null)) {
+                    if (c.moveToFirst()) {
+                        String existingId = c.getString(0);
+                        cv.put("id", existingId);
+                        db.update(table, cv, "id = ?", new String[]{existingId});
+                        return;
+                    }
+                }
+            }
+        } else if (TutorSyncContract.StudentEntry.TABLE_NAME.equals(table)) {
+            String dispId = cv.getAsString(TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY);
+            if (dispId != null && !dispId.isEmpty()) {
+                try (Cursor c = db.query(table, new String[]{"id"},
+                        TutorSyncContract.StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                                TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " = ? AND id != ?",
+                        new String[]{activeAccountId, dispId, id}, null, null, null)) {
+                    if (c.moveToFirst()) {
+                        // Clear colliding display ID so migrateLegacyStudentIds assigns the next sequential STU-XXXX
+                        cv.putNull(TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY);
+                    }
+                }
+            }
+        }
+
+        boolean exists = false;
+        try (Cursor c = db.query(table, new String[]{"id"}, "id = ?", new String[]{id}, null, null, null)) {
+            if (c.moveToFirst()) {
+                exists = true;
+            }
+        }
+
+        if (exists) {
+            db.update(table, cv, "id = ?", new String[]{id});
+        } else {
+            db.insertOrThrow(table, null, cv);
+        }
     }
 
     @NonNull

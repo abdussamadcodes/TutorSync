@@ -32,7 +32,9 @@ public class InvoiceRepository {
                     "          FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
                     "          INNER JOIN " + TransactionEntry.TABLE_NAME + " t ON pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = t." + TransactionEntry.COLUMN_ID + " " +
                     "          WHERE pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID + " " +
-                    "          AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0), 0) AS derived_paid_minor " +
+                    "          AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0), 0) AS derived_paid_minor, " +
+                    "EXISTS(SELECT 1 FROM " + PaymentAllocationEntry.TABLE_NAME + " pa2 " +
+                    "       WHERE pa2." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID + ") AS has_allocations " +
                     "FROM " + InvoiceEntry.TABLE_NAME + " i ";
 
     public String generateNextInvoiceId(@NonNull String accountId, @NonNull SQLiteDatabase db) {
@@ -426,7 +428,12 @@ public class InvoiceRepository {
     private Invoice mapCursorToInvoice(Cursor cursor) {
         int derivedPaid = cursor.getInt(cursor.getColumnIndexOrThrow("derived_paid_minor"));
         int storedPaid = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_PAID_AMOUNT));
-        int effectivePaid = Math.max(derivedPaid, storedPaid);
+        int hasAllocationsIdx = cursor.getColumnIndex("has_allocations");
+        boolean hasAllocations = hasAllocationsIdx != -1 && cursor.getInt(hasAllocationsIdx) == 1;
+
+        // When payment_allocations exist for this invoice, derivedPaid is authoritative
+        // (respecting reversals and refunds); storedPaid is only used for legacy unallocated rows.
+        int effectivePaid = hasAllocations ? Math.max(0, derivedPaid) : Math.max(0, storedPaid);
 
         int totalAmount = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_TOTAL_AMOUNT));
         int subtotal = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_SUBTOTAL_MINOR));

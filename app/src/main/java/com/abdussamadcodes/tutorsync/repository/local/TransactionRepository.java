@@ -151,6 +151,7 @@ public class TransactionRepository {
 
     /**
      * Records a refund or payment reversal with negative payment_allocations and a permanent audit trail.
+     * Prevents refunding reversed transactions, refunding non-payment transactions, or exceeding remaining refundable balance.
      */
     public boolean recordRefundForTransaction(
             @NonNull String accountId,
@@ -163,6 +164,8 @@ public class TransactionRepository {
         try {
             String studentId = null;
             String method = "Cash";
+            String origType = null;
+            boolean origReversed = false;
             int origAmount = 0;
 
             try (Cursor c = db.query(TransactionEntry.TABLE_NAME, null,
@@ -171,10 +174,33 @@ public class TransactionRepository {
                 if (!c.moveToFirst()) return false;
                 studentId = c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_STUDENT_ID));
                 method = c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_METHOD));
+                origType = c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_TYPE));
+                origReversed = c.getInt(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_IS_REVERSED)) == 1;
                 origAmount = c.getInt(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_AMOUNT_MINOR));
             }
 
-            if (refundAmountMinor <= 0 || refundAmountMinor > origAmount) return false;
+            if (!FinancialTransaction.TYPE_PAYMENT.equals(origType) || origReversed) {
+                return false;
+            }
+
+            int alreadyRefundedMinor = 0;
+            try (Cursor rc = db.rawQuery(
+                    "SELECT COALESCE(SUM(" + TransactionEntry.COLUMN_AMOUNT_MINOR + "), 0) " +
+                            "FROM " + TransactionEntry.TABLE_NAME +
+                            " WHERE " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                            " AND " + TransactionEntry.COLUMN_PARENT_TXN_ID + " = ? " +
+                            " AND " + TransactionEntry.COLUMN_TYPE + " = ? " +
+                            " AND " + TransactionEntry.COLUMN_IS_REVERSED + " = 0",
+                    new String[]{accountId, originalTransactionId, FinancialTransaction.TYPE_REFUND})) {
+                if (rc.moveToFirst()) {
+                    alreadyRefundedMinor = Math.max(0, rc.getInt(0));
+                }
+            }
+
+            int remainingRefundableMinor = origAmount - alreadyRefundedMinor;
+            if (refundAmountMinor <= 0 || refundAmountMinor > remainingRefundableMinor) {
+                return false;
+            }
 
             long now = System.currentTimeMillis();
             String refundTxnId = UUID.randomUUID().toString();
@@ -195,16 +221,29 @@ public class TransactionRepository {
             tv.put(TransactionEntry.COLUMN_CREATED_AT, now);
             db.insertOrThrow(TransactionEntry.TABLE_NAME, null, tv);
 
-            // De-allocate proportionally across the original transaction's invoice allocations
+            // Compute net remaining allocation per invoice for this original transaction
             int remainingToDeallocate = refundAmountMinor;
-            try (Cursor ac = db.query(PaymentAllocationEntry.TABLE_NAME,
-                    new String[]{PaymentAllocationEntry.COLUMN_INVOICE_ID, PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR},
-                    PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ?",
-                    new String[]{originalTransactionId}, null, null, PaymentAllocationEntry.COLUMN_CREATED_AT + " DESC")) {
+            String netAllocSql =
+                    "SELECT pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + ", " +
+                            "pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + " + COALESCE((" +
+                            "   SELECT SUM(rpa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + ") " +
+                            "   FROM " + PaymentAllocationEntry.TABLE_NAME + " rpa " +
+                            "   INNER JOIN " + TransactionEntry.TABLE_NAME + " rt ON rpa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = rt." + TransactionEntry.COLUMN_ID + " " +
+                            "   WHERE rt." + TransactionEntry.COLUMN_PARENT_TXN_ID + " = ? " +
+                            "   AND rt." + TransactionEntry.COLUMN_IS_REVERSED + " = 0 " +
+                            "   AND rpa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID +
+                            "), 0) AS net_alloc_minor " +
+                            "FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
+                            "WHERE pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ? " +
+                            "ORDER BY pa." + PaymentAllocationEntry.COLUMN_CREATED_AT + " DESC";
+
+            try (Cursor ac = db.rawQuery(netAllocSql, new String[]{originalTransactionId, originalTransactionId})) {
                 while (ac.moveToNext() && remainingToDeallocate > 0) {
                     String invId = ac.getString(0);
-                    int origAlloc = ac.getInt(1);
-                    int dealloc = Math.min(remainingToDeallocate, origAlloc);
+                    int netInvoiceAlloc = Math.max(0, ac.getInt(1));
+                    if (netInvoiceAlloc <= 0) continue;
+
+                    int dealloc = Math.min(remainingToDeallocate, netInvoiceAlloc);
 
                     ContentValues revAlloc = new ContentValues();
                     revAlloc.put(PaymentAllocationEntry.COLUMN_ID, UUID.randomUUID().toString());
@@ -236,25 +275,39 @@ public class TransactionRepository {
     private void syncInvoiceMirrorColumns(SQLiteDatabase db, String invoiceId) {
         int derivedPaid = 0;
         int totalAmount = 0;
+        long dueDate = 0L;
         try (Cursor c = db.rawQuery(
-                "SELECT COALESCE(SUM(" + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + "), 0) " +
-                        "FROM " + PaymentAllocationEntry.TABLE_NAME + " WHERE " + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ?",
+                "SELECT COALESCE(SUM(pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + "), 0) " +
+                        "FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
+                        "INNER JOIN " + TransactionEntry.TABLE_NAME + " t ON pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = t." + TransactionEntry.COLUMN_ID + " " +
+                        "WHERE pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? " +
+                        "AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0",
                 new String[]{invoiceId})) {
             if (c.moveToFirst()) derivedPaid = Math.max(0, c.getInt(0));
         }
-        try (Cursor c = db.query(InvoiceEntry.TABLE_NAME, new String[]{InvoiceEntry.COLUMN_TOTAL_AMOUNT},
+        try (Cursor c = db.query(InvoiceEntry.TABLE_NAME,
+                new String[]{InvoiceEntry.COLUMN_TOTAL_AMOUNT, InvoiceEntry.COLUMN_DUE_DATE},
                 InvoiceEntry.COLUMN_ID + " = ?", new String[]{invoiceId}, null, null, null)) {
-            if (c.moveToFirst()) totalAmount = c.getInt(0);
+            if (c.moveToFirst()) {
+                totalAmount = c.getInt(0);
+                dueDate = c.getLong(1);
+            }
         }
 
+        long now = System.currentTimeMillis();
         String status = Invoice.STATUS_UNPAID;
-        if (derivedPaid >= totalAmount && totalAmount > 0) status = Invoice.STATUS_PAID;
-        else if (derivedPaid > 0) status = Invoice.STATUS_PARTIAL;
+        if (derivedPaid >= totalAmount && totalAmount > 0) {
+            status = Invoice.STATUS_PAID;
+        } else if (totalAmount - derivedPaid > 0 && dueDate > 0 && now > dueDate) {
+            status = Invoice.STATUS_OVERDUE;
+        } else if (derivedPaid > 0) {
+            status = Invoice.STATUS_PARTIAL;
+        }
 
         ContentValues iv = new ContentValues();
         iv.put(InvoiceEntry.COLUMN_PAID_AMOUNT, derivedPaid);
         iv.put(InvoiceEntry.COLUMN_STATUS, status);
-        iv.put(InvoiceEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+        iv.put(InvoiceEntry.COLUMN_UPDATED_AT, now);
         db.update(InvoiceEntry.TABLE_NAME, iv, InvoiceEntry.COLUMN_ID + " = ?", new String[]{invoiceId});
     }
 

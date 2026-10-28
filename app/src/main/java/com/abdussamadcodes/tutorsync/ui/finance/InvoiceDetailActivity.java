@@ -11,9 +11,12 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import com.abdussamadcodes.tutorsync.R;
+import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
+import com.abdussamadcodes.tutorsync.model.Account;
 import com.abdussamadcodes.tutorsync.model.FinancialTransaction;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.InvoiceItem;
@@ -48,6 +51,7 @@ public class InvoiceDetailActivity extends BaseActivity {
     private InvoiceRepository invoiceRepo;
     private TransactionRepository txnRepo;
     private StudentRepository studentRepo;
+    private LocalAccountStore accountStore;
     private SessionManager sessionManager;
     private LinearLayout rootContent;
     private MaterialToolbar toolbar;
@@ -58,6 +62,7 @@ public class InvoiceDetailActivity extends BaseActivity {
 
         invoiceId = getIntent().getStringExtra("invoice_id");
         sessionManager = new SessionManager(this);
+        accountStore = new LocalAccountStore(this);
         invoiceRepo = new InvoiceRepository();
         txnRepo = new TransactionRepository();
         studentRepo = new StudentRepository();
@@ -95,6 +100,18 @@ public class InvoiceDetailActivity extends BaseActivity {
         applySystemBarInsets(root);
 
         refreshDetails();
+    }
+
+    @NonNull
+    private String getActiveTutorName() {
+        String accountId = sessionManager.getActiveAccountId();
+        if (!accountId.isEmpty()) {
+            Account account = accountStore.getAccountById(accountId);
+            if (account != null && !account.getFullName().trim().isEmpty()) {
+                return account.getFullName().trim();
+            }
+        }
+        return "Tutor";
     }
 
     private void refreshDetails() {
@@ -234,7 +251,8 @@ public class InvoiceDetailActivity extends BaseActivity {
                 .setItems(options, (d, which) -> {
                     if (which == 0 && currentStudent != null) {
                         try {
-                            File file = FinancialPdfGenerator.generatePaymentReceiptPdf(this, "Tutor", currentStudent, txn);
+                            File file = FinancialPdfGenerator.generatePaymentReceiptPdf(
+                                    this, getActiveTutorName(), currentStudent, txn);
                             FinancialPdfGenerator.sharePdf(this, file, getString(R.string.invoice_share_receipt_pdf));
                         } catch (Exception e) {
                             showMessage(rootContent, e.getMessage());
@@ -255,7 +273,7 @@ public class InvoiceDetailActivity extends BaseActivity {
         if (currentStudent == null) return;
         try {
             File pdf = FinancialPdfGenerator.generateInvoicePdf(
-                    this, "Tutor", currentStudent, currentInvoice, currentItems, currentTransactions);
+                    this, getActiveTutorName(), currentStudent, currentInvoice, currentItems, currentTransactions);
             FinancialPdfGenerator.sharePdf(this, pdf, getString(R.string.invoice_export_pdf));
         } catch (Exception e) {
             showMessage(rootContent, e.getMessage());

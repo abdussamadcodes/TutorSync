@@ -13,9 +13,12 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import com.abdussamadcodes.tutorsync.R;
+import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
+import com.abdussamadcodes.tutorsync.model.Account;
 import com.abdussamadcodes.tutorsync.model.FeeAgreement;
 import com.abdussamadcodes.tutorsync.model.FinancialTransaction;
 import com.abdussamadcodes.tutorsync.model.Invoice;
@@ -58,6 +61,7 @@ public class StudentTransactionsActivity extends BaseActivity {
     private String studentId;
     private Student currentStudent;
     private SessionManager sessionManager;
+    private LocalAccountStore accountStore;
     private StudentRepository studentRepo;
     private ScheduleRepository scheduleRepo;
     private FeeAgreementRepository feeRepo;
@@ -74,6 +78,7 @@ public class StudentTransactionsActivity extends BaseActivity {
 
         studentId = getIntent().getStringExtra("student_id");
         sessionManager = new SessionManager(this);
+        accountStore = new LocalAccountStore(this);
         studentRepo = new StudentRepository();
         scheduleRepo = new ScheduleRepository();
         feeRepo = new FeeAgreementRepository();
@@ -117,6 +122,18 @@ public class StudentTransactionsActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         refreshHistory();
+    }
+
+    @NonNull
+    private String getActiveTutorName() {
+        String accountId = sessionManager.getActiveAccountId();
+        if (!accountId.isEmpty()) {
+            Account account = accountStore.getAccountById(accountId);
+            if (account != null && !account.getFullName().trim().isEmpty()) {
+                return account.getFullName().trim();
+            }
+        }
+        return "Tutor";
     }
 
     private String formatTimeMinutes(int startTimeMinutes) {
@@ -520,7 +537,8 @@ public class StudentTransactionsActivity extends BaseActivity {
                 .setItems(items, (d, which) -> {
                     if (which == 0) {
                         try {
-                            File pdf = FinancialPdfGenerator.generatePaymentReceiptPdf(this, "Tutor", currentStudent, txn);
+                            File pdf = FinancialPdfGenerator.generatePaymentReceiptPdf(
+                                    this, getActiveTutorName(), currentStudent, txn);
                             FinancialPdfGenerator.sharePdf(this, pdf, getString(R.string.invoice_share_receipt_pdf));
                         } catch (Exception e) {
                             showMessage(contentContainer, e.getMessage());

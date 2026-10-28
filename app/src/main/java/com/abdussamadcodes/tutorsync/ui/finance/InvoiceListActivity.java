@@ -13,6 +13,7 @@ import com.abdussamadcodes.tutorsync.repository.local.InvoiceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import java.util.ArrayList;
 import java.util.List;
 
 public class InvoiceListActivity extends BaseActivity {
@@ -88,11 +89,22 @@ public class InvoiceListActivity extends BaseActivity {
         int totalBilledMinor = 0;
         int totalOutstandingMinor = 0;
         int overdueCount = 0;
+        List<Invoice> filteredInvoices = new ArrayList<>();
+
         for (Invoice inv : allInvoices) {
             totalBilledMinor += inv.getTotalAmount();
             totalOutstandingMinor += inv.getOutstandingBalance();
             if (inv.isOverdue()) overdueCount++;
+
+            if ("ALL".equalsIgnoreCase(activeFilter)) {
+                filteredInvoices.add(inv);
+            } else if ("OVERDUE".equalsIgnoreCase(activeFilter) && inv.isOverdue()) {
+                filteredInvoices.add(inv);
+            } else if (activeFilter.equalsIgnoreCase(inv.getStatus())) {
+                filteredInvoices.add(inv);
+            }
         }
+
         int totalReceivedMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
 
         binding.tvFinancialSummary.setText(getString(R.string.invoice_summary_dashboard_fmt,
@@ -101,7 +113,6 @@ public class InvoiceListActivity extends BaseActivity {
                 totalOutstandingMinor / 100.0,
                 overdueCount));
 
-        List<Invoice> filteredInvoices = invoiceRepo.getFilteredInvoicesForAccount(accountId, activeFilter);
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
 
         adapter.setData(filteredInvoices, students);

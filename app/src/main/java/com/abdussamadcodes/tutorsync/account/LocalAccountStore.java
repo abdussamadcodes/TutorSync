@@ -29,6 +29,11 @@ public class LocalAccountStore {
             values.put(AccountEntry.COLUMN_USERNAME, account.getUsername().toLowerCase());
             values.put(AccountEntry.COLUMN_PASSWORD_HASH, account.getPasswordHash());
             values.put(AccountEntry.COLUMN_SALT, account.getSalt());
+            values.put(AccountEntry.COLUMN_PHONE, account.getPhone());
+            values.put(AccountEntry.COLUMN_EMAIL, account.getEmail());
+            values.put(AccountEntry.COLUMN_ADDRESS, account.getAddress());
+            values.put(AccountEntry.COLUMN_DOB, account.getDob());
+            values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, account.getProfilePicPath());
 
             long currentTime = System.currentTimeMillis();
             values.put(AccountEntry.COLUMN_CREATED_AT, currentTime);
@@ -91,7 +96,23 @@ public class LocalAccountStore {
         String savedUsername = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_USERNAME));
         String passwordHash = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_PASSWORD_HASH));
         String salt = cursor.getString(cursor.getColumnIndexOrThrow(AccountEntry.COLUMN_SALT));
-        return new Account(id, fullName, savedUsername, passwordHash, salt);
+        String phone = getNullableString(cursor, AccountEntry.COLUMN_PHONE);
+        String email = getNullableString(cursor, AccountEntry.COLUMN_EMAIL);
+        String address = getNullableString(cursor, AccountEntry.COLUMN_ADDRESS);
+        String dob = getNullableString(cursor, AccountEntry.COLUMN_DOB);
+        String profilePicPath = getNullableString(cursor, AccountEntry.COLUMN_PROFILE_PIC_PATH);
+
+        return new Account(id, fullName, savedUsername, passwordHash, salt,
+                phone, email, address, dob, profilePicPath);
+    }
+
+    @Nullable
+    private String getNullableString(@NonNull Cursor cursor, @NonNull String columnName) {
+        int index = cursor.getColumnIndex(columnName);
+        if (index != -1 && !cursor.isNull(index)) {
+            return cursor.getString(index);
+        }
+        return null;
     }
 
     public boolean updatePassword(@NonNull String accountId, @NonNull String newPasswordHash, @NonNull String newSalt) {
@@ -133,8 +154,7 @@ public class LocalAccountStore {
 
     public boolean updateProfile(@NonNull String accountId, @NonNull String fullName,
                                  @Nullable String phone, @Nullable String email,
-                                 @Nullable String address, @Nullable String dob,
-                                 @Nullable String username) {
+                                 @Nullable String address, @Nullable String dob) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         boolean success = false;
         try {
@@ -152,5 +172,12 @@ public class LocalAccountStore {
             DatabaseManager.getInstance().closeDatabase();
         }
         return success;
+    }
+
+    public boolean updateProfile(@NonNull String accountId, @NonNull String fullName,
+                                 @Nullable String phone, @Nullable String email,
+                                 @Nullable String address, @Nullable String dob,
+                                 @Nullable String unusedUsername) {
+        return updateProfile(accountId, fullName, phone, email, address, dob);
     }
 }
