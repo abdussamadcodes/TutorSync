@@ -8,7 +8,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -63,54 +62,35 @@ public final class FinancialPdfGenerator {
     // Standard A4 dimensions in PostScript points (1/72 inch)
     private static final int PAGE_WIDTH = 595;
     private static final int PAGE_HEIGHT = 842;
-    private static final float MARGIN_H = 36f;
-    private static final float MARGIN_TOP = 36f;
-    private static final float FOOTER_RESERVE = 64f;
+    private static final float MARGIN_H = 40f;
+    private static final float MARGIN_TOP = 38f;
+    private static final float FOOTER_RESERVE = 56f;
     private static final float CONTENT_WIDTH = PAGE_WIDTH - (MARGIN_H * 2f);
 
-    // Unified Brand & Print-Safe Color Palette
-    private static final int COLOR_BRAND_DARK = Color.parseColor("#0F172A");     // Slate 900
-    private static final int COLOR_BRAND_PRIMARY = Color.parseColor("#1E3A8A");  // Deep Royal Blue
-    private static final int COLOR_BRAND_ACCENT = Color.parseColor("#2563EB");   // Royal Blue 600
-    private static final int COLOR_BRAND_SOFT = Color.parseColor("#EFF6FF");     // Blue 50
-    private static final int COLOR_SURFACE_CARD = Color.parseColor("#F8FAFC");   // Slate 50
-    private static final int COLOR_SURFACE_ZEBRA = Color.parseColor("#F8FAFC");  // Alternate Row
-    private static final int COLOR_BORDER = Color.parseColor("#E2E8F0");         // Slate 200
-    private static final int COLOR_BORDER_STRONG = Color.parseColor("#CBD5E1");  // Slate 300
+    // High-Contrast, Print-Safe Minimal Palette (Crisp in both Color & B&W)
+    private static final int COLOR_INK_STRONG = Color.parseColor("#0F172A");    // Deep Slate/Black
+    private static final int COLOR_INK_BODY = Color.parseColor("#1E293B");      // Dark Slate
+    private static final int COLOR_INK_SECONDARY = Color.parseColor("#475569"); // Medium Slate
+    private static final int COLOR_INK_MUTED = Color.parseColor("#64748B");     // Muted Label Slate
+    private static final int COLOR_ACCENT = Color.parseColor("#1D4ED8");        // Subtle Deep Blue
 
-    private static final int COLOR_INK_PRIMARY = Color.parseColor("#0F172A");    // Main text
-    private static final int COLOR_INK_SECONDARY = Color.parseColor("#475569");  // Subtitles
-    private static final int COLOR_INK_MUTED = Color.parseColor("#64748B");      // Captions/Labels
+    private static final int COLOR_RULE_DARK = Color.parseColor("#0F172A");     // Structural Rule
+    private static final int COLOR_RULE_MEDIUM = Color.parseColor("#CBD5E1");   // Card/Box Border
+    private static final int COLOR_RULE_LIGHT = Color.parseColor("#E2E8F0");    // Row Divider
+    private static final int COLOR_SURFACE_SUBTLE = Color.parseColor("#F8FAFC");// Minimal Tint
 
-    // Status Colors
-    private static final int COLOR_PAID_BG = Color.parseColor("#DCFCE7");
-    private static final int COLOR_PAID_BORDER = Color.parseColor("#86EFAC");
-    private static final int COLOR_PAID_INK = Color.parseColor("#15803D");
-
-    private static final int COLOR_PARTIAL_BG = Color.parseColor("#FEF3C7");
-    private static final int COLOR_PARTIAL_BORDER = Color.parseColor("#FCD34D");
-    private static final int COLOR_PARTIAL_INK = Color.parseColor("#B45309");
-
-    private static final int COLOR_UNPAID_BG = Color.parseColor("#FEE2E2");
-    private static final int COLOR_UNPAID_BORDER = Color.parseColor("#FCA5A5");
-    private static final int COLOR_UNPAID_INK = Color.parseColor("#B91C1C");
-
-    private static final int COLOR_VOID_BG = Color.parseColor("#F1F5F9");
-    private static final int COLOR_VOID_BORDER = Color.parseColor("#CBD5E1");
-    private static final int COLOR_VOID_INK = Color.parseColor("#475569");
+    // High-contrast semantic status colors (paired with explicit text labels)
+    private static final int COLOR_STATUS_PAID = Color.parseColor("#15803D");
+    private static final int COLOR_STATUS_PARTIAL = Color.parseColor("#B45309");
+    private static final int COLOR_STATUS_UNPAID = Color.parseColor("#B91C1C");
+    private static final int COLOR_STATUS_VOID = Color.parseColor("#475569");
 
     private FinancialPdfGenerator() {}
 
     // =========================================================================================
-    // 1. PUBLIC ENTRY POINTS (Flexible signatures for all Activities)
+    // 1. PUBLIC ENTRY POINTS (Preserves all existing signatures across Activities)
     // =========================================================================================
 
-    /**
-     * Generates a redesigned, print-ready Invoice PDF.
-     * Supports any call signature, e.g.:
-     * - generateInvoicePdf(context, invoiceId)
-     * - generateInvoicePdf(context, "Tutor", student, invoice, items, transactions)
-     */
     @Nullable
     public static File generateInvoicePdf(@NonNull Context context, Object... args) {
         String invoiceId = resolveInvoiceIdFromArgs(args);
@@ -126,12 +106,6 @@ public final class FinancialPdfGenerator {
         return pdf;
     }
 
-    /**
-     * Generates a redesigned Payment Receipt PDF.
-     * Supports any call signature, e.g.:
-     * - generatePaymentReceiptPdf(context, "Tutor", currentStudent, txn)
-     * - generatePaymentReceiptPdf(context, txnId)
-     */
     @Nullable
     public static File generatePaymentReceiptPdf(@NonNull Context context, Object... args) {
         String txnOrPaymentId = null;
@@ -179,9 +153,6 @@ public final class FinancialPdfGenerator {
         return generatePaymentReceiptPdf(context, args);
     }
 
-    /**
-     * Generates a comprehensive Student Financial Statement & Transaction Ledger PDF.
-     */
     @Nullable
     public static File generateStudentStatementPdf(@NonNull Context context, Object... args) {
         String studentId = resolveStudentIdFromArgs(args);
@@ -217,9 +188,6 @@ public final class FinancialPdfGenerator {
         return generateStudentStatementPdf(context, args);
     }
 
-    /**
-     * Generates an Account-level Financial Summary Report PDF across all students.
-     */
     @Nullable
     public static File generateFinancialReportPdf(@NonNull Context context, @Nullable String billingPeriodFilter) {
         FinancialReportData data = loadFinancialReportData(context, billingPeriodFilter);
@@ -231,9 +199,6 @@ public final class FinancialPdfGenerator {
         return pdf;
     }
 
-    /**
-     * Saves a generated PDF to the public Downloads/TutorSync directory and returns its Uri.
-     */
     @Nullable
     public static Uri savePdfToDownloads(@NonNull Context context, @NonNull File pdfFile) {
         try {
@@ -286,9 +251,6 @@ public final class FinancialPdfGenerator {
         sharePdf(context, pdfFile, "Share PDF Document");
     }
 
-    /**
-     * Shares a generated PDF file safely using FileProvider (with MediaStore fallback).
-     */
     public static void sharePdf(@NonNull Context context, @Nullable File pdfFile, @Nullable String chooserTitle) {
         if (pdfFile == null || !pdfFile.exists()) {
             Toast.makeText(context, "Unable to generate PDF file", Toast.LENGTH_SHORT).show();
@@ -309,9 +271,6 @@ public final class FinancialPdfGenerator {
         }
     }
 
-    /**
-     * Opens a generated PDF file in the device's default PDF viewer.
-     */
     public static void openPdf(@NonNull Context context, @Nullable File pdfFile) {
         if (pdfFile == null || !pdfFile.exists()) return;
         try {
@@ -434,127 +393,110 @@ public final class FinancialPdfGenerator {
     }
 
     // =========================================================================================
-    // 2. INVOICE PDF RENDERER
+    // 2. MINIMAL, SINGLE-PAGE INVOICE PDF RENDERER
     // =========================================================================================
 
     @Nullable
     private static File renderInvoiceDocument(@NonNull Context context, @NonNull InvoiceData data) {
         PdfDocument pdfDocument = new PdfDocument();
         List<PageHolder> pages = new ArrayList<>();
-        Bitmap logoWatermark = loadLogoBitmap(context, 240, COLOR_BRAND_PRIMARY);
-        Bitmap logoHeader = loadLogoBitmap(context, 48, COLOR_BRAND_ACCENT);
+        Bitmap logoSmall = loadLogoBitmap(context, 36, COLOR_INK_STRONG);
 
         try {
-            PageHolder current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
+            PageHolder current = startNewPage(pdfDocument, 1);
             pages.add(current);
             Canvas canvas = current.canvas;
 
-            // 1. Top Header (Tutor Profile + Document Title & Status Badge)
-            String statusLabel = resolveStatusLabel(data.status, data.isVoid);
-            float y = drawDocumentHeader(
+            // 1. Clean Top Header: Brand + Invoice Number + Explicit Text Status Badge
+            String statusText = resolveExplicitStatusText(data.status, data.isVoid);
+            int statusColor = resolveStatusColor(data.status, data.isVoid);
+            float y = drawMinimalHeader(canvas, logoSmall, "INVOICE", data.invoiceDisplayId, statusText, statusColor);
+            y += 16f;
+
+            // 2. Two-Column Party & Metadata Block (Tutor & Student Info on Left, Dates on Right)
+            y = drawInvoicePartiesAndDates(canvas, y, data);
+            y += 16f;
+
+            // 3. Three Key Figures Strip: Total Amount | Amount Paid | Amount Due
+            int currentDue = Math.max(0, data.totalAmountMinor - data.paidAmountMinor);
+            y = drawThreeKeyFiguresStrip(
                     canvas,
-                    logoHeader,
-                    data.tutor,
-                    "INVOICE",
-                    data.invoiceDisplayId,
-                    statusLabel,
-                    data.status,
-                    data.isVoid
+                    y,
+                    "TOTAL AMOUNT", formatCurrency(data.totalAmountMinor),
+                    "AMOUNT PAID", formatCurrency(data.paidAmountMinor),
+                    "AMOUNT DUE", formatCurrency(currentDue),
+                    currentDue > 0 ? COLOR_STATUS_UNPAID : COLOR_INK_STRONG
             );
+            y += 20f;
 
-            y += 14f;
+            // 4. Simple Class Fee Table
+            y = drawFeeTableHeader(canvas, y);
 
-            // 2. Student Information Card (Left) & Invoice Metadata Card (Right)
-            y = drawStudentAndInvoiceMetaCards(canvas, y, data);
-            y += 14f;
-
-            // 3. Prominent Financial Summary Strip (Total Amount | Amount Paid | Amount Due [+ Previous Dues])
-            y = drawProminentInvoiceSummaryStrip(canvas, y, data);
-            y += 18f;
-
-            // 4. Section Title: Breakdown of Billable Classes & Fees
-            y = drawSectionHeader(canvas, y, "BILLABLE CLASSES & FEE BREAKDOWN");
-            y += 6f;
-
-            // Table Header
-            y = drawInvoiceTableHeader(canvas, y);
-
-            // Table Rows (with automatic multi-page flow)
             for (int i = 0; i < data.items.size(); i++) {
                 LineItemRow item = data.items.get(i);
-                float rowHeight = measureInvoiceItemRowHeight(item);
+                float rowH = measureFeeItemRowHeight(item);
 
-                if (y + rowHeight > PAGE_HEIGHT - FOOTER_RESERVE) {
-                    current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
+                if (y + rowH > PAGE_HEIGHT - FOOTER_RESERVE) {
+                    current = startNewPage(pdfDocument, pages.size() + 1);
                     pages.add(current);
                     canvas = current.canvas;
-                    y = drawContinuationHeader(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
+                    y = drawContinuationBar(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
                     y += 12f;
-                    y = drawInvoiceTableHeader(canvas, y);
+                    y = drawFeeTableHeader(canvas, y);
                 }
-
-                y = drawInvoiceItemRow(canvas, y, i + 1, item, i % 2 == 1);
+                y = drawFeeItemRow(canvas, y, item);
             }
 
-            // Bottom border of items table
-            Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            linePaint.setColor(COLOR_BORDER_STRONG);
-            linePaint.setStrokeWidth(1f);
-            canvas.drawLine(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y, linePaint);
-            y += 14f;
-
-            // 5. Totals Breakdown (Subtotal, Discount, Previous Dues, Payments, Remaining Balance) + Notes/Status Seal
-            float totalsNeededHeight = 148f;
-            if (y + totalsNeededHeight > PAGE_HEIGHT - FOOTER_RESERVE) {
-                current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
-                pages.add(current);
-                canvas = current.canvas;
-                y = drawContinuationHeader(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
-                y += 16f;
-            }
-            y = drawTotalsAndNotesSection(canvas, y, data);
+            // Minimal inline adjustments (only shown if discount or previous unpaid balance exists)
+            y = drawMinimalFeeAdjustments(canvas, y, data);
             y += 18f;
 
-            // 6. Payments Breakdown Table (Payments logged against this invoice)
-            float paymentsHeaderHeight = data.payments.isEmpty() ? 52f : 72f;
-            if (y + paymentsHeaderHeight > PAGE_HEIGHT - FOOTER_RESERVE) {
-                current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
+            // 5. Compact Payment History Section
+            float paymentSectionMinH = data.payments.isEmpty() ? 42f : 56f;
+            if (y + paymentSectionMinH > PAGE_HEIGHT - FOOTER_RESERVE) {
+                current = startNewPage(pdfDocument, pages.size() + 1);
                 pages.add(current);
                 canvas = current.canvas;
-                y = drawContinuationHeader(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
-                y += 16f;
+                y = drawContinuationBar(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
+                y += 12f;
             }
 
-            y = drawSectionHeader(canvas, y, "PAYMENTS & ALLOCATIONS BREAKDOWN");
-            y += 6f;
-
+            y = drawCompactPaymentsHeader(canvas, y);
             if (data.payments.isEmpty()) {
-                y = drawEmptyPaymentsBox(canvas, y, "No payments have been recorded against this invoice yet.");
+                y = drawCompactEmptyRow(canvas, y, "No payments recorded for this invoice.");
             } else {
-                y = drawPaymentsTableHeader(canvas, y);
                 for (int i = 0; i < data.payments.size(); i++) {
                     PaymentRow p = data.payments.get(i);
-                    float rowH = 24f;
-                    if (y + rowH > PAGE_HEIGHT - FOOTER_RESERVE) {
-                        current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
+                    if (y + 20f > PAGE_HEIGHT - FOOTER_RESERVE) {
+                        current = startNewPage(pdfDocument, pages.size() + 1);
                         pages.add(current);
                         canvas = current.canvas;
-                        y = drawContinuationHeader(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
+                        y = drawContinuationBar(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
                         y += 12f;
-                        y = drawPaymentsTableHeader(canvas, y);
+                        y = drawCompactPaymentsHeader(canvas, y);
                     }
-                    y = drawPaymentTableRow(canvas, y, p, i % 2 == 1);
+                    y = drawCompactPaymentRow(canvas, y, p);
                 }
-                canvas.drawLine(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y, linePaint);
             }
 
-            // 7. Signature & Footer on all pages
+            // 6. Optional Notes (compact, only if present)
+            if (!TextUtils.isEmpty(data.notes)) {
+                y += 14f;
+                if (y + 36f > PAGE_HEIGHT - FOOTER_RESERVE) {
+                    current = startNewPage(pdfDocument, pages.size() + 1);
+                    pages.add(current);
+                    canvas = current.canvas;
+                    y = drawContinuationBar(canvas, "INVOICE " + data.invoiceDisplayId, data.student.getFormattedName());
+                    y += 12f;
+                }
+                y = drawCompactNoteBlock(canvas, y, data.notes);
+            }
+
+            // 7. Minimal Footer on all pages
             int totalPages = pages.size();
             for (int i = 0; i < totalPages; i++) {
-                PageHolder holder = pages.get(i);
-                boolean isLastPage = (i == totalPages - 1);
-                drawPageFooter(holder.canvas, data.tutor, i + 1, totalPages, isLastPage);
-                pdfDocument.finishPage(holder.page);
+                drawMinimalFooter(pages.get(i).canvas, i + 1, totalPages);
+                pdfDocument.finishPage(pages.get(i).page);
             }
 
             String safeInvoiceName = sanitizeFilename(data.invoiceDisplayId) + "_"
@@ -573,151 +515,56 @@ public final class FinancialPdfGenerator {
     }
 
     // =========================================================================================
-    // 3. PAYMENT RECEIPT PDF RENDERER
+    // 3. MINIMAL PAYMENT RECEIPT PDF RENDERER
     // =========================================================================================
 
     @Nullable
     private static File renderReceiptDocument(@NonNull Context context, @NonNull ReceiptData data) {
         PdfDocument pdfDocument = new PdfDocument();
-        List<PageHolder> pages = new ArrayList<>();
-        Bitmap logoWatermark = loadLogoBitmap(context, 240, COLOR_BRAND_PRIMARY);
-        Bitmap logoHeader = loadLogoBitmap(context, 48, COLOR_BRAND_ACCENT);
+        Bitmap logoSmall = loadLogoBitmap(context, 36, COLOR_INK_STRONG);
 
         try {
-            PageHolder current = startNewPage(pdfDocument, 1, logoWatermark);
-            pages.add(current);
+            PageHolder current = startNewPage(pdfDocument, 1);
             Canvas canvas = current.canvas;
 
-            String badgeText = data.isReversed ? "REVERSED" : "OFFICIAL RECEIPT";
-            String statusCode = data.isReversed ? "VOID" : Invoice.STATUS_PAID;
+            String statusText = data.isReversed ? "STATUS: REVERSED" : "STATUS: CONFIRMED";
+            int statusColor = data.isReversed ? COLOR_STATUS_VOID : COLOR_STATUS_PAID;
 
-            float y = drawDocumentHeader(
-                    canvas,
-                    logoHeader,
-                    data.tutor,
-                    "PAYMENT RECEIPT",
-                    data.receiptDisplayId,
-                    badgeText,
-                    statusCode,
-                    data.isReversed
-            );
+            float y = drawMinimalHeader(canvas, logoSmall, "PAYMENT RECEIPT", data.receiptDisplayId, statusText, statusColor);
             y += 16f;
 
-            // Prominent Amount Received Banner
-            RectF heroRect = new RectF(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y + 66f);
-            Paint cardPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            cardPaint.setColor(data.isReversed ? COLOR_VOID_BG : COLOR_PAID_BG);
-            canvas.drawRoundRect(heroRect, 8f, 8f, cardPaint);
+            // Two-Column Party & Receipt Metadata
+            y = drawReceiptPartiesAndDates(canvas, y, data);
+            y += 18f;
 
-            Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            borderPaint.setStyle(Paint.Style.STROKE);
-            borderPaint.setStrokeWidth(1.2f);
-            borderPaint.setColor(data.isReversed ? COLOR_VOID_BORDER : COLOR_PAID_BORDER);
-            canvas.drawRoundRect(heroRect, 8f, 8f, borderPaint);
-
-            String heroLabel = "DISCOUNT".equalsIgnoreCase(data.type) ? "DISCOUNT / WAIVER APPLIED"
-                    : ("REFUND".equalsIgnoreCase(data.type) ? "AMOUNT REFUNDED" : "AMOUNT RECEIVED");
-            TextPaint labelPaint = createTextPaint(9f, Typeface.BOLD, data.isReversed ? COLOR_VOID_INK : COLOR_PAID_INK);
-            canvas.drawText(heroLabel, MARGIN_H + 16f, y + 22f, labelPaint);
-
-            TextPaint amountPaint = createTextPaint(22f, Typeface.BOLD, data.isReversed ? COLOR_VOID_INK : COLOR_PAID_INK);
-            canvas.drawText(formatCurrency(data.amountMinor), MARGIN_H + 16f, y + 50f, amountPaint);
-
-            TextPaint rightMetaPaint = createTextPaint(9.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-            rightMetaPaint.setTextAlign(Paint.Align.RIGHT);
-            canvas.drawText("Date: " + formatDateTime(data.paymentTimestamp), PAGE_WIDTH - MARGIN_H - 16f, y + 26f, rightMetaPaint);
-            canvas.drawText("Method: " + nonEmptyOrDefault(data.method, "Cash"), PAGE_WIDTH - MARGIN_H - 16f, y + 44f, rightMetaPaint);
-
-            y += 82f;
-
-            // Student & Payment Details Card
-            RectF detailsCard = new RectF(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y + 124f);
-            Paint surfacePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            surfacePaint.setColor(COLOR_SURFACE_CARD);
-            canvas.drawRoundRect(detailsCard, 8f, 8f, surfacePaint);
-            borderPaint.setColor(COLOR_BORDER);
-            borderPaint.setStrokeWidth(1f);
-            canvas.drawRoundRect(detailsCard, 8f, 8f, borderPaint);
-
-            float leftX = MARGIN_H + 16f;
-            float rightX = MARGIN_H + (CONTENT_WIDTH / 2f) + 12f;
-            float rowY = y + 22f;
-
-            TextPaint secHeader = createTextPaint(8.5f, Typeface.BOLD, COLOR_BRAND_ACCENT);
-            canvas.drawText("STUDENT INFORMATION", leftX, rowY, secHeader);
-            canvas.drawText("TRANSACTION SUMMARY", rightX, rowY, secHeader);
-
-            rowY += 18f;
-            TextPaint boldInk = createTextPaint(11f, Typeface.BOLD, COLOR_INK_PRIMARY);
-            canvas.drawText(ellipsize(data.student.getFormattedName(), boldInk, (CONTENT_WIDTH / 2f) - 24f), leftX, rowY, boldInk);
-            drawKeyValueRow(canvas, rightX, PAGE_WIDTH - MARGIN_H - 16f, rowY, "Receipt No:", data.receiptDisplayId);
-
-            rowY += 16f;
-            TextPaint subInk = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-            if (!TextUtils.isEmpty(data.student.gradeOrSchool())) {
-                canvas.drawText(ellipsize(data.student.gradeOrSchool(), subInk, (CONTENT_WIDTH / 2f) - 24f), leftX, rowY, subInk);
-                rowY += 14f;
-            }
-            if (!TextUtils.isEmpty(data.student.guardianSummary())) {
-                canvas.drawText(ellipsize(data.student.guardianSummary(), subInk, (CONTENT_WIDTH / 2f) - 24f), leftX, rowY, subInk);
-                rowY += 14f;
-            }
-            if (!TextUtils.isEmpty(data.student.address)) {
-                canvas.drawText(ellipsize(data.student.address, subInk, (CONTENT_WIDTH / 2f) - 28f), leftX, rowY, subInk);
-            }
-
-            float rightRowY = y + 56f;
-            if (!TextUtils.isEmpty(data.type)) {
-                drawKeyValueRow(canvas, rightX, PAGE_WIDTH - MARGIN_H - 16f, rightRowY, "Transaction Type:", data.type);
-                rightRowY += 16f;
-            }
-            if (!TextUtils.isEmpty(data.referenceNo)) {
-                drawKeyValueRow(canvas, rightX, PAGE_WIDTH - MARGIN_H - 16f, rightRowY, "Reference:", data.referenceNo);
-                rightRowY += 16f;
-            }
-            if (!TextUtils.isEmpty(data.invoiceDisplayId)) {
-                drawKeyValueRow(canvas, rightX, PAGE_WIDTH - MARGIN_H - 16f, rightRowY, "Applied to Invoice:", data.invoiceDisplayId);
-                rightRowY += 16f;
-            }
-            if (!TextUtils.isEmpty(data.billingPeriod)) {
-                drawKeyValueRow(canvas, rightX, PAGE_WIDTH - MARGIN_H - 16f, rightRowY, "Billing Period:", data.billingPeriod);
-            }
-
-            y += 142f;
-
-            // Linked Invoice Balance Summary (if linked to an invoice)
+            // Key Figures Strip
             if (data.invoiceTotalMinor > 0) {
-                y = drawSectionHeader(canvas, y, "INVOICE SETTLEMENT SUMMARY (" + nonEmptyOrDefault(data.invoiceDisplayId, "Linked Invoice") + ")");
-                y += 8f;
-
-                RectF invBox = new RectF(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y + 76f);
-                Paint whitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                whitePaint.setColor(Color.WHITE);
-                canvas.drawRoundRect(invBox, 8f, 8f, whitePaint);
-                canvas.drawRoundRect(invBox, 8f, 8f, borderPaint);
-
-                float colW = CONTENT_WIDTH / 4f;
-                int remainingOnInvoice = Math.max(0, data.invoiceTotalMinor - data.invoicePaidMinor);
-                drawMiniMetric(canvas, MARGIN_H, y + 16f, colW, "INVOICE TOTAL", formatCurrency(data.invoiceTotalMinor), COLOR_INK_PRIMARY);
-                drawMiniMetric(canvas, MARGIN_H + colW, y + 16f, colW, "THIS AMOUNT", formatCurrency(data.amountMinor), COLOR_PAID_INK);
-                drawMiniMetric(canvas, MARGIN_H + colW * 2, y + 16f, colW, "TOTAL PAID TO DATE", formatCurrency(data.invoicePaidMinor), COLOR_BRAND_ACCENT);
-                drawMiniMetric(canvas, MARGIN_H + colW * 3, y + 16f, colW, "REMAINING DUE", formatCurrency(remainingOnInvoice),
-                        remainingOnInvoice > 0 ? COLOR_UNPAID_INK : COLOR_PAID_INK);
-
-                y += 94f;
+                int remainingDue = Math.max(0, data.invoiceTotalMinor - data.invoicePaidMinor);
+                y = drawThreeKeyFiguresStrip(
+                        canvas,
+                        y,
+                        "INVOICE TOTAL", formatCurrency(data.invoiceTotalMinor),
+                        "THIS PAYMENT", formatCurrency(data.amountMinor),
+                        "REMAINING DUE", formatCurrency(remainingDue),
+                        remainingDue > 0 ? COLOR_STATUS_UNPAID : COLOR_INK_STRONG
+                );
+            } else {
+                y = drawThreeKeyFiguresStrip(
+                        canvas,
+                        y,
+                        "TRANSACTION TYPE", nonEmptyOrDefault(data.type, "PAYMENT"),
+                        "PAYMENT METHOD", nonEmptyOrDefault(data.method, "Cash"),
+                        "AMOUNT RECEIVED", formatCurrency(data.amountMinor),
+                        COLOR_INK_STRONG
+                );
             }
+            y += 22f;
 
             if (!TextUtils.isEmpty(data.notes)) {
-                y = drawSectionHeader(canvas, y, "TRANSACTION NOTES");
-                y += 6f;
-                RectF noteBox = new RectF(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y + 44f);
-                canvas.drawRoundRect(noteBox, 6f, 6f, surfacePaint);
-                canvas.drawRoundRect(noteBox, 6f, 6f, borderPaint);
-                TextPaint notePaint = createTextPaint(9.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-                canvas.drawText(ellipsize(data.notes, notePaint, CONTENT_WIDTH - 24f), MARGIN_H + 12f, y + 26f, notePaint);
+                drawCompactNoteBlock(canvas, y, data.notes);
             }
 
-            drawPageFooter(canvas, data.tutor, 1, 1, true);
+            drawMinimalFooter(canvas, 1, 1);
             pdfDocument.finishPage(current.page);
 
             String safeId = sanitizeFilename(data.receiptDisplayId);
@@ -735,128 +582,91 @@ public final class FinancialPdfGenerator {
     }
 
     // =========================================================================================
-    // 4. STUDENT STATEMENT / LEDGER PDF RENDERER
+    // 4. MINIMAL STUDENT STATEMENT PDF RENDERER
     // =========================================================================================
 
     @Nullable
     private static File renderStudentStatementDocument(@NonNull Context context, @NonNull StatementData data) {
         PdfDocument pdfDocument = new PdfDocument();
         List<PageHolder> pages = new ArrayList<>();
-        Bitmap logoWatermark = loadLogoBitmap(context, 240, COLOR_BRAND_PRIMARY);
-        Bitmap logoHeader = loadLogoBitmap(context, 48, COLOR_BRAND_ACCENT);
+        Bitmap logoSmall = loadLogoBitmap(context, 36, COLOR_INK_STRONG);
 
         try {
-            PageHolder current = startNewPage(pdfDocument, 1, logoWatermark);
+            PageHolder current = startNewPage(pdfDocument, 1);
             pages.add(current);
             Canvas canvas = current.canvas;
 
             int totalDue = Math.max(0, data.totalBilledMinor - data.totalPaidMinor);
-            String status = totalDue == 0 ? Invoice.STATUS_PAID : (data.totalPaidMinor > 0 ? Invoice.STATUS_PARTIAL : Invoice.STATUS_UNPAID);
-            String badgeLabel = totalDue == 0 ? "SETTLED" : "BALANCE DUE";
+            String statusText = totalDue == 0 ? "STATUS: SETTLED" : "STATUS: BALANCE DUE";
+            int statusColor = totalDue == 0 ? COLOR_STATUS_PAID : COLOR_STATUS_UNPAID;
+            String refId = !TextUtils.isEmpty(data.student.studentIdDisplay) ? data.student.studentIdDisplay : "STATEMENT";
 
-            float y = drawDocumentHeader(
-                    canvas,
-                    logoHeader,
-                    data.tutor,
-                    "STUDENT STATEMENT",
-                    data.student.studentIdDisplay != null ? data.student.studentIdDisplay : "LEDGER",
-                    badgeLabel,
-                    status,
-                    false
-            );
-            y += 14f;
+            float y = drawMinimalHeader(canvas, logoSmall, "STUDENT STATEMENT", refId, statusText, statusColor);
+            y += 16f;
 
-            // Student Info Bar
-            RectF studentBox = new RectF(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y + 60f);
-            Paint surfacePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            surfacePaint.setColor(COLOR_SURFACE_CARD);
-            canvas.drawRoundRect(studentBox, 8f, 8f, surfacePaint);
-            Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            borderPaint.setStyle(Paint.Style.STROKE);
-            borderPaint.setColor(COLOR_BORDER);
-            borderPaint.setStrokeWidth(1f);
-            canvas.drawRoundRect(studentBox, 8f, 8f, borderPaint);
+            // Tutor & Student Info Row
+            y = drawStatementPartiesBlock(canvas, y, data.tutor, data.student);
+            y += 16f;
 
-            TextPaint namePaint = createTextPaint(12f, Typeface.BOLD, COLOR_INK_PRIMARY);
-            canvas.drawText(data.student.getFormattedName(), MARGIN_H + 14f, y + 24f, namePaint);
-
-            TextPaint subPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-            String metaLine = TextUtils.join("  •  ", nonEmptyList(data.student.gradeOrSchool(), data.student.guardianSummary(), data.student.address));
-            if (!TextUtils.isEmpty(metaLine)) {
-                canvas.drawText(ellipsize(metaLine, subPaint, CONTENT_WIDTH - 28f), MARGIN_H + 14f, y + 44f, subPaint);
-            }
-            y += 74f;
-
-            // 3-Box Summary Strip
-            y = drawThreeBoxSummaryStrip(
+            // 3 Key Figures Strip
+            y = drawThreeKeyFiguresStrip(
                     canvas,
                     y,
-                    "TOTAL INVOICED", formatCurrency(data.totalBilledMinor),
-                    "TOTAL PAID", formatCurrency(data.totalPaidMinor),
-                    "OUTSTANDING BALANCE", formatCurrency(totalDue),
-                    totalDue > 0
+                    "TOTAL AMOUNT", formatCurrency(data.totalBilledMinor),
+                    "AMOUNT PAID", formatCurrency(data.totalPaidMinor),
+                    "AMOUNT DUE", formatCurrency(totalDue),
+                    totalDue > 0 ? COLOR_STATUS_UNPAID : COLOR_INK_STRONG
             );
-            y += 18f;
+            y += 20f;
 
-            y = drawSectionHeader(canvas, y, "INVOICE & BILLING HISTORY");
-            y += 6f;
-
-            Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            linePaint.setColor(COLOR_BORDER);
-            linePaint.setStrokeWidth(0.8f);
-
+            // Invoices Table
+            y = drawStatementInvoicesHeader(canvas, y);
             if (data.invoices.isEmpty()) {
-                y = drawEmptyPaymentsBox(canvas, y, "No invoices recorded for this student yet.");
+                y = drawCompactEmptyRow(canvas, y, "No invoices issued for this student.");
             } else {
-                y = drawStatementTableHeader(canvas, y);
-                for (int i = 0; i < data.invoices.size(); i++) {
-                    InvoiceData inv = data.invoices.get(i);
-                    if (y + 26f > PAGE_HEIGHT - FOOTER_RESERVE) {
-                        current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
+                for (InvoiceData inv : data.invoices) {
+                    if (y + 20f > PAGE_HEIGHT - FOOTER_RESERVE) {
+                        current = startNewPage(pdfDocument, pages.size() + 1);
                         pages.add(current);
                         canvas = current.canvas;
-                        y = drawContinuationHeader(canvas, "STUDENT STATEMENT", data.student.getFormattedName());
+                        y = drawContinuationBar(canvas, "STUDENT STATEMENT", data.student.getFormattedName());
                         y += 12f;
-                        y = drawStatementTableHeader(canvas, y);
+                        y = drawStatementInvoicesHeader(canvas, y);
                     }
-                    y = drawStatementInvoiceRow(canvas, y, inv, i % 2 == 1);
+                    y = drawStatementInvoiceRow(canvas, y, inv);
                 }
-                canvas.drawLine(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y, linePaint);
             }
+            y += 18f;
 
-            y += 16f;
-            if (y + 60f > PAGE_HEIGHT - FOOTER_RESERVE) {
-                current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
+            // Payments History
+            if (y + 50f > PAGE_HEIGHT - FOOTER_RESERVE) {
+                current = startNewPage(pdfDocument, pages.size() + 1);
                 pages.add(current);
                 canvas = current.canvas;
-                y = drawContinuationHeader(canvas, "STUDENT STATEMENT", data.student.getFormattedName());
+                y = drawContinuationBar(canvas, "STUDENT STATEMENT", data.student.getFormattedName());
                 y += 12f;
             }
 
-            y = drawSectionHeader(canvas, y, "PAYMENTS & TRANSACTIONS HISTORY");
-            y += 6f;
+            y = drawCompactPaymentsHeader(canvas, y);
             if (data.transactions.isEmpty()) {
-                y = drawEmptyPaymentsBox(canvas, y, "No payment transactions recorded for this student yet.");
+                drawCompactEmptyRow(canvas, y, "No payments recorded for this student.");
             } else {
-                y = drawPaymentsTableHeader(canvas, y);
-                for (int i = 0; i < data.transactions.size(); i++) {
-                    PaymentRow p = data.transactions.get(i);
-                    if (y + 24f > PAGE_HEIGHT - FOOTER_RESERVE) {
-                        current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
+                for (PaymentRow p : data.transactions) {
+                    if (y + 20f > PAGE_HEIGHT - FOOTER_RESERVE) {
+                        current = startNewPage(pdfDocument, pages.size() + 1);
                         pages.add(current);
                         canvas = current.canvas;
-                        y = drawContinuationHeader(canvas, "STUDENT STATEMENT", data.student.getFormattedName());
+                        y = drawContinuationBar(canvas, "STUDENT STATEMENT", data.student.getFormattedName());
                         y += 12f;
-                        y = drawPaymentsTableHeader(canvas, y);
+                        y = drawCompactPaymentsHeader(canvas, y);
                     }
-                    y = drawPaymentTableRow(canvas, y, p, i % 2 == 1);
+                    y = drawCompactPaymentRow(canvas, y, p);
                 }
-                canvas.drawLine(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y, linePaint);
             }
 
             int totalPages = pages.size();
             for (int i = 0; i < totalPages; i++) {
-                drawPageFooter(pages.get(i).canvas, data.tutor, i + 1, totalPages, i == totalPages - 1);
+                drawMinimalFooter(pages.get(i).canvas, i + 1, totalPages);
                 pdfDocument.finishPage(pages.get(i).page);
             }
 
@@ -875,64 +685,56 @@ public final class FinancialPdfGenerator {
     }
 
     // =========================================================================================
-    // 5. ACCOUNT FINANCIAL SUMMARY REPORT PDF RENDERER
+    // 5. MINIMAL FINANCIAL SUMMARY REPORT PDF RENDERER
     // =========================================================================================
 
     @Nullable
     private static File renderFinancialReportDocument(@NonNull Context context, @NonNull FinancialReportData data) {
         PdfDocument pdfDocument = new PdfDocument();
         List<PageHolder> pages = new ArrayList<>();
-        Bitmap logoWatermark = loadLogoBitmap(context, 240, COLOR_BRAND_PRIMARY);
-        Bitmap logoHeader = loadLogoBitmap(context, 48, COLOR_BRAND_ACCENT);
+        Bitmap logoSmall = loadLogoBitmap(context, 36, COLOR_INK_STRONG);
 
         try {
-            PageHolder current = startNewPage(pdfDocument, 1, logoWatermark);
+            PageHolder current = startNewPage(pdfDocument, 1);
             pages.add(current);
             Canvas canvas = current.canvas;
 
             int totalDue = Math.max(0, data.totalBilledMinor - data.totalCollectedMinor);
-            float y = drawDocumentHeader(
-                    canvas,
-                    logoHeader,
-                    data.tutor,
-                    "FINANCIAL REPORT",
-                    data.periodLabel,
-                    "SUMMARY",
-                    totalDue == 0 ? Invoice.STATUS_PAID : Invoice.STATUS_PARTIAL,
-                    false
-            );
+            String statusText = "PERIOD: " + data.periodLabel.toUpperCase(Locale.US);
+
+            float y = drawMinimalHeader(canvas, logoSmall, "FINANCIAL REPORT", data.periodLabel, statusText, COLOR_INK_STRONG);
             y += 16f;
 
-            y = drawThreeBoxSummaryStrip(
+            y = drawThreeKeyFiguresStrip(
                     canvas,
                     y,
-                    "TOTAL INVOICED", formatCurrency(data.totalBilledMinor),
-                    "PAYMENTS COLLECTED", formatCurrency(data.totalCollectedMinor),
-                    "OUTSTANDING DUES", formatCurrency(totalDue),
-                    totalDue > 0
+                    "TOTAL AMOUNT", formatCurrency(data.totalBilledMinor),
+                    "AMOUNT PAID", formatCurrency(data.totalCollectedMinor),
+                    "AMOUNT DUE", formatCurrency(totalDue),
+                    totalDue > 0 ? COLOR_STATUS_UNPAID : COLOR_INK_STRONG
             );
-            y += 18f;
+            y += 20f;
 
-            y = drawSectionHeader(canvas, y, "INVOICE BREAKDOWN (" + data.invoices.size() + " INVOICES)");
-            y += 6f;
             y = drawReportTableHeader(canvas, y);
-
-            for (int i = 0; i < data.invoices.size(); i++) {
-                InvoiceData inv = data.invoices.get(i);
-                if (y + 26f > PAGE_HEIGHT - FOOTER_RESERVE) {
-                    current = startNewPage(pdfDocument, pages.size() + 1, logoWatermark);
-                    pages.add(current);
-                    canvas = current.canvas;
-                    y = drawContinuationHeader(canvas, "FINANCIAL REPORT", data.periodLabel);
-                    y += 12f;
-                    y = drawReportTableHeader(canvas, y);
+            if (data.invoices.isEmpty()) {
+                drawCompactEmptyRow(canvas, y, "No invoices found for this period.");
+            } else {
+                for (InvoiceData inv : data.invoices) {
+                    if (y + 20f > PAGE_HEIGHT - FOOTER_RESERVE) {
+                        current = startNewPage(pdfDocument, pages.size() + 1);
+                        pages.add(current);
+                        canvas = current.canvas;
+                        y = drawContinuationBar(canvas, "FINANCIAL REPORT", data.periodLabel);
+                        y += 12f;
+                        y = drawReportTableHeader(canvas, y);
+                    }
+                    y = drawReportInvoiceRow(canvas, y, inv);
                 }
-                y = drawReportInvoiceRow(canvas, y, inv, i % 2 == 1);
             }
 
             int totalPages = pages.size();
             for (int i = 0; i < totalPages; i++) {
-                drawPageFooter(pages.get(i).canvas, data.tutor, i + 1, totalPages, i == totalPages - 1);
+                drawMinimalFooter(pages.get(i).canvas, i + 1, totalPages);
                 pdfDocument.finishPage(pages.get(i).page);
             }
 
@@ -951,857 +753,644 @@ public final class FinancialPdfGenerator {
     }
 
     // =========================================================================================
-    // 6. SHARED DRAWING COMPONENTS (Header, Watermark, Cards, Tables, Totals, Footer)
+    // 6. MINIMAL, HIGH-CONTRAST DRAWING BUILDING BLOCKS
     // =========================================================================================
 
-    private static PageHolder startNewPage(@NonNull PdfDocument doc, int pageNumber, @Nullable Bitmap watermarkBitmap) {
+    private static PageHolder startNewPage(@NonNull PdfDocument doc, int pageNumber) {
         PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create();
         PdfDocument.Page page = doc.startPage(pageInfo);
         Canvas canvas = page.getCanvas();
-
+        // Pure white background with no watermark or ink-heavy blocks
         canvas.drawColor(Color.WHITE);
-
-        // Top decorative accent band
-        Paint bandPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bandPaint.setColor(COLOR_BRAND_DARK);
-        canvas.drawRect(0, 0, PAGE_WIDTH, 6f, bandPaint);
-        bandPaint.setColor(COLOR_BRAND_ACCENT);
-        canvas.drawRect(PAGE_WIDTH * 0.68f, 0, PAGE_WIDTH, 6f, bandPaint);
-
-        // Subtle Center TutorSync Logo Watermark
-        drawSubtleWatermark(canvas, watermarkBitmap);
-
         return new PageHolder(page, canvas);
     }
 
-    private static void drawSubtleWatermark(@NonNull Canvas canvas, @Nullable Bitmap watermarkBitmap) {
-        canvas.save();
-        float centerX = PAGE_WIDTH / 2f;
-        float centerY = PAGE_HEIGHT / 2f + 20f;
-        canvas.rotate(-18f, centerX, centerY);
-
-        if (watermarkBitmap != null) {
-            Paint wmPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-            wmPaint.setAlpha(11); // ~4.3% opacity so it never interferes with readability
-            float size = 210f;
-            RectF dst = new RectF(centerX - size / 2f, centerY - size / 2f - 15f, centerX + size / 2f, centerY + size / 2f - 15f);
-            canvas.drawBitmap(watermarkBitmap, null, dst, wmPaint);
-        }
-
-        TextPaint wmText = createTextPaint(34f, Typeface.BOLD, COLOR_BRAND_PRIMARY);
-        wmText.setAlpha(11);
-        wmText.setTextAlign(Paint.Align.CENTER);
-        wmText.setLetterSpacing(0.12f);
-        canvas.drawText("TUTORSYNC", centerX, centerY + 115f, wmText);
-        canvas.restore();
-    }
-
-    private static float drawDocumentHeader(@NonNull Canvas canvas,
-                                            @Nullable Bitmap logoHeader,
-                                            @NonNull TutorProfile tutor,
-                                            @NonNull String documentTypeTitle,
-                                            @NonNull String documentRefId,
-                                            @NonNull String statusLabel,
-                                            @NonNull String statusCode,
-                                            boolean isVoid) {
-        float y = MARGIN_TOP - 8f;
+    /**
+     * Top header with subtle TutorSync branding on the left, and Document Title + Outlined Text Status Badge on the right.
+     */
+    private static float drawMinimalHeader(@NonNull Canvas canvas,
+                                           @Nullable Bitmap logoSmall,
+                                           @NonNull String docTitle,
+                                           @NonNull String docNumber,
+                                           @NonNull String statusBadgeText,
+                                           int statusColor) {
+        float y = MARGIN_TOP;
         float leftX = MARGIN_H;
 
-        if (logoHeader != null) {
-            RectF iconBg = new RectF(leftX, y, leftX + 34f, y + 34f);
-            Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            bgPaint.setColor(COLOR_BRAND_SOFT);
-            canvas.drawRoundRect(iconBg, 8f, 8f, bgPaint);
-
-            RectF iconDst = new RectF(leftX + 5f, y + 5f, leftX + 29f, y + 29f);
+        // Subtle TutorSync Brand Mark + Wordmark
+        if (logoSmall != null) {
+            RectF dst = new RectF(leftX, y, leftX + 18f, y + 18f);
             Paint bmpPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-            canvas.drawBitmap(logoHeader, null, iconDst, bmpPaint);
-            leftX += 42f;
+            canvas.drawBitmap(logoSmall, null, dst, bmpPaint);
+            leftX += 24f;
         }
 
-        String displayTutorName = !TextUtils.isEmpty(tutor.fullName) ? tutor.fullName : "TutorSync Educator";
-        TextPaint tutorNamePaint = createTextPaint(15f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        canvas.drawText(displayTutorName, leftX, y + 15f, tutorNamePaint);
+        TextPaint brandPaint = createTextPaint(11f, Typeface.BOLD, COLOR_INK_STRONG);
+        brandPaint.setLetterSpacing(0.06f);
+        canvas.drawText("TUTORSYNC", leftX, y + 13f, brandPaint);
 
-        TextPaint roleBadgePaint = createTextPaint(8.5f, Typeface.BOLD, COLOR_BRAND_ACCENT);
-        canvas.drawText("TUTORSYNC EDUCATOR PROFILE", leftX, y + 27f, roleBadgePaint);
+        // Document Title (Top Left below brand)
+        TextPaint titlePaint = createTextPaint(20f, Typeface.BOLD, COLOR_INK_STRONG);
+        canvas.drawText(docTitle, MARGIN_H, y + 38f, titlePaint);
 
-        float contactY = y + 42f;
-        TextPaint contactPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-
-        // Gracefully show teacher's mobile number, email, and address when available in profile
-        if (!TextUtils.isEmpty(tutor.phone)) {
-            canvas.drawText("Mobile: " + tutor.phone, MARGIN_H, contactY, contactPaint);
-            contactY += 13f;
-        }
-        if (!TextUtils.isEmpty(tutor.email)) {
-            canvas.drawText("Email: " + tutor.email, MARGIN_H, contactY, contactPaint);
-            contactY += 13f;
-        }
-        if (!TextUtils.isEmpty(tutor.address)) {
-            canvas.drawText(ellipsize("Address: " + tutor.address, contactPaint, CONTENT_WIDTH * 0.54f), MARGIN_H, contactY, contactPaint);
-            contactY += 13f;
-        }
-
-        // Right Column: Document Type Title, Reference Number & Status Pill
+        // Right Side: Document Number + Text-First Outlined Status Badge
         float rightEdge = PAGE_WIDTH - MARGIN_H;
-        TextPaint docTitlePaint = createTextPaint(20f, Typeface.BOLD, COLOR_BRAND_DARK);
-        docTitlePaint.setTextAlign(Paint.Align.RIGHT);
-        docTitlePaint.setLetterSpacing(0.04f);
-        canvas.drawText(documentTypeTitle, rightEdge, y + 18f, docTitlePaint);
+        TextPaint numPaint = createTextPaint(12f, Typeface.BOLD, COLOR_INK_STRONG);
+        numPaint.setTextAlign(Paint.Align.RIGHT);
+        canvas.drawText(docNumber, rightEdge, y + 14f, numPaint);
 
-        TextPaint refPaint = createTextPaint(11f, Typeface.BOLD, COLOR_BRAND_ACCENT);
-        refPaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(documentRefId, rightEdge, y + 34f, refPaint);
+        drawOutlinedStatusBadge(canvas, rightEdge, y + 22f, statusBadgeText, statusColor);
 
-        drawStatusBadge(canvas, rightEdge, y + 43f, statusLabel, statusCode, isVoid);
-
-        float headerBottom = Math.max(contactY + 2f, y + 72f);
-
-        Paint divPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        divPaint.setColor(COLOR_BORDER);
-        divPaint.setStrokeWidth(1f);
-        canvas.drawLine(MARGIN_H, headerBottom, PAGE_WIDTH - MARGIN_H, headerBottom, divPaint);
-
-        return headerBottom;
+        float bottomY = y + 48f;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_DARK, 1.2f);
+        return bottomY;
     }
 
-    private static void drawStatusBadge(@NonNull Canvas canvas,
-                                        float rightEdge,
-                                        float topY,
-                                        @NonNull String statusLabel,
-                                        @NonNull String statusCode,
-                                        boolean isVoid) {
-        int bgColor;
-        int borderColor;
-        int inkColor;
+    /**
+     * Outlined badge that communicates payment status clearly via explicit text + border (works in B&W and Color).
+     */
+    private static void drawOutlinedStatusBadge(@NonNull Canvas canvas,
+                                                float rightEdge,
+                                                float topY,
+                                                @NonNull String text,
+                                                int strokeAndTextColor) {
+        TextPaint tp = createTextPaint(8.5f, Typeface.BOLD, strokeAndTextColor);
+        tp.setLetterSpacing(0.04f);
+        float textW = tp.measureText(text);
+        float padH = 9f;
+        float boxW = textW + (padH * 2f);
+        float boxH = 18f;
 
-        if (isVoid || "VOID".equalsIgnoreCase(statusCode)) {
-            bgColor = COLOR_VOID_BG;
-            borderColor = COLOR_VOID_BORDER;
-            inkColor = COLOR_VOID_INK;
-        } else if (Invoice.STATUS_PAID.equalsIgnoreCase(statusCode)) {
-            bgColor = COLOR_PAID_BG;
-            borderColor = COLOR_PAID_BORDER;
-            inkColor = COLOR_PAID_INK;
-        } else if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(statusCode)) {
-            bgColor = COLOR_PARTIAL_BG;
-            borderColor = COLOR_PARTIAL_BORDER;
-            inkColor = COLOR_PARTIAL_INK;
-        } else {
-            bgColor = COLOR_UNPAID_BG;
-            borderColor = COLOR_UNPAID_BORDER;
-            inkColor = COLOR_UNPAID_INK;
-        }
+        RectF rect = new RectF(rightEdge - boxW, topY, rightEdge, topY + boxH);
 
-        TextPaint badgeTextPaint = createTextPaint(8.5f, Typeface.BOLD, inkColor);
-        float textW = badgeTextPaint.measureText(statusLabel);
-        float pillW = textW + 26f;
-        float pillH = 20f;
-        RectF pillRect = new RectF(rightEdge - pillW, topY, rightEdge, topY + pillH);
+        Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
+        border.setStyle(Paint.Style.STROKE);
+        border.setStrokeWidth(1.1f);
+        border.setColor(strokeAndTextColor);
+        canvas.drawRoundRect(rect, 4f, 4f, border);
 
-        Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        fillPaint.setColor(bgColor);
-        canvas.drawRoundRect(pillRect, 10f, 10f, fillPaint);
-
-        Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        strokePaint.setStyle(Paint.Style.STROKE);
-        strokePaint.setStrokeWidth(1f);
-        strokePaint.setColor(borderColor);
-        canvas.drawRoundRect(pillRect, 10f, 10f, strokePaint);
-
-        Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        dotPaint.setColor(inkColor);
-        canvas.drawCircle(pillRect.left + 9f, pillRect.centerY(), 2.8f, dotPaint);
-
-        canvas.drawText(statusLabel, pillRect.left + 16f, pillRect.top + 13.5f, badgeTextPaint);
+        canvas.drawText(text, rect.left + padH, rect.top + 12.2f, tp);
     }
 
-    private static float drawStudentAndInvoiceMetaCards(@NonNull Canvas canvas, float topY, @NonNull InvoiceData data) {
-        float gap = 12f;
-        float cardW = (CONTENT_WIDTH - gap) / 2f;
+    /**
+     * Clean 3-column block:
+     * Column 1: FROM (Tutor)
+     * Column 2: BILLED TO (Student Name · STU-XXXX)
+     * Column 3: INVOICE DETAILS (Billing Period, Issue Date, Due Date)
+     */
+    private static float drawInvoicePartiesAndDates(@NonNull Canvas canvas, float topY, @NonNull InvoiceData data) {
+        float col1X = MARGIN_H;
+        float col2X = MARGIN_H + 175f;
+        float col3X = MARGIN_H + 355f;
+        float rightEdge = PAGE_WIDTH - MARGIN_H;
+        float colWidth = 165f;
 
-        List<String> studentSubLines = new ArrayList<>();
-        if (!TextUtils.isEmpty(data.student.studentIdDisplay)) {
-            studentSubLines.add("Student ID: " + data.student.studentIdDisplay);
+        TextPaint labelPaint = createTextPaint(7.5f, Typeface.BOLD, COLOR_INK_MUTED);
+        labelPaint.setLetterSpacing(0.06f);
+        TextPaint namePaint = createTextPaint(10.5f, Typeface.BOLD, COLOR_INK_STRONG);
+        TextPaint bodyPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
+
+        // Column 1: Tutor Info
+        float y1 = topY + 10f;
+        canvas.drawText("FROM (TUTOR)", col1X, y1, labelPaint);
+        y1 += 15f;
+        String tutorName = !TextUtils.isEmpty(data.tutor.fullName) ? data.tutor.fullName : "TutorSync Educator";
+        canvas.drawText(ellipsize(tutorName, namePaint, colWidth), col1X, y1, namePaint);
+        y1 += 13f;
+
+        if (!TextUtils.isEmpty(data.tutor.phone)) {
+            canvas.drawText(ellipsize(data.tutor.phone, bodyPaint, colWidth), col1X, y1, bodyPaint);
+            y1 += 12.5f;
         }
+        if (!TextUtils.isEmpty(data.tutor.email)) {
+            canvas.drawText(ellipsize(data.tutor.email, bodyPaint, colWidth), col1X, y1, bodyPaint);
+            y1 += 12.5f;
+        }
+        if (!TextUtils.isEmpty(data.tutor.address)) {
+            canvas.drawText(ellipsize(data.tutor.address, bodyPaint, colWidth), col1X, y1, bodyPaint);
+            y1 += 12.5f;
+        }
+
+        // Column 2: Student Info (Name · STU-XXXX without duplicate ID row)
+        float y2 = topY + 10f;
+        canvas.drawText("BILLED TO (STUDENT)", col2X, y2, labelPaint);
+        y2 += 15f;
+        canvas.drawText(ellipsize(data.student.getFormattedName(), namePaint, colWidth), col2X, y2, namePaint);
+        y2 += 13f;
+
         String gradeSchool = data.student.gradeOrSchool();
         if (!TextUtils.isEmpty(gradeSchool)) {
-            studentSubLines.add(gradeSchool);
+            canvas.drawText(ellipsize(gradeSchool, bodyPaint, colWidth), col2X, y2, bodyPaint);
+            y2 += 12.5f;
         }
         String guardian = data.student.guardianSummary();
         if (!TextUtils.isEmpty(guardian)) {
-            studentSubLines.add(guardian);
+            canvas.drawText(ellipsize(guardian, bodyPaint, colWidth), col2X, y2, bodyPaint);
+            y2 += 12.5f;
         }
         if (!TextUtils.isEmpty(data.student.address)) {
-            studentSubLines.add(data.student.address);
+            canvas.drawText(ellipsize(data.student.address, bodyPaint, colWidth), col2X, y2, bodyPaint);
+            y2 += 12.5f;
         }
 
-        int rightLineCount = 3; // Invoice No, Billing Period, Issue Date
-        if (data.periodStart > 0 && data.periodEnd > 0) rightLineCount++;
-        if (data.dueDate > 0) rightLineCount++;
+        // Column 3: Dates & Billing Period
+        float y3 = topY + 10f;
+        canvas.drawText("DETAILS", col3X, y3, labelPaint);
+        y3 += 15f;
 
-        float leftH = 44f + (studentSubLines.size() * 13.5f);
-        float rightH = 28f + (rightLineCount * 15f);
-        float cardH = Math.max(88f, Math.max(leftH, rightH));
+        drawMetaPair(canvas, col3X, rightEdge, y3, "Billing Period", data.billingPeriod);
+        y3 += 13.5f;
 
-        RectF leftCard = new RectF(MARGIN_H, topY, MARGIN_H + cardW, topY + cardH);
-        RectF rightCard = new RectF(MARGIN_H + cardW + gap, topY, PAGE_WIDTH - MARGIN_H, topY + cardH);
-
-        Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        fillPaint.setColor(COLOR_SURFACE_CARD);
-        canvas.drawRoundRect(leftCard, 8f, 8f, fillPaint);
-        canvas.drawRoundRect(rightCard, 8f, 8f, fillPaint);
-
-        Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        borderPaint.setStyle(Paint.Style.STROKE);
-        borderPaint.setColor(COLOR_BORDER);
-        borderPaint.setStrokeWidth(1f);
-        canvas.drawRoundRect(leftCard, 8f, 8f, borderPaint);
-        canvas.drawRoundRect(rightCard, 8f, 8f, borderPaint);
-
-        // Left Card Content: Student Information
-        float lx = leftCard.left + 12f;
-        float ly = leftCard.top + 18f;
-        TextPaint cardHeaderPaint = createTextPaint(8f, Typeface.BOLD, COLOR_BRAND_ACCENT);
-        cardHeaderPaint.setLetterSpacing(0.06f);
-        canvas.drawText("BILLED TO (STUDENT)", lx, ly, cardHeaderPaint);
-
-        ly += 17f;
-        TextPaint studentNamePaint = createTextPaint(12f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        canvas.drawText(ellipsize(data.student.getFormattedName(), studentNamePaint, cardW - 24f), lx, ly, studentNamePaint);
-
-        ly += 15f;
-        TextPaint subLinePaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        for (String line : studentSubLines) {
-            canvas.drawText(ellipsize(line, subLinePaint, cardW - 24f), lx, ly, subLinePaint);
-            ly += 13.5f;
-        }
-
-        // Right Card Content: Invoice Metadata
-        float rx = rightCard.left + 12f;
-        float rEdge = rightCard.right - 12f;
-        float ry = rightCard.top + 18f;
-        canvas.drawText("INVOICE DETAILS", rx, ry, cardHeaderPaint);
-
-        ry += 17f;
-        drawKeyValueRow(canvas, rx, rEdge, ry, "Invoice Number:", data.invoiceDisplayId);
-        ry += 15f;
-        drawKeyValueRow(canvas, rx, rEdge, ry, "Billing Period:", data.billingPeriod);
         if (data.periodStart > 0 && data.periodEnd > 0) {
-            ry += 15f;
             String cycle = formatDateShort(data.periodStart) + " – " + formatDateShort(data.periodEnd);
-            drawKeyValueRow(canvas, rx, rEdge, ry, "Billing Cycle:", cycle);
+            drawMetaPair(canvas, col3X, rightEdge, y3, "Cycle", cycle);
+            y3 += 13.5f;
         }
-        ry += 15f;
-        drawKeyValueRow(canvas, rx, rEdge, ry, "Issue Date:", formatDate(data.issueDate));
+
+        drawMetaPair(canvas, col3X, rightEdge, y3, "Issue Date", formatDate(data.issueDate));
+        y3 += 13.5f;
+
         if (data.dueDate > 0) {
-            ry += 15f;
-            drawKeyValueRow(canvas, rx, rEdge, ry, "Due Date:", formatDate(data.dueDate));
+            drawMetaPair(canvas, col3X, rightEdge, y3, "Due Date", formatDate(data.dueDate));
+            y3 += 13.5f;
         }
 
-        return topY + cardH;
+        return Math.max(y1, Math.max(y2, y3)) + 2f;
     }
 
-    private static float drawProminentInvoiceSummaryStrip(@NonNull Canvas canvas, float topY, @NonNull InvoiceData data) {
-        int currentDue = Math.max(0, data.totalAmountMinor - data.paidAmountMinor);
-        boolean hasPrevDues = data.previousDuesMinor > 0;
-        int cols = hasPrevDues ? 4 : 3;
-        float gap = 10f;
-        float boxW = (CONTENT_WIDTH - (gap * (cols - 1))) / cols;
-        float boxH = 54f;
+    private static float drawReceiptPartiesAndDates(@NonNull Canvas canvas, float topY, @NonNull ReceiptData data) {
+        float col1X = MARGIN_H;
+        float col2X = MARGIN_H + 175f;
+        float col3X = MARGIN_H + 345f;
+        float rightEdge = PAGE_WIDTH - MARGIN_H;
+        float colWidth = 160f;
 
-        drawSummaryCardBox(
-                canvas,
-                MARGIN_H,
-                topY,
-                boxW,
-                boxH,
-                "TOTAL AMOUNT",
-                formatCurrency(data.totalAmountMinor),
-                hasPrevDues ? "Current invoice charges" : "Billed for " + data.billingPeriod,
-                COLOR_SURFACE_CARD,
-                COLOR_BORDER,
-                COLOR_INK_PRIMARY
-        );
+        TextPaint labelPaint = createTextPaint(7.5f, Typeface.BOLD, COLOR_INK_MUTED);
+        labelPaint.setLetterSpacing(0.06f);
+        TextPaint namePaint = createTextPaint(10.5f, Typeface.BOLD, COLOR_INK_STRONG);
+        TextPaint bodyPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
 
-        drawSummaryCardBox(
-                canvas,
-                MARGIN_H + (boxW + gap),
-                topY,
-                boxW,
-                boxH,
-                "AMOUNT PAID",
-                formatCurrency(data.paidAmountMinor),
-                data.paidAmountMinor >= data.totalAmountMinor ? "Paid in full" : "Payments received",
-                COLOR_PAID_BG,
-                COLOR_PAID_BORDER,
-                COLOR_PAID_INK
-        );
-
-        boolean isDuePositive = currentDue > 0;
-        drawSummaryCardBox(
-                canvas,
-                MARGIN_H + (boxW + gap) * 2,
-                topY,
-                boxW,
-                boxH,
-                "AMOUNT DUE",
-                formatCurrency(currentDue),
-                isDuePositive ? "Remaining on this invoice" : "Settled (No due)",
-                isDuePositive ? COLOR_UNPAID_BG : COLOR_PAID_BG,
-                isDuePositive ? COLOR_UNPAID_BORDER : COLOR_PAID_BORDER,
-                isDuePositive ? COLOR_UNPAID_INK : COLOR_PAID_INK
-        );
-
-        if (hasPrevDues) {
-            int totalAccountBalance = currentDue + data.previousDuesMinor;
-            drawSummaryCardBox(
-                    canvas,
-                    MARGIN_H + (boxW + gap) * 3,
-                    topY,
-                    boxW,
-                    boxH,
-                    "TOTAL BALANCE",
-                    formatCurrency(totalAccountBalance),
-                    "Incl. " + formatCurrency(data.previousDuesMinor) + " prev. due",
-                    COLOR_PARTIAL_BG,
-                    COLOR_PARTIAL_BORDER,
-                    COLOR_PARTIAL_INK
-            );
+        float y1 = topY + 10f;
+        canvas.drawText("RECEIVED BY (TUTOR)", col1X, y1, labelPaint);
+        y1 += 15f;
+        String tutorName = !TextUtils.isEmpty(data.tutor.fullName) ? data.tutor.fullName : "TutorSync Educator";
+        canvas.drawText(ellipsize(tutorName, namePaint, colWidth), col1X, y1, namePaint);
+        y1 += 13f;
+        if (!TextUtils.isEmpty(data.tutor.phone)) {
+            canvas.drawText(ellipsize(data.tutor.phone, bodyPaint, colWidth), col1X, y1, bodyPaint);
+            y1 += 12.5f;
+        }
+        if (!TextUtils.isEmpty(data.tutor.email)) {
+            canvas.drawText(ellipsize(data.tutor.email, bodyPaint, colWidth), col1X, y1, bodyPaint);
+            y1 += 12.5f;
         }
 
-        return topY + boxH;
+        float y2 = topY + 10f;
+        canvas.drawText("STUDENT", col2X, y2, labelPaint);
+        y2 += 15f;
+        canvas.drawText(ellipsize(data.student.getFormattedName(), namePaint, colWidth), col2X, y2, namePaint);
+        y2 += 13f;
+        if (!TextUtils.isEmpty(data.student.gradeOrSchool())) {
+            canvas.drawText(ellipsize(data.student.gradeOrSchool(), bodyPaint, colWidth), col2X, y2, bodyPaint);
+            y2 += 12.5f;
+        }
+        if (!TextUtils.isEmpty(data.student.guardianSummary())) {
+            canvas.drawText(ellipsize(data.student.guardianSummary(), bodyPaint, colWidth), col2X, y2, bodyPaint);
+            y2 += 12.5f;
+        }
+
+        float y3 = topY + 10f;
+        canvas.drawText("PAYMENT DETAILS", col3X, y3, labelPaint);
+        y3 += 15f;
+        drawMetaPair(canvas, col3X, rightEdge, y3, "Date", formatDate(data.paymentTimestamp));
+        y3 += 13.5f;
+        drawMetaPair(canvas, col3X, rightEdge, y3, "Method", nonEmptyOrDefault(data.method, "Cash"));
+        y3 += 13.5f;
+        if (!TextUtils.isEmpty(data.invoiceDisplayId)) {
+            drawMetaPair(canvas, col3X, rightEdge, y3, "Invoice", data.invoiceDisplayId);
+            y3 += 13.5f;
+        }
+        if (!TextUtils.isEmpty(data.referenceNo)) {
+            drawMetaPair(canvas, col3X, rightEdge, y3, "Ref", data.referenceNo);
+            y3 += 13.5f;
+        }
+
+        return Math.max(y1, Math.max(y2, y3)) + 2f;
     }
 
-    private static float drawThreeBoxSummaryStrip(@NonNull Canvas canvas,
+    private static float drawStatementPartiesBlock(@NonNull Canvas canvas,
+                                                   float topY,
+                                                   @NonNull TutorProfile tutor,
+                                                   @NonNull StudentProfile student) {
+        float col1X = MARGIN_H;
+        float col2X = MARGIN_H + 220f;
+
+        TextPaint labelPaint = createTextPaint(7.5f, Typeface.BOLD, COLOR_INK_MUTED);
+        labelPaint.setLetterSpacing(0.06f);
+        TextPaint namePaint = createTextPaint(10.5f, Typeface.BOLD, COLOR_INK_STRONG);
+        TextPaint bodyPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
+
+        float y1 = topY + 10f;
+        canvas.drawText("TUTOR", col1X, y1, labelPaint);
+        y1 += 15f;
+        canvas.drawText(nonEmptyOrDefault(tutor.fullName, "TutorSync Educator"), col1X, y1, namePaint);
+        y1 += 13f;
+        String tutorContact = TextUtils.join("  •  ", nonEmptyList(tutor.phone, tutor.email));
+        if (!TextUtils.isEmpty(tutorContact)) {
+            canvas.drawText(ellipsize(tutorContact, bodyPaint, 200f), col1X, y1, bodyPaint);
+            y1 += 12.5f;
+        }
+
+        float y2 = topY + 10f;
+        canvas.drawText("STUDENT", col2X, y2, labelPaint);
+        y2 += 15f;
+        canvas.drawText(student.getFormattedName(), col2X, y2, namePaint);
+        y2 += 13f;
+        String studentMeta = TextUtils.join("  •  ", nonEmptyList(student.gradeOrSchool(), student.guardianSummary()));
+        if (!TextUtils.isEmpty(studentMeta)) {
+            canvas.drawText(ellipsize(studentMeta, bodyPaint, 290f), col2X, y2, bodyPaint);
+            y2 += 12.5f;
+        }
+
+        return Math.max(y1, y2) + 2f;
+    }
+
+    /**
+     * Highlights the 3 key figures (Total Amount, Amount Paid, Amount Due) in a clean bordered 3-column strip.
+     */
+    private static float drawThreeKeyFiguresStrip(@NonNull Canvas canvas,
                                                   float topY,
                                                   @NonNull String label1, @NonNull String val1,
                                                   @NonNull String label2, @NonNull String val2,
                                                   @NonNull String label3, @NonNull String val3,
-                                                  boolean highlightThirdAsDue) {
-        float gap = 10f;
-        float boxW = (CONTENT_WIDTH - (gap * 2)) / 3f;
-        float boxH = 52f;
+                                                  int thirdValueColor) {
+        float boxH = 48f;
+        RectF outer = new RectF(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + boxH);
 
-        drawSummaryCardBox(canvas, MARGIN_H, topY, boxW, boxH, label1, val1, null,
-                COLOR_SURFACE_CARD, COLOR_BORDER, COLOR_INK_PRIMARY);
-        drawSummaryCardBox(canvas, MARGIN_H + boxW + gap, topY, boxW, boxH, label2, val2, null,
-                COLOR_PAID_BG, COLOR_PAID_BORDER, COLOR_PAID_INK);
-        drawSummaryCardBox(canvas, MARGIN_H + (boxW + gap) * 2, topY, boxW, boxH, label3, val3, null,
-                highlightThirdAsDue ? COLOR_UNPAID_BG : COLOR_PAID_BG,
-                highlightThirdAsDue ? COLOR_UNPAID_BORDER : COLOR_PAID_BORDER,
-                highlightThirdAsDue ? COLOR_UNPAID_INK : COLOR_PAID_INK);
-
-        return topY + boxH;
-    }
-
-    private static void drawSummaryCardBox(@NonNull Canvas canvas,
-                                           float left, float top, float width, float height,
-                                           @NonNull String title, @NonNull String value, @Nullable String caption,
-                                           int bgColor, int borderColor, int valueColor) {
-        RectF rect = new RectF(left, top, left + width, top + height);
-        Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(bgColor);
-        canvas.drawRoundRect(rect, 7f, 7f, bg);
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fill.setColor(COLOR_SURFACE_SUBTLE);
+        canvas.drawRoundRect(outer, 5f, 5f, fill);
 
         Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
         border.setStyle(Paint.Style.STROKE);
         border.setStrokeWidth(1f);
-        border.setColor(borderColor);
-        canvas.drawRoundRect(rect, 7f, 7f, border);
+        border.setColor(COLOR_RULE_MEDIUM);
+        canvas.drawRoundRect(outer, 5f, 5f, border);
 
-        TextPaint titlePaint = createTextPaint(7.5f, Typeface.BOLD, COLOR_INK_SECONDARY);
-        titlePaint.setLetterSpacing(0.04f);
-        canvas.drawText(title, left + 10f, top + 15f, titlePaint);
+        float colW = CONTENT_WIDTH / 3f;
+        // Vertical dividers between the 3 key figures
+        canvas.drawLine(MARGIN_H + colW, topY + 8f, MARGIN_H + colW, topY + boxH - 8f, border);
+        canvas.drawLine(MARGIN_H + colW * 2f, topY + 8f, MARGIN_H + colW * 2f, topY + boxH - 8f, border);
 
-        TextPaint valPaint = createTextPaint(13f, Typeface.BOLD, valueColor);
-        canvas.drawText(ellipsize(value, valPaint, width - 16f), left + 10f, top + 34f, valPaint);
+        drawKeyFigureCell(canvas, MARGIN_H, topY, colW, label1, val1, COLOR_INK_STRONG);
+        drawKeyFigureCell(canvas, MARGIN_H + colW, topY, colW, label2, val2, COLOR_INK_STRONG);
+        drawKeyFigureCell(canvas, MARGIN_H + colW * 2f, topY, colW, label3, val3, thirdValueColor);
 
-        if (!TextUtils.isEmpty(caption)) {
-            TextPaint capPaint = createTextPaint(7.5f, Typeface.NORMAL, COLOR_INK_MUTED);
-            canvas.drawText(ellipsize(caption, capPaint, width - 16f), left + 10f, top + 46f, capPaint);
-        }
+        return topY + boxH;
     }
 
-    private static float drawSectionHeader(@NonNull Canvas canvas, float topY, @NonNull String title) {
-        Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        barPaint.setColor(COLOR_BRAND_ACCENT);
-        canvas.drawRoundRect(new RectF(MARGIN_H, topY, MARGIN_H + 3.5f, topY + 12f), 2f, 2f, barPaint);
+    private static void drawKeyFigureCell(@NonNull Canvas canvas,
+                                          float leftX,
+                                          float topY,
+                                          float width,
+                                          @NonNull String label,
+                                          @NonNull String value,
+                                          int valueColor) {
+        TextPaint lp = createTextPaint(7.5f, Typeface.BOLD, COLOR_INK_MUTED);
+        lp.setLetterSpacing(0.06f);
+        canvas.drawText(label, leftX + 14f, topY + 16f, lp);
 
-        TextPaint titlePaint = createTextPaint(9.5f, Typeface.BOLD, COLOR_BRAND_DARK);
-        titlePaint.setLetterSpacing(0.05f);
-        canvas.drawText(title, MARGIN_H + 9f, topY + 10f, titlePaint);
-        return topY + 14f;
+        TextPaint vp = createTextPaint(14f, Typeface.BOLD, valueColor);
+        canvas.drawText(ellipsize(value, vp, width - 24f), leftX + 14f, topY + 36f, vp);
     }
 
-    private static float drawInvoiceTableHeader(@NonNull Canvas canvas, float topY) {
-        float h = 24f;
-        RectF headerRect = new RectF(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + h);
-        Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bgPaint.setColor(COLOR_BRAND_DARK);
-        canvas.drawRoundRect(headerRect, 5f, 5f, bgPaint);
-        canvas.drawRect(MARGIN_H, topY + 12f, PAGE_WIDTH - MARGIN_H, topY + h, bgPaint);
+    /**
+     * Minimal, ink-free table header for Class Fees.
+     */
+    private static float drawFeeTableHeader(@NonNull Canvas canvas, float topY) {
+        TextPaint secPaint = createTextPaint(8f, Typeface.BOLD, COLOR_INK_STRONG);
+        secPaint.setLetterSpacing(0.06f);
+        canvas.drawText("CLASS & ROUTINE FEES", MARGIN_H, topY + 10f, secPaint);
 
-        TextPaint thPaint = createTextPaint(8.5f, Typeface.BOLD, Color.WHITE);
-        float baseline = topY + 15.5f;
+        float headerY = topY + 16f;
+        drawHorizontalRule(canvas, headerY, COLOR_RULE_DARK, 1f);
 
-        canvas.drawText("#", MARGIN_H + 10f, baseline, thPaint);
-        canvas.drawText("DESCRIPTION / ROUTINE & CLASSES", MARGIN_H + 32f, baseline, thPaint);
-        canvas.drawText("BILLING TYPE", MARGIN_H + 278f, baseline, thPaint);
+        float base = headerY + 14f;
+        TextPaint th = createTextPaint(8f, Typeface.BOLD, COLOR_INK_SECONDARY);
+        canvas.drawText("DESCRIPTION", MARGIN_H, base, th);
+        canvas.drawText("TYPE", MARGIN_H + 265f, base, th);
 
-        thPaint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText("QTY", MARGIN_H + 368f, baseline, thPaint);
+        th.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText("QTY", MARGIN_H + 355f, base, th);
 
-        thPaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText("RATE", MARGIN_H + 442f, baseline, thPaint);
-        canvas.drawText("AMOUNT", PAGE_WIDTH - MARGIN_H - 10f, baseline, thPaint);
+        th.setTextAlign(Paint.Align.RIGHT);
+        canvas.drawText("RATE", MARGIN_H + 430f, base, th);
+        canvas.drawText("AMOUNT", PAGE_WIDTH - MARGIN_H, base, th);
 
-        return topY + h;
+        float bottomY = headerY + 20f;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_MEDIUM, 0.8f);
+        return bottomY;
     }
 
-    private static float measureInvoiceItemRowHeight(@NonNull LineItemRow item) {
-        TextPaint descPaint = createTextPaint(9.5f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        StaticLayout descLayout = buildStaticLayout(item.description, descPaint, 236);
-        float height = 10f + descLayout.getHeight();
+    private static float measureFeeItemRowHeight(@NonNull LineItemRow item) {
+        TextPaint descPaint = createTextPaint(9.5f, Typeface.BOLD, COLOR_INK_BODY);
+        StaticLayout descLayout = buildStaticLayout(item.description, descPaint, 250);
+        float h = 8f + descLayout.getHeight();
         if (!TextUtils.isEmpty(item.classDatesSummary)) {
             TextPaint subPaint = createTextPaint(8f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-            StaticLayout subLayout = buildStaticLayout(item.classDatesSummary, subPaint, 236);
-            height += 3f + subLayout.getHeight();
+            StaticLayout subLayout = buildStaticLayout(item.classDatesSummary, subPaint, 250);
+            h += 2f + subLayout.getHeight();
         }
-        return Math.max(26f, height + 6f);
+        return Math.max(22f, h + 5f);
     }
 
-    private static float drawInvoiceItemRow(@NonNull Canvas canvas,
-                                            float topY,
-                                            int index,
-                                            @NonNull LineItemRow item,
-                                            boolean isZebra) {
-        float rowH = measureInvoiceItemRowHeight(item);
+    private static float drawFeeItemRow(@NonNull Canvas canvas, float topY, @NonNull LineItemRow item) {
+        float rowH = measureFeeItemRowHeight(item);
+        float textTop = topY + 6f;
 
-        if (isZebra) {
-            Paint zebraPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            zebraPaint.setColor(COLOR_SURFACE_ZEBRA);
-            canvas.drawRect(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + rowH, zebraPaint);
-        }
-
-        Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        borderPaint.setColor(COLOR_BORDER);
-        borderPaint.setStrokeWidth(0.7f);
-        canvas.drawLine(MARGIN_H, topY + rowH, PAGE_WIDTH - MARGIN_H, topY + rowH, borderPaint);
-
-        float textTop = topY + 7f;
-        TextPaint idxPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        canvas.drawText(String.valueOf(index), MARGIN_H + 10f, textTop + 9f, idxPaint);
-
-        TextPaint descPaint = createTextPaint(9.5f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        StaticLayout descLayout = buildStaticLayout(item.description, descPaint, 236);
+        TextPaint descPaint = createTextPaint(9.5f, Typeface.BOLD, COLOR_INK_BODY);
+        StaticLayout descLayout = buildStaticLayout(item.description, descPaint, 250);
         canvas.save();
-        canvas.translate(MARGIN_H + 32f, textTop);
+        canvas.translate(MARGIN_H, textTop);
         descLayout.draw(canvas);
         canvas.restore();
 
         if (!TextUtils.isEmpty(item.classDatesSummary)) {
             TextPaint datesPaint = createTextPaint(8f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-            StaticLayout datesLayout = buildStaticLayout(item.classDatesSummary, datesPaint, 236);
+            StaticLayout datesLayout = buildStaticLayout(item.classDatesSummary, datesPaint, 250);
             canvas.save();
-            canvas.translate(MARGIN_H + 32f, textTop + descLayout.getHeight() + 2f);
+            canvas.translate(MARGIN_H, textTop + descLayout.getHeight() + 2f);
             datesLayout.draw(canvas);
             canvas.restore();
         }
 
         String modelText = "PER_CLASS".equalsIgnoreCase(item.billingModel) ? "Per Class" : "Monthly";
-        TextPaint modelPaint = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        canvas.drawText(modelText, MARGIN_H + 278f, textTop + 9f, modelPaint);
+        TextPaint regPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
+        canvas.drawText(modelText, MARGIN_H + 265f, textTop + 9f, regPaint);
 
         String qtyLabel = "PER_CLASS".equalsIgnoreCase(item.billingModel)
                 ? item.quantity + (item.quantity == 1 ? " class" : " classes")
                 : String.valueOf(item.quantity);
-        TextPaint qtyPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_PRIMARY);
-        qtyPaint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText(qtyLabel, MARGIN_H + 368f, textTop + 9f, qtyPaint);
+        regPaint.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText(qtyLabel, MARGIN_H + 355f, textTop + 9f, regPaint);
 
-        TextPaint numPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        numPaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(item.unitPriceMinor), MARGIN_H + 442f, textTop + 9f, numPaint);
+        regPaint.setTextAlign(Paint.Align.RIGHT);
+        canvas.drawText(formatCurrency(item.unitPriceMinor), MARGIN_H + 430f, textTop + 9f, regPaint);
 
-        TextPaint amountPaint = createTextPaint(9.5f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        amountPaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(item.amountMinor), PAGE_WIDTH - MARGIN_H - 10f, textTop + 9f, amountPaint);
+        TextPaint amtPaint = createTextPaint(9.5f, Typeface.BOLD, COLOR_INK_STRONG);
+        amtPaint.setTextAlign(Paint.Align.RIGHT);
+        canvas.drawText(formatCurrency(item.amountMinor), PAGE_WIDTH - MARGIN_H, textTop + 9f, amtPaint);
 
-        return topY + rowH;
+        float bottomY = topY + rowH;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_LIGHT, 0.7f);
+        return bottomY;
     }
 
-    private static float drawTotalsAndNotesSection(@NonNull Canvas canvas, float topY, @NonNull InvoiceData data) {
-        float leftWidth = CONTENT_WIDTH * 0.46f;
-        float rightWidth = CONTENT_WIDTH * 0.50f;
-        float rightLeft = PAGE_WIDTH - MARGIN_H - rightWidth;
+    /**
+     * Only renders inline rows below the table when a discount or prior unpaid balance exists,
+     * avoiding duplicate repetition of Total Amount / Amount Paid / Amount Due.
+     */
+    private static float drawMinimalFeeAdjustments(@NonNull Canvas canvas, float topY, @NonNull InvoiceData data) {
+        float y = topY;
+        float labelX = MARGIN_H + 310f;
+        float rightEdge = PAGE_WIDTH - MARGIN_H;
 
-        float leftY = topY;
-        if (!TextUtils.isEmpty(data.notes)) {
-            TextPaint noteLabel = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_SECONDARY);
-            canvas.drawText("NOTES / REMARKS", MARGIN_H, leftY + 10f, noteLabel);
-            leftY += 15f;
+        TextPaint labelPaint = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
+        TextPaint valPaint = createTextPaint(9f, Typeface.BOLD, COLOR_INK_STRONG);
+        valPaint.setTextAlign(Paint.Align.RIGHT);
 
-            TextPaint noteBody = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-            StaticLayout noteLayout = buildStaticLayout(data.notes, noteBody, (int) (leftWidth - 20f));
-            float boxH = Math.max(36f, noteLayout.getHeight() + 14f);
-
-            RectF noteRect = new RectF(MARGIN_H, leftY, MARGIN_H + leftWidth, leftY + boxH);
-            Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-            fill.setColor(COLOR_SURFACE_CARD);
-            canvas.drawRoundRect(noteRect, 6f, 6f, fill);
-
-            Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
-            border.setStyle(Paint.Style.STROKE);
-            border.setColor(COLOR_BORDER);
-            border.setStrokeWidth(1f);
-            canvas.drawRoundRect(noteRect, 6f, 6f, border);
-
-            canvas.save();
-            canvas.translate(MARGIN_H + 10f, leftY + 7f);
-            noteLayout.draw(canvas);
-            canvas.restore();
-
-            leftY += boxH + 12f;
-        }
-
-        drawOfficialStatusSeal(canvas, MARGIN_H, leftY + 4f, data);
-
-        float ry = topY;
-        float rLabelX = rightLeft + 12f;
-        float rValX = PAGE_WIDTH - MARGIN_H - 12f;
-
-        int currentInvoiceDue = Math.max(0, data.totalAmountMinor - data.paidAmountMinor);
-        int overallRemainingBalance = currentInvoiceDue + data.previousDuesMinor;
-
-        List<SummaryLine> lines = new ArrayList<>();
-        lines.add(new SummaryLine("Billable Fees Subtotal:", formatCurrency(data.subtotalMinor), COLOR_INK_PRIMARY, false));
         if (data.discountMinor > 0) {
-            lines.add(new SummaryLine("Discount Applied:", "- " + formatCurrency(data.discountMinor), COLOR_PAID_INK, false));
+            y += 14f;
+            canvas.drawText("Subtotal", labelX, y, labelPaint);
+            canvas.drawText(formatCurrency(data.subtotalMinor), rightEdge, y, valPaint);
+
+            y += 15f;
+            canvas.drawText("Discount", labelX, y, labelPaint);
+            canvas.drawText("- " + formatCurrency(data.discountMinor), rightEdge, y, valPaint);
+
+            y += 6f;
+            canvas.drawLine(labelX, y, rightEdge, y, createLinePaint(COLOR_RULE_LIGHT, 0.8f));
         }
-        lines.add(new SummaryLine("Current Invoice Total:", formatCurrency(data.totalAmountMinor), COLOR_INK_PRIMARY, true));
-        lines.add(new SummaryLine("Payments Received (This Invoice):", "- " + formatCurrency(data.paidAmountMinor), COLOR_PAID_INK, false));
-        lines.add(new SummaryLine("Current Invoice Due:", formatCurrency(currentInvoiceDue),
-                currentInvoiceDue > 0 ? COLOR_UNPAID_INK : COLOR_PAID_INK, true));
 
         if (data.previousDuesMinor > 0) {
+            y += 15f;
+            int currentDue = Math.max(0, data.totalAmountMinor - data.paidAmountMinor);
+            int totalWithPrev = currentDue + data.previousDuesMinor;
             String prevLabel = !TextUtils.isEmpty(data.previousDuesRefs)
-                    ? "Previous Dues (" + data.previousDuesRefs + "):"
-                    : "Previous Unpaid Dues:";
-            lines.add(new SummaryLine(prevLabel, "+ " + formatCurrency(data.previousDuesMinor), COLOR_PARTIAL_INK, false));
+                    ? "Previous Unpaid (" + data.previousDuesRefs + ")"
+                    : "Previous Unpaid Balance";
+            canvas.drawText(ellipsize(prevLabel, labelPaint, 125f), labelX, y, labelPaint);
+            canvas.drawText(formatCurrency(data.previousDuesMinor), rightEdge, y, valPaint);
+
+            y += 15f;
+            TextPaint boldLabel = createTextPaint(9f, Typeface.BOLD, COLOR_INK_STRONG);
+            canvas.drawText("Total Balance (Incl. Previous)", labelX, y, boldLabel);
+            canvas.drawText(formatCurrency(totalWithPrev), rightEdge, y, valPaint);
         }
 
-        float boxHeight = (lines.size() * 18f) + 46f;
-        RectF summaryCard = new RectF(rightLeft, ry, PAGE_WIDTH - MARGIN_H, ry + boxHeight);
-        Paint cardBg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        cardBg.setColor(COLOR_SURFACE_CARD);
-        canvas.drawRoundRect(summaryCard, 8f, 8f, cardBg);
-
-        Paint cardBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
-        cardBorder.setStyle(Paint.Style.STROKE);
-        cardBorder.setColor(COLOR_BORDER_STRONG);
-        cardBorder.setStrokeWidth(1f);
-        canvas.drawRoundRect(summaryCard, 8f, 8f, cardBorder);
-
-        float lineY = ry + 18f;
-        for (SummaryLine line : lines) {
-            TextPaint lp = createTextPaint(9f, line.isBold ? Typeface.BOLD : Typeface.NORMAL, COLOR_INK_SECONDARY);
-            TextPaint vp = createTextPaint(9.5f, line.isBold ? Typeface.BOLD : Typeface.NORMAL, line.valueColor);
-            vp.setTextAlign(Paint.Align.RIGHT);
-
-            canvas.drawText(ellipsize(line.label, lp, rightWidth - 95f), rLabelX, lineY, lp);
-            canvas.drawText(line.value, rValX, lineY, vp);
-            lineY += 18f;
-        }
-
-        RectF netBar = new RectF(rightLeft, ry + boxHeight - 32f, PAGE_WIDTH - MARGIN_H, ry + boxHeight);
-        Paint netBg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        netBg.setColor(overallRemainingBalance > 0 ? COLOR_BRAND_DARK : COLOR_PAID_INK);
-        canvas.drawRoundRect(netBar, 8f, 8f, netBg);
-        canvas.drawRect(rightLeft, ry + boxHeight - 32f, PAGE_WIDTH - MARGIN_H, ry + boxHeight - 16f, netBg);
-
-        TextPaint netLabelPaint = createTextPaint(9.5f, Typeface.BOLD, Color.WHITE);
-        String finalBalanceTitle = data.previousDuesMinor > 0 ? "TOTAL REMAINING BALANCE" : "REMAINING BALANCE DUE";
-        canvas.drawText(finalBalanceTitle, rLabelX, ry + boxHeight - 11.5f, netLabelPaint);
-
-        TextPaint netValPaint = createTextPaint(12f, Typeface.BOLD, Color.WHITE);
-        netValPaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(overallRemainingBalance), rValX, ry + boxHeight - 11f, netValPaint);
-
-        return Math.max(leftY + 46f, ry + boxHeight);
+        return y;
     }
 
-    private static void drawOfficialStatusSeal(@NonNull Canvas canvas, float leftX, float topY, @NonNull InvoiceData data) {
-        int borderColor;
-        int inkColor;
-        String stampTitle;
-        String stampSub;
+    /**
+     * Compact Payment History Section Header.
+     */
+    private static float drawCompactPaymentsHeader(@NonNull Canvas canvas, float topY) {
+        TextPaint secPaint = createTextPaint(8f, Typeface.BOLD, COLOR_INK_STRONG);
+        secPaint.setLetterSpacing(0.06f);
+        canvas.drawText("PAYMENT HISTORY", MARGIN_H, topY + 10f, secPaint);
 
-        if (data.isVoid) {
-            borderColor = COLOR_VOID_BORDER;
-            inkColor = COLOR_VOID_INK;
-            stampTitle = "VOIDED INVOICE";
-            stampSub = "No balance payable on this document";
-        } else if (Invoice.STATUS_PAID.equalsIgnoreCase(data.status)) {
-            borderColor = COLOR_PAID_BORDER;
-            inkColor = COLOR_PAID_INK;
-            stampTitle = "PAID IN FULL";
-            stampSub = "Thank you for your timely payment";
-        } else if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(data.status)) {
-            borderColor = COLOR_PARTIAL_BORDER;
-            inkColor = COLOR_PARTIAL_INK;
-            stampTitle = "PARTIALLY PAID";
-            stampSub = "Remaining due: " + formatCurrency(Math.max(0, data.totalAmountMinor - data.paidAmountMinor));
-        } else {
-            borderColor = COLOR_UNPAID_BORDER;
-            inkColor = COLOR_UNPAID_INK;
-            stampTitle = "PAYMENT DUE";
-            stampSub = data.dueDate > 0 ? "Please settle by " + formatDate(data.dueDate) : "Awaiting payment settlement";
-        }
+        float headerY = topY + 16f;
+        drawHorizontalRule(canvas, headerY, COLOR_RULE_DARK, 1f);
 
-        RectF sealRect = new RectF(leftX, topY, leftX + 195f, topY + 42f);
-        Paint sealBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
-        sealBorder.setStyle(Paint.Style.STROKE);
-        sealBorder.setStrokeWidth(1.5f);
-        sealBorder.setColor(borderColor);
-        sealBorder.setPathEffect(new DashPathEffect(new float[]{4f, 2f}, 0f));
-        canvas.drawRoundRect(sealRect, 6f, 6f, sealBorder);
-
-        TextPaint t1 = createTextPaint(10f, Typeface.BOLD, inkColor);
-        t1.setLetterSpacing(0.06f);
-        canvas.drawText("STATUS: " + stampTitle, leftX + 10f, topY + 17f, t1);
-
-        TextPaint t2 = createTextPaint(8f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        canvas.drawText(stampSub, leftX + 10f, topY + 31f, t2);
-    }
-
-    private static float drawPaymentsTableHeader(@NonNull Canvas canvas, float topY) {
-        float h = 22f;
-        RectF rect = new RectF(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + h);
-        Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(COLOR_BRAND_PRIMARY);
-        canvas.drawRoundRect(rect, 5f, 5f, bg);
-        canvas.drawRect(MARGIN_H, topY + 10f, PAGE_WIDTH - MARGIN_H, topY + h, bg);
-
-        TextPaint th = createTextPaint(8f, Typeface.BOLD, Color.WHITE);
-        float base = topY + 14.5f;
-        canvas.drawText("RECEIPT / TXN ID", MARGIN_H + 10f, base, th);
-        canvas.drawText("PAYMENT DATE", MARGIN_H + 115f, base, th);
-        canvas.drawText("METHOD", MARGIN_H + 245f, base, th);
-        canvas.drawText("REFERENCE / NOTES", MARGIN_H + 325f, base, th);
+        float base = headerY + 13.5f;
+        TextPaint th = createTextPaint(8f, Typeface.BOLD, COLOR_INK_SECONDARY);
+        canvas.drawText("RECEIPT ID", MARGIN_H, base, th);
+        canvas.drawText("DATE", MARGIN_H + 105f, base, th);
+        canvas.drawText("METHOD", MARGIN_H + 220f, base, th);
+        canvas.drawText("REFERENCE / NOTES", MARGIN_H + 300f, base, th);
 
         th.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText("AMOUNT PAID", PAGE_WIDTH - MARGIN_H - 10f, base, th);
-        return topY + h;
+        canvas.drawText("AMOUNT", PAGE_WIDTH - MARGIN_H, base, th);
+
+        float bottomY = headerY + 19f;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_MEDIUM, 0.8f);
+        return bottomY;
     }
 
-    private static float drawPaymentTableRow(@NonNull Canvas canvas, float topY, @NonNull PaymentRow p, boolean isZebra) {
-        float rowH = 22f;
-        if (isZebra) {
-            Paint z = new Paint(Paint.ANTI_ALIAS_FLAG);
-            z.setColor(COLOR_SURFACE_ZEBRA);
-            canvas.drawRect(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + rowH, z);
-        }
+    private static float drawCompactPaymentRow(@NonNull Canvas canvas, float topY, @NonNull PaymentRow p) {
+        float rowH = 19f;
+        float base = topY + 13f;
 
-        Paint div = new Paint(Paint.ANTI_ALIAS_FLAG);
-        div.setColor(COLOR_BORDER);
-        div.setStrokeWidth(0.6f);
-        canvas.drawLine(MARGIN_H, topY + rowH, PAGE_WIDTH - MARGIN_H, topY + rowH, div);
-
-        float base = topY + 14.5f;
-        TextPaint idPaint = createTextPaint(8.5f, Typeface.BOLD, COLOR_BRAND_ACCENT);
-        canvas.drawText(ellipsize(p.displayId, idPaint, 98f), MARGIN_H + 10f, base, idPaint);
+        TextPaint idPaint = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_BODY);
+        canvas.drawText(ellipsize(p.displayId, idPaint, 95f), MARGIN_H, base, idPaint);
 
         TextPaint regPaint = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        canvas.drawText(formatDateTimeShort(p.timestamp), MARGIN_H + 115f, base, regPaint);
-        canvas.drawText(ellipsize(nonEmptyOrDefault(p.method, "Cash"), regPaint, 72f), MARGIN_H + 245f, base, regPaint);
+        canvas.drawText(formatDateTimeShort(p.timestamp), MARGIN_H + 105f, base, regPaint);
+        canvas.drawText(ellipsize(nonEmptyOrDefault(p.method, "Cash"), regPaint, 72f), MARGIN_H + 220f, base, regPaint);
 
         String refNote = buildRefAndNote(p.referenceNo, p.notes);
-        canvas.drawText(ellipsize(refNote, regPaint, 115f), MARGIN_H + 325f, base, regPaint);
+        canvas.drawText(ellipsize(refNote, regPaint, 130f), MARGIN_H + 300f, base, regPaint);
 
-        TextPaint amtPaint = createTextPaint(9f, Typeface.BOLD, COLOR_PAID_INK);
+        TextPaint amtPaint = createTextPaint(9f, Typeface.BOLD, COLOR_INK_STRONG);
         amtPaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(p.amountMinor), PAGE_WIDTH - MARGIN_H - 10f, base, amtPaint);
+        canvas.drawText(formatCurrency(p.amountMinor), PAGE_WIDTH - MARGIN_H, base, amtPaint);
 
-        return topY + rowH;
+        float bottomY = topY + rowH;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_LIGHT, 0.6f);
+        return bottomY;
     }
 
-    private static float drawEmptyPaymentsBox(@NonNull Canvas canvas, float topY, @NonNull String message) {
-        RectF box = new RectF(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + 28f);
-        Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(COLOR_SURFACE_CARD);
-        canvas.drawRoundRect(box, 5f, 5f, bg);
-
-        Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
-        border.setStyle(Paint.Style.STROKE);
-        border.setColor(COLOR_BORDER);
-        border.setStrokeWidth(0.8f);
-        canvas.drawRoundRect(box, 5f, 5f, border);
-
-        TextPaint tp = createTextPaint(8.5f, Typeface.ITALIC, COLOR_INK_MUTED);
-        canvas.drawText(message, MARGIN_H + 12f, topY + 17.5f, tp);
-        return topY + 32f;
+    private static float drawCompactEmptyRow(@NonNull Canvas canvas, float topY, @NonNull String message) {
+        TextPaint tp = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_MUTED);
+        canvas.drawText(message, MARGIN_H, topY + 14f, tp);
+        float bottomY = topY + 21f;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_LIGHT, 0.6f);
+        return bottomY;
     }
 
-    private static float drawStatementTableHeader(@NonNull Canvas canvas, float topY) {
-        float h = 22f;
-        RectF rect = new RectF(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + h);
-        Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(COLOR_BRAND_DARK);
-        canvas.drawRoundRect(rect, 5f, 5f, bg);
-        canvas.drawRect(MARGIN_H, topY + 10f, PAGE_WIDTH - MARGIN_H, topY + h, bg);
+    private static float drawCompactNoteBlock(@NonNull Canvas canvas, float topY, @NonNull String notes) {
+        TextPaint label = createTextPaint(7.5f, Typeface.BOLD, COLOR_INK_MUTED);
+        label.setLetterSpacing(0.06f);
+        canvas.drawText("NOTES", MARGIN_H, topY + 9f, label);
 
-        TextPaint th = createTextPaint(8f, Typeface.BOLD, Color.WHITE);
-        float base = topY + 14.5f;
-        canvas.drawText("INVOICE ID", MARGIN_H + 10f, base, th);
-        canvas.drawText("BILLING PERIOD", MARGIN_H + 95f, base, th);
-        canvas.drawText("ISSUE DATE", MARGIN_H + 210f, base, th);
-        canvas.drawText("STATUS", MARGIN_H + 290f, base, th);
+        TextPaint body = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
+        StaticLayout layout = buildStaticLayout(notes, body, (int) CONTENT_WIDTH);
+        canvas.save();
+        canvas.translate(MARGIN_H, topY + 13f);
+        layout.draw(canvas);
+        canvas.restore();
+        return topY + 15f + layout.getHeight();
+    }
+
+    private static float drawStatementInvoicesHeader(@NonNull Canvas canvas, float topY) {
+        TextPaint secPaint = createTextPaint(8f, Typeface.BOLD, COLOR_INK_STRONG);
+        secPaint.setLetterSpacing(0.06f);
+        canvas.drawText("INVOICES", MARGIN_H, topY + 10f, secPaint);
+
+        float headerY = topY + 16f;
+        drawHorizontalRule(canvas, headerY, COLOR_RULE_DARK, 1f);
+
+        float base = headerY + 13.5f;
+        TextPaint th = createTextPaint(8f, Typeface.BOLD, COLOR_INK_SECONDARY);
+        canvas.drawText("INVOICE", MARGIN_H, base, th);
+        canvas.drawText("PERIOD", MARGIN_H + 85f, base, th);
+        canvas.drawText("ISSUED", MARGIN_H + 195f, base, th);
+        canvas.drawText("STATUS", MARGIN_H + 270f, base, th);
 
         th.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText("TOTAL", MARGIN_H + 405f, base, th);
-        canvas.drawText("PAID", MARGIN_H + 465f, base, th);
-        canvas.drawText("DUE", PAGE_WIDTH - MARGIN_H - 10f, base, th);
-        return topY + h;
+        canvas.drawText("TOTAL", MARGIN_H + 395f, base, th);
+        canvas.drawText("PAID", MARGIN_H + 455f, base, th);
+        canvas.drawText("DUE", PAGE_WIDTH - MARGIN_H, base, th);
+
+        float bottomY = headerY + 19f;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_MEDIUM, 0.8f);
+        return bottomY;
     }
 
-    private static float drawStatementInvoiceRow(@NonNull Canvas canvas, float topY, @NonNull InvoiceData inv, boolean isZebra) {
-        float rowH = 22f;
-        if (isZebra) {
-            Paint z = new Paint(Paint.ANTI_ALIAS_FLAG);
-            z.setColor(COLOR_SURFACE_ZEBRA);
-            canvas.drawRect(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + rowH, z);
-        }
+    private static float drawStatementInvoiceRow(@NonNull Canvas canvas, float topY, @NonNull InvoiceData inv) {
+        float rowH = 19f;
+        float base = topY + 13f;
 
-        float base = topY + 14.5f;
-        TextPaint idP = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        canvas.drawText(inv.invoiceDisplayId, MARGIN_H + 10f, base, idP);
+        TextPaint idP = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_BODY);
+        canvas.drawText(inv.invoiceDisplayId, MARGIN_H, base, idP);
 
         TextPaint reg = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        canvas.drawText(ellipsize(inv.billingPeriod, reg, 108f), MARGIN_H + 95f, base, reg);
-        canvas.drawText(formatDateShort(inv.issueDate), MARGIN_H + 210f, base, reg);
-        canvas.drawText(resolveStatusLabel(inv.status, inv.isVoid), MARGIN_H + 290f, base, reg);
+        canvas.drawText(ellipsize(inv.billingPeriod, reg, 102f), MARGIN_H + 85f, base, reg);
+        canvas.drawText(formatDateShort(inv.issueDate), MARGIN_H + 195f, base, reg);
+        canvas.drawText(resolveShortStatusLabel(inv.status, inv.isVoid), MARGIN_H + 270f, base, reg);
 
         int due = Math.max(0, inv.totalAmountMinor - inv.paidAmountMinor);
         reg.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(inv.totalAmountMinor), MARGIN_H + 405f, base, reg);
-        canvas.drawText(formatCurrency(inv.paidAmountMinor), MARGIN_H + 465f, base, reg);
+        canvas.drawText(formatCurrency(inv.totalAmountMinor), MARGIN_H + 395f, base, reg);
+        canvas.drawText(formatCurrency(inv.paidAmountMinor), MARGIN_H + 455f, base, reg);
 
-        TextPaint dueP = createTextPaint(8.5f, Typeface.BOLD, due > 0 ? COLOR_UNPAID_INK : COLOR_PAID_INK);
+        TextPaint dueP = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_STRONG);
         dueP.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(due), PAGE_WIDTH - MARGIN_H - 10f, base, dueP);
-        return topY + rowH;
+        canvas.drawText(formatCurrency(due), PAGE_WIDTH - MARGIN_H, base, dueP);
+
+        float bottomY = topY + rowH;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_LIGHT, 0.6f);
+        return bottomY;
     }
 
     private static float drawReportTableHeader(@NonNull Canvas canvas, float topY) {
-        float h = 22f;
-        RectF rect = new RectF(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + h);
-        Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(COLOR_BRAND_DARK);
-        canvas.drawRoundRect(rect, 5f, 5f, bg);
-        canvas.drawRect(MARGIN_H, topY + 10f, PAGE_WIDTH - MARGIN_H, topY + h, bg);
+        TextPaint secPaint = createTextPaint(8f, Typeface.BOLD, COLOR_INK_STRONG);
+        secPaint.setLetterSpacing(0.06f);
+        canvas.drawText("INVOICE SUMMARY", MARGIN_H, topY + 10f, secPaint);
 
-        TextPaint th = createTextPaint(8f, Typeface.BOLD, Color.WHITE);
-        float base = topY + 14.5f;
-        canvas.drawText("INVOICE", MARGIN_H + 8f, base, th);
-        canvas.drawText("STUDENT (NAME · ID)", MARGIN_H + 78f, base, th);
-        canvas.drawText("PERIOD", MARGIN_H + 235f, base, th);
-        canvas.drawText("STATUS", MARGIN_H + 315f, base, th);
+        float headerY = topY + 16f;
+        drawHorizontalRule(canvas, headerY, COLOR_RULE_DARK, 1f);
+
+        float base = headerY + 13.5f;
+        TextPaint th = createTextPaint(8f, Typeface.BOLD, COLOR_INK_SECONDARY);
+        canvas.drawText("INVOICE", MARGIN_H, base, th);
+        canvas.drawText("STUDENT", MARGIN_H + 72f, base, th);
+        canvas.drawText("PERIOD", MARGIN_H + 230f, base, th);
+        canvas.drawText("STATUS", MARGIN_H + 310f, base, th);
 
         th.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText("TOTAL", MARGIN_H + 412f, base, th);
-        canvas.drawText("PAID", MARGIN_H + 468f, base, th);
-        canvas.drawText("DUE", PAGE_WIDTH - MARGIN_H - 8f, base, th);
-        return topY + h;
+        canvas.drawText("TOTAL", MARGIN_H + 402f, base, th);
+        canvas.drawText("PAID", MARGIN_H + 458f, base, th);
+        canvas.drawText("DUE", PAGE_WIDTH - MARGIN_H, base, th);
+
+        float bottomY = headerY + 19f;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_MEDIUM, 0.8f);
+        return bottomY;
     }
 
-    private static float drawReportInvoiceRow(@NonNull Canvas canvas, float topY, @NonNull InvoiceData inv, boolean isZebra) {
-        float rowH = 22f;
-        if (isZebra) {
-            Paint z = new Paint(Paint.ANTI_ALIAS_FLAG);
-            z.setColor(COLOR_SURFACE_ZEBRA);
-            canvas.drawRect(MARGIN_H, topY, PAGE_WIDTH - MARGIN_H, topY + rowH, z);
-        }
+    private static float drawReportInvoiceRow(@NonNull Canvas canvas, float topY, @NonNull InvoiceData inv) {
+        float rowH = 19f;
+        float base = topY + 13f;
 
-        float base = topY + 14.5f;
-        TextPaint idP = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        canvas.drawText(ellipsize(inv.invoiceDisplayId, idP, 66f), MARGIN_H + 8f, base, idP);
+        TextPaint idP = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_BODY);
+        canvas.drawText(ellipsize(inv.invoiceDisplayId, idP, 66f), MARGIN_H, base, idP);
 
         TextPaint reg = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        canvas.drawText(ellipsize(inv.student.getFormattedName(), reg, 150f), MARGIN_H + 78f, base, reg);
-        canvas.drawText(ellipsize(inv.billingPeriod, reg, 75f), MARGIN_H + 235f, base, reg);
-        canvas.drawText(resolveStatusLabel(inv.status, inv.isVoid), MARGIN_H + 315f, base, reg);
+        canvas.drawText(ellipsize(inv.student.getFormattedName(), reg, 150f), MARGIN_H + 72f, base, reg);
+        canvas.drawText(ellipsize(inv.billingPeriod, reg, 75f), MARGIN_H + 230f, base, reg);
+        canvas.drawText(resolveShortStatusLabel(inv.status, inv.isVoid), MARGIN_H + 310f, base, reg);
 
         int due = Math.max(0, inv.totalAmountMinor - inv.paidAmountMinor);
         reg.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(inv.totalAmountMinor), MARGIN_H + 412f, base, reg);
-        canvas.drawText(formatCurrency(inv.paidAmountMinor), MARGIN_H + 468f, base, reg);
+        canvas.drawText(formatCurrency(inv.totalAmountMinor), MARGIN_H + 402f, base, reg);
+        canvas.drawText(formatCurrency(inv.paidAmountMinor), MARGIN_H + 458f, base, reg);
 
-        TextPaint dueP = createTextPaint(8.5f, Typeface.BOLD, due > 0 ? COLOR_UNPAID_INK : COLOR_PAID_INK);
+        TextPaint dueP = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_STRONG);
         dueP.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText(formatCurrency(due), PAGE_WIDTH - MARGIN_H - 8f, base, dueP);
-        return topY + rowH;
+        canvas.drawText(formatCurrency(due), PAGE_WIDTH - MARGIN_H, base, dueP);
+
+        float bottomY = topY + rowH;
+        drawHorizontalRule(canvas, bottomY, COLOR_RULE_LIGHT, 0.6f);
+        return bottomY;
     }
 
-    private static float drawContinuationHeader(@NonNull Canvas canvas, @NonNull String docTitle, @NonNull String subtitle) {
-        float y = MARGIN_TOP - 4f;
-        TextPaint leftP = createTextPaint(10f, Typeface.BOLD, COLOR_BRAND_DARK);
+    private static float drawContinuationBar(@NonNull Canvas canvas, @NonNull String docTitle, @NonNull String subtitle) {
+        float y = MARGIN_TOP;
+        TextPaint leftP = createTextPaint(9.5f, Typeface.BOLD, COLOR_INK_STRONG);
         canvas.drawText(docTitle + " (Continued)", MARGIN_H, y + 10f, leftP);
 
         TextPaint rightP = createTextPaint(9f, Typeface.NORMAL, COLOR_INK_SECONDARY);
         rightP.setTextAlign(Paint.Align.RIGHT);
         canvas.drawText(subtitle, PAGE_WIDTH - MARGIN_H, y + 10f, rightP);
 
-        Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
-        line.setColor(COLOR_BORDER);
-        line.setStrokeWidth(1f);
-        canvas.drawLine(MARGIN_H, y + 16f, PAGE_WIDTH - MARGIN_H, y + 16f, line);
+        drawHorizontalRule(canvas, y + 16f, COLOR_RULE_MEDIUM, 0.8f);
         return y + 16f;
     }
 
-    private static void drawPageFooter(@NonNull Canvas canvas,
-                                       @NonNull TutorProfile tutor,
-                                       int pageNum,
-                                       int totalPages,
-                                       boolean includeSignatures) {
-        float footerTop = PAGE_HEIGHT - 46f;
+    private static void drawMinimalFooter(@NonNull Canvas canvas, int pageNum, int totalPages) {
+        float footerTop = PAGE_HEIGHT - 38f;
+        drawHorizontalRule(canvas, footerTop, COLOR_RULE_LIGHT, 0.8f);
 
-        if (includeSignatures) {
-            float sigLineY = footerTop - 14f;
-            Paint sigLine = new Paint(Paint.ANTI_ALIAS_FLAG);
-            sigLine.setColor(COLOR_BORDER_STRONG);
-            sigLine.setStrokeWidth(0.9f);
+        TextPaint leftFooter = createTextPaint(8f, Typeface.NORMAL, COLOR_INK_MUTED);
+        canvas.drawText("Generated by TutorSync  •  " + formatDate(System.currentTimeMillis()), MARGIN_H, footerTop + 14f, leftFooter);
 
-            canvas.drawLine(MARGIN_H, sigLineY, MARGIN_H + 130f, sigLineY, sigLine);
-            canvas.drawLine(PAGE_WIDTH - MARGIN_H - 130f, sigLineY, PAGE_WIDTH - MARGIN_H, sigLineY, sigLine);
-
-            TextPaint sigLabel = createTextPaint(7.5f, Typeface.NORMAL, COLOR_INK_MUTED);
-            canvas.drawText("Student / Guardian Signature", MARGIN_H, sigLineY + 10f, sigLabel);
-
-            sigLabel.setTextAlign(Paint.Align.RIGHT);
-            String tutorSig = !TextUtils.isEmpty(tutor.fullName) ? tutor.fullName + " (Tutor)" : "Authorized Tutor Signature";
-            canvas.drawText(tutorSig, PAGE_WIDTH - MARGIN_H, sigLineY + 10f, sigLabel);
-        }
-
-        Paint divPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        divPaint.setColor(COLOR_BORDER);
-        divPaint.setStrokeWidth(0.9f);
-        canvas.drawLine(MARGIN_H, footerTop, PAGE_WIDTH - MARGIN_H, footerTop, divPaint);
-
-        TextPaint leftFooter = createTextPaint(8f, Typeface.BOLD, COLOR_BRAND_PRIMARY);
-        canvas.drawText("TutorSync  •  Smart Offline Tuition & Fee Management", MARGIN_H, footerTop + 14f, leftFooter);
-
-        TextPaint subFooter = createTextPaint(7.5f, Typeface.NORMAL, COLOR_INK_MUTED);
-        canvas.drawText("Generated on " + formatDateTime(System.currentTimeMillis()), MARGIN_H, footerTop + 25f, subFooter);
-
-        TextPaint pagePaint = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_SECONDARY);
+        TextPaint pagePaint = createTextPaint(8f, Typeface.BOLD, COLOR_INK_SECONDARY);
         pagePaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText("Page " + pageNum + " of " + totalPages, PAGE_WIDTH - MARGIN_H, footerTop + 18f, pagePaint);
+        canvas.drawText("Page " + pageNum + " of " + totalPages, PAGE_WIDTH - MARGIN_H, footerTop + 14f, pagePaint);
     }
 
     // =========================================================================================
-    // 7. DATABASE QUERIES (SQLite Data Extraction with Full Backward Compatibility)
+    // 7. DATABASE QUERIES (Preserves all existing SQLite logic & calculations)
     // =========================================================================================
 
     @Nullable
@@ -1983,7 +1572,7 @@ public final class FinancialPdfGenerator {
         }
 
         if (dates.isEmpty()) return null;
-        return "Billable Class Dates: " + TextUtils.join(", ", dates);
+        return "Classes: " + TextUtils.join(", ", dates);
     }
 
     @NonNull
@@ -2270,6 +1859,28 @@ public final class FinancialPdfGenerator {
     // 8. FORMATTING & GRAPHICS HELPERS
     // =========================================================================================
 
+    private static void drawHorizontalRule(@NonNull Canvas canvas, float y, int color, float strokeWidth) {
+        canvas.drawLine(MARGIN_H, y, PAGE_WIDTH - MARGIN_H, y, createLinePaint(color, strokeWidth));
+    }
+
+    @NonNull
+    private static Paint createLinePaint(int color, float strokeWidth) {
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(color);
+        p.setStrokeWidth(strokeWidth);
+        return p;
+    }
+
+    private static void drawMetaPair(@NonNull Canvas canvas, float leftX, float rightX, float baselineY, @NonNull String label, @NonNull String value) {
+        TextPaint lp = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
+        TextPaint vp = createTextPaint(8.5f, Typeface.BOLD, COLOR_INK_STRONG);
+        vp.setTextAlign(Paint.Align.RIGHT);
+
+        canvas.drawText(label, leftX, baselineY, lp);
+        float maxW = Math.max(40f, (rightX - leftX) - lp.measureText(label) - 8f);
+        canvas.drawText(ellipsize(value, vp, maxW), rightX, baselineY, vp);
+    }
+
     @Nullable
     private static Bitmap loadLogoBitmap(@NonNull Context context, int sizePx, int tintColor) {
         try {
@@ -2303,30 +1914,12 @@ public final class FinancialPdfGenerator {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             return StaticLayout.Builder.obtain(text, 0, text.length(), paint, safeWidth)
                     .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                    .setLineSpacing(1.5f, 1.0f)
+                    .setLineSpacing(1.2f, 1.0f)
                     .setIncludePad(false)
                     .build();
         } else {
-            return new StaticLayout(text, paint, safeWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 1.5f, false);
+            return new StaticLayout(text, paint, safeWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 1.2f, false);
         }
-    }
-
-    private static void drawKeyValueRow(@NonNull Canvas canvas, float leftX, float rightX, float baselineY, @NonNull String key, @NonNull String value) {
-        TextPaint keyPaint = createTextPaint(8.5f, Typeface.NORMAL, COLOR_INK_SECONDARY);
-        TextPaint valPaint = createTextPaint(9f, Typeface.BOLD, COLOR_INK_PRIMARY);
-        valPaint.setTextAlign(Paint.Align.RIGHT);
-
-        canvas.drawText(key, leftX, baselineY, keyPaint);
-        float maxValWidth = Math.max(40f, (rightX - leftX) - keyPaint.measureText(key) - 8f);
-        canvas.drawText(ellipsize(value, valPaint, maxValWidth), rightX, baselineY, valPaint);
-    }
-
-    private static void drawMiniMetric(@NonNull Canvas canvas, float leftX, float topY, float width, @NonNull String label, @NonNull String value, int valColor) {
-        TextPaint lp = createTextPaint(7.5f, Typeface.BOLD, COLOR_INK_MUTED);
-        canvas.drawText(label, leftX + 12f, topY + 10f, lp);
-
-        TextPaint vp = createTextPaint(11.5f, Typeface.BOLD, valColor);
-        canvas.drawText(ellipsize(value, vp, width - 20f), leftX + 12f, topY + 30f, vp);
     }
 
     @NonNull
@@ -2347,23 +1940,32 @@ public final class FinancialPdfGenerator {
     }
 
     @NonNull
-    private static String formatDateTime(long millis) {
-        if (millis <= 0) return "-";
-        return new SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(new Date(millis));
-    }
-
-    @NonNull
     private static String formatDateTimeShort(long millis) {
         if (millis <= 0) return "-";
         return new SimpleDateFormat("dd MMM yy, hh:mm a", Locale.getDefault()).format(new Date(millis));
     }
 
     @NonNull
-    private static String resolveStatusLabel(@Nullable String status, boolean isVoid) {
+    private static String resolveExplicitStatusText(@Nullable String status, boolean isVoid) {
+        if (isVoid) return "STATUS: VOID";
+        if (Invoice.STATUS_PAID.equalsIgnoreCase(status)) return "STATUS: PAID";
+        if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(status)) return "STATUS: PARTIALLY PAID";
+        return "STATUS: UNPAID";
+    }
+
+    @NonNull
+    private static String resolveShortStatusLabel(@Nullable String status, boolean isVoid) {
         if (isVoid) return "VOID";
         if (Invoice.STATUS_PAID.equalsIgnoreCase(status)) return "PAID";
-        if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(status)) return "PARTIALLY PAID";
+        if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(status)) return "PARTIAL";
         return "UNPAID";
+    }
+
+    private static int resolveStatusColor(@Nullable String status, boolean isVoid) {
+        if (isVoid) return COLOR_STATUS_VOID;
+        if (Invoice.STATUS_PAID.equalsIgnoreCase(status)) return COLOR_STATUS_PAID;
+        if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(status)) return COLOR_STATUS_PARTIAL;
+        return COLOR_STATUS_UNPAID;
     }
 
     @NonNull
@@ -2498,7 +2100,7 @@ public final class FinancialPdfGenerator {
                 return "Guardian: " + guardianName + " (" + guardianPhone + ")";
             }
             if (!TextUtils.isEmpty(guardianName)) return "Guardian: " + guardianName;
-            if (!TextUtils.isEmpty(guardianPhone)) return "Guardian Phone: " + guardianPhone;
+            if (!TextUtils.isEmpty(guardianPhone)) return "Guardian: " + guardianPhone;
             return null;
         }
     }
@@ -2521,20 +2123,6 @@ public final class FinancialPdfGenerator {
         String referenceNo;
         String notes;
         int amountMinor;
-    }
-
-    private static final class SummaryLine {
-        final String label;
-        final String value;
-        final int valueColor;
-        final boolean isBold;
-
-        SummaryLine(String label, String value, int valueColor, boolean isBold) {
-            this.label = label;
-            this.value = value;
-            this.valueColor = valueColor;
-            this.isBold = isBold;
-        }
     }
 
     private static final class InvoiceData {
