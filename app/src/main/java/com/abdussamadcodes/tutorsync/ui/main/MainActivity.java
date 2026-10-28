@@ -39,10 +39,10 @@ import com.abdussamadcodes.tutorsync.repository.local.InvoiceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
+import com.abdussamadcodes.tutorsync.security.AppLockManager;
 import com.abdussamadcodes.tutorsync.security.BiometricAuthHelper;
 import com.abdussamadcodes.tutorsync.security.PasswordHasher;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
-import com.abdussamadcodes.tutorsync.ui.account.PinLockActivity;
 import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
 import com.abdussamadcodes.tutorsync.ui.attendance.AttendanceBottomSheetFragment;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
@@ -89,8 +89,6 @@ public class MainActivity extends BaseActivity {
     private InvoiceRepository invoiceRepo;
     private OccurrenceAdapter occurrenceAdapter;
 
-    private boolean isPinVerifiedThisSession = false;
-    private static final String STATE_PIN_VERIFIED = "state_pin_verified";
     private static final String STATE_ACTIVE_TAB = "state_active_tab";
 
     // Remembers the active tab across theme/language recreations
@@ -135,10 +133,6 @@ public class MainActivity extends BaseActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (savedInstanceState != null) {
-            isPinVerifiedThisSession = savedInstanceState.getBoolean(STATE_PIN_VERIFIED, false);
-        }
-
         sessionManager = new SessionManager(this);
         accountStore = new LocalAccountStore(this);
         studentRepo = new StudentRepository();
@@ -180,7 +174,6 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        outState.putBoolean(STATE_PIN_VERIFIED, isPinVerifiedThisSession);
         outState.putInt(STATE_ACTIVE_TAB, lastActiveTabId);
     }
 
@@ -192,12 +185,6 @@ public class MainActivity extends BaseActivity {
             switchToTab(lastActiveTabId);
             refreshStatusLabels();
             loadDashboardData();
-
-            if (!isPinVerifiedThisSession && sessionManager.hasPinSetup()) {
-                startActivity(new Intent(this, PinLockActivity.class));
-                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
-                isPinVerifiedThisSession = true;
-            }
         }
     }
 
@@ -425,6 +412,7 @@ public class MainActivity extends BaseActivity {
         binding.btnSignOut.setOnClickListener(v -> {
             lastActiveTabId = R.id.nav_home;
             sessionManager.logout();
+            AppLockManager.getInstance().resetLockState();
             startActivity(new Intent(this, SignInActivity.class));
             finish();
         });
@@ -660,7 +648,7 @@ public class MainActivity extends BaseActivity {
                     try {
                         String hashedPin = PasswordHasher.hashPassword(rawPin, SessionManager.PIN_SALT_BASE64);
                         sessionManager.savePinSetup(hashedPin, cbBio.isChecked() && bioReady);
-                        isPinVerifiedThisSession = true;
+                        AppLockManager.getInstance().markUnlocked();
                         refreshStatusLabels();
                     } catch (Exception e) {
                         showMessage(binding.getRoot(), R.string.auth_err_hashing);
@@ -671,6 +659,7 @@ public class MainActivity extends BaseActivity {
         if (sessionManager.hasPinSetup()) {
             builder.setNeutralButton("Disable Lock", (dialog, which) -> {
                 sessionManager.savePinSetup(null, false);
+                AppLockManager.getInstance().markUnlocked();
                 refreshStatusLabels();
             });
         }
@@ -834,8 +823,7 @@ public class MainActivity extends BaseActivity {
             if (profile != null) {
                 backupSourceAccountId = profile.optString(AccountEntry.COLUMN_ID, "");
 
-                // FIX: Only overwrite the profile if this backup belongs to the current account.
-                // This prevents cross-account imports from stealing another user's name and photo!
+                // Only overwrite profile if this backup belongs to the current account
                 if (backupSourceAccountId.equals(accountId)) {
                     ContentValues pv = new ContentValues();
                     if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
@@ -942,10 +930,6 @@ public class MainActivity extends BaseActivity {
         loadDashboardData();
     }
 
-    /**
-     * Checks whether any row in the backup belongs to a different account_id or collides with
-     * an existing primary key owned by another account on this device.
-     */
     private boolean hasCrossAccountCollisionInBackup(
             @NonNull SQLiteDatabase db,
             @NonNull JSONObject tablesJson,
@@ -979,9 +963,6 @@ public class MainActivity extends BaseActivity {
         return false;
     }
 
-    /**
-     * Deterministically remaps primary and foreign key UUIDs when importing a backup created by a different account.
-     */
     private void remapEntityIdsForAccount(
             @NonNull ContentValues cv,
             @NonNull String[] remapColumns,
@@ -1010,10 +991,6 @@ public class MainActivity extends BaseActivity {
         return UUID.nameUUIDFromBytes((activeAccountId + ":" + originalId).getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    /**
-     * Updates existing rows in-place and inserts missing rows without using CONFLICT_REPLACE,
-     * preventing SQLite from deleting parent rows and triggering ON DELETE CASCADE on child tables.
-     */
     private void upsertRowWithoutCascadeDelete(
             @NonNull SQLiteDatabase db,
             @NonNull String table,
@@ -1025,7 +1002,6 @@ public class MainActivity extends BaseActivity {
             return;
         }
 
-        // Handle unique constraints that could collide when restoring into an account that already has data
         if (TutorSyncContract.StudentSubjectEntry.TABLE_NAME.equals(table)) {
             String stuId = cv.getAsString(TutorSyncContract.StudentSubjectEntry.COLUMN_STUDENT_ID);
             String subId = cv.getAsString(TutorSyncContract.StudentSubjectEntry.COLUMN_SUBJECT_ID);
@@ -1035,7 +1011,7 @@ public class MainActivity extends BaseActivity {
                                 TutorSyncContract.StudentSubjectEntry.COLUMN_SUBJECT_ID + " = ?",
                         new String[]{stuId, subId}, null, null, null)) {
                     if (c.moveToFirst()) {
-                        return; // Enrollment pair already exists
+                        return;
                     }
                 }
             }
@@ -1075,7 +1051,6 @@ public class MainActivity extends BaseActivity {
                                 TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " = ? AND id != ?",
                         new String[]{activeAccountId, dispId, id}, null, null, null)) {
                     if (c.moveToFirst()) {
-                        // Clear colliding display ID so migrateLegacyStudentIds assigns the next sequential STU-XXXX
                         cv.putNull(TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY);
                     }
                 }
