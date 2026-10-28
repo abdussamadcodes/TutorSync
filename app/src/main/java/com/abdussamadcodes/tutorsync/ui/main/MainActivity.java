@@ -823,7 +823,7 @@ public class MainActivity extends BaseActivity {
 
             JSONObject root = new JSONObject(sb.toString());
 
-            // 1. Restore Theme & Language
+            // 1. Restore Theme & Language (App Lock remains strictly independent)
             JSONObject prefs = root.optJSONObject("preferences");
             if (prefs != null) {
                 String lang = prefs.optString("language_code", "");
@@ -836,44 +836,47 @@ public class MainActivity extends BaseActivity {
                 }
             }
 
-            // 2. Restore Profile Information
+            // 2. Restore Profile Information (Only if backup is from the same account)
             JSONObject profile = root.optJSONObject("profile");
             String backupSourceAccountId = "";
 
             if (profile != null) {
                 backupSourceAccountId = profile.optString(AccountEntry.COLUMN_ID, "");
+                boolean isSameAccount = backupSourceAccountId.isEmpty() || backupSourceAccountId.equals(accountId);
 
-                ContentValues pv = new ContentValues();
-                if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
-                    pv.put(AccountEntry.COLUMN_FULL_NAME, profile.optString(AccountEntry.COLUMN_FULL_NAME));
-                }
-                if (profile.has(AccountEntry.COLUMN_PHONE)) {
-                    if (profile.isNull(AccountEntry.COLUMN_PHONE)) pv.putNull(AccountEntry.COLUMN_PHONE);
-                    else pv.put(AccountEntry.COLUMN_PHONE, profile.optString(AccountEntry.COLUMN_PHONE));
-                }
-                if (profile.has(AccountEntry.COLUMN_EMAIL)) {
-                    if (profile.isNull(AccountEntry.COLUMN_EMAIL)) pv.putNull(AccountEntry.COLUMN_EMAIL);
-                    else pv.put(AccountEntry.COLUMN_EMAIL, profile.optString(AccountEntry.COLUMN_EMAIL));
-                }
-                if (profile.has(AccountEntry.COLUMN_DOB)) {
-                    if (profile.isNull(AccountEntry.COLUMN_DOB)) pv.putNull(AccountEntry.COLUMN_DOB);
-                    else pv.put(AccountEntry.COLUMN_DOB, profile.optString(AccountEntry.COLUMN_DOB));
-                }
-                if (profile.has(AccountEntry.COLUMN_ADDRESS)) {
-                    if (profile.isNull(AccountEntry.COLUMN_ADDRESS)) pv.putNull(AccountEntry.COLUMN_ADDRESS);
-                    else pv.put(AccountEntry.COLUMN_ADDRESS, profile.optString(AccountEntry.COLUMN_ADDRESS));
-                }
-                String base64Pic = profile.optString("profile_pic_base64", "");
-                if (!base64Pic.isEmpty()) {
-                    byte[] imgBytes = Base64.decode(base64Pic, Base64.NO_WRAP);
-                    File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
-                    try (FileOutputStream fos = new FileOutputStream(destFile)) {
-                        fos.write(imgBytes);
-                        pv.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, destFile.getAbsolutePath());
+                if (isSameAccount) {
+                    ContentValues pv = new ContentValues();
+                    if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
+                        pv.put(AccountEntry.COLUMN_FULL_NAME, profile.optString(AccountEntry.COLUMN_FULL_NAME));
                     }
-                }
-                if (pv.size() > 0) {
-                    db.update(AccountEntry.TABLE_NAME, pv, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
+                    if (profile.has(AccountEntry.COLUMN_PHONE)) {
+                        if (profile.isNull(AccountEntry.COLUMN_PHONE)) pv.putNull(AccountEntry.COLUMN_PHONE);
+                        else pv.put(AccountEntry.COLUMN_PHONE, profile.optString(AccountEntry.COLUMN_PHONE));
+                    }
+                    if (profile.has(AccountEntry.COLUMN_EMAIL)) {
+                        if (profile.isNull(AccountEntry.COLUMN_EMAIL)) pv.putNull(AccountEntry.COLUMN_EMAIL);
+                        else pv.put(AccountEntry.COLUMN_EMAIL, profile.optString(AccountEntry.COLUMN_EMAIL));
+                    }
+                    if (profile.has(AccountEntry.COLUMN_DOB)) {
+                        if (profile.isNull(AccountEntry.COLUMN_DOB)) pv.putNull(AccountEntry.COLUMN_DOB);
+                        else pv.put(AccountEntry.COLUMN_DOB, profile.optString(AccountEntry.COLUMN_DOB));
+                    }
+                    if (profile.has(AccountEntry.COLUMN_ADDRESS)) {
+                        if (profile.isNull(AccountEntry.COLUMN_ADDRESS)) pv.putNull(AccountEntry.COLUMN_ADDRESS);
+                        else pv.put(AccountEntry.COLUMN_ADDRESS, profile.optString(AccountEntry.COLUMN_ADDRESS));
+                    }
+                    String base64Pic = profile.optString("profile_pic_base64", "");
+                    if (!base64Pic.isEmpty()) {
+                        byte[] imgBytes = Base64.decode(base64Pic, Base64.NO_WRAP);
+                        File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
+                        try (FileOutputStream fos = new FileOutputStream(destFile)) {
+                            fos.write(imgBytes);
+                            pv.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, destFile.getAbsolutePath());
+                        }
+                    }
+                    if (pv.size() > 0) {
+                        db.update(AccountEntry.TABLE_NAME, pv, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
+                    }
                 }
             }
 

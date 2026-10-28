@@ -49,10 +49,6 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
     private boolean isLockScreenShowing = false;
     private WeakReference<Activity> topActivityRef = new WeakReference<>(null);
 
-    // Tracks foreground state so Keystore is probed at most once per foreground session
-    private int startedActivityCount = 0;
-    private boolean wasKeystoreProbedThisForegroundSession = false;
-
     private AppLockManager(@NonNull Application application) {
         this.application = application;
         this.sessionManager = new SessionManager(application);
@@ -144,7 +140,6 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
     public void markUnlocked() {
         isSessionUnlocked = true;
         isLockScreenShowing = false;
-        wasKeystoreProbedThisForegroundSession = true;
         sessionManager.setSessionUnlockedState(true);
     }
 
@@ -159,7 +154,6 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
 
     private void lockSession() {
         isSessionUnlocked = false;
-        wasKeystoreProbedThisForegroundSession = false;
         sessionManager.setSessionUnlockedState(false);
     }
 
@@ -183,7 +177,7 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
     /**
      * Checks AndroidKeyStore's hardware authentication timestamp table to detect if the user
      * unlocked the device lock screen AFTER the last time they unlocked TutorSync.
-     * This catches phone lock/unlock cycles even if the app process was killed in Recent Apps.
+     * This catches phone lock/unlock cycles even if the app process was frozen or killed in the background.
      */
     private boolean hasDeviceUnlockedSinceAppUnlock() {
         long lastAppUnlockRealtime = sessionManager.getLastAppUnlockRealtime();
@@ -197,7 +191,7 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
         }
 
         int elapsedSeconds = (int) (elapsedMs / 1000L);
-        if (elapsedSeconds < 4) {
+        if (elapsedSeconds < 3) {
             return false;
         }
 
@@ -206,7 +200,7 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
             return false;
         }
 
-        int probeTimeoutSeconds = Math.max(1, elapsedSeconds - 3);
+        int probeTimeoutSeconds = Math.max(1, elapsedSeconds - 2);
         try {
             KeyGenerator keyGenerator = KeyGenerator.getInstance(
                     KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER);
@@ -230,10 +224,11 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS7Padding");
             cipher.init(Cipher.ENCRYPT_MODE, secretKey);
 
-            // Cipher.init succeeded, meaning a device unlock occurred within probeTimeoutSeconds
+            // Cipher.init succeeded, which means a device unlock occurred within probeTimeoutSeconds
+            // (more recently than lastAppUnlockRealtime).
             return true;
         } catch (UserNotAuthenticatedException e) {
-            // No device unlock occurred within probeTimeoutSeconds; phone remained unlocked
+            // No device unlock occurred within probeTimeoutSeconds; phone remained unlocked.
             return false;
         } catch (Throwable t) {
             return false;
@@ -272,17 +267,12 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
             return;
         }
 
+        // If the phone is currently locked or screen is off, mark session locked immediately
         if (isDeviceCurrentlyLocked(activity)) {
             lockSession();
         } else if (isSessionUnlocked && sessionManager.isSessionUnlockedForCurrentBoot()) {
-            // Only probe AndroidKeyStore once when entering the foreground, never during in-app navigation
-            if (!wasKeystoreProbedThisForegroundSession) {
-                if (hasDeviceUnlockedSinceAppUnlock()) {
-                    lockSession();
-                } else {
-                    wasKeystoreProbedThisForegroundSession = true;
-                    return;
-                }
+            if (hasDeviceUnlockedSinceAppUnlock()) {
+                lockSession();
             } else {
                 return;
             }
@@ -302,10 +292,6 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
     @Override
     public void onActivityStarted(@NonNull Activity activity) {
         if (!isExemptActivity(activity)) {
-            if (startedActivityCount == 0) {
-                wasKeystoreProbedThisForegroundSession = false;
-            }
-            startedActivityCount++;
             topActivityRef = new WeakReference<>(activity);
             if (isDeviceCurrentlyLocked(activity)) {
                 lockSession();
@@ -343,9 +329,6 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
 
     @Override
     public void onActivityStopped(@NonNull Activity activity) {
-        if (!isExemptActivity(activity)) {
-            startedActivityCount = Math.max(0, startedActivityCount - 1);
-        }
         if (isDeviceCurrentlyLocked(activity)) {
             lockSession();
         }
