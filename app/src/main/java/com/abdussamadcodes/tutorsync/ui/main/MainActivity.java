@@ -567,7 +567,7 @@ public class MainActivity extends BaseActivity {
                     return;
                 }
 
-                // 2. Enforce password strength rules (same as SignUpActivity)
+                // 2. Enforce password strength rules
                 if (newPass.length() < 8) {
                     tilNew.setError(getString(R.string.auth_err_pass_length));
                     return;
@@ -724,6 +724,13 @@ public class MainActivity extends BaseActivity {
             root.put("backup_version", 1);
             root.put("exported_at", System.currentTimeMillis());
 
+            // 1. Export Preferences (Excluding AppLock for local independence)
+            JSONObject prefs = new JSONObject();
+            prefs.put("language_code", appPreferences.getLanguageCode());
+            prefs.put("theme_mode", appPreferences.getThemeMode());
+            root.put("preferences", prefs);
+
+            // 2. Export Profile
             try (Cursor c = db.query(AccountEntry.TABLE_NAME, null,
                     AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}, null, null, null)) {
                 if (c.moveToFirst()) {
@@ -742,6 +749,7 @@ public class MainActivity extends BaseActivity {
                 }
             }
 
+            // 3. Export Tables
             String[] accountScopedTables = new String[]{
                     TutorSyncContract.StudentEntry.TABLE_NAME,
                     TutorSyncContract.SubjectEntry.TABLE_NAME,
@@ -767,8 +775,7 @@ public class MainActivity extends BaseActivity {
                         arr.put(cursorRowToJson(c));
                     }
                     tablesJson.put(table, arr);
-                } catch (Exception ignored) {
-                }
+                } catch (Exception ignored) {}
             }
 
             try (Cursor c = db.rawQuery(
@@ -780,8 +787,7 @@ public class MainActivity extends BaseActivity {
                     arr.put(cursorRowToJson(c));
                 }
                 tablesJson.put(TutorSyncContract.StudentSubjectEntry.TABLE_NAME, arr);
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
 
             root.put("tables", tablesJson);
 
@@ -817,48 +823,61 @@ public class MainActivity extends BaseActivity {
 
             JSONObject root = new JSONObject(sb.toString());
 
+            // 1. Restore Theme & Language
+            JSONObject prefs = root.optJSONObject("preferences");
+            if (prefs != null) {
+                String lang = prefs.optString("language_code", "");
+                if (!lang.isEmpty()) appPreferences.setLanguageCode(lang);
+
+                String theme = prefs.optString("theme_mode", "");
+                if (!theme.isEmpty()) {
+                    appPreferences.setThemeMode(theme);
+                    LocaleThemeHelper.applyThemeMode(theme);
+                }
+            }
+
+            // 2. Restore Profile Information
             JSONObject profile = root.optJSONObject("profile");
             String backupSourceAccountId = "";
 
             if (profile != null) {
                 backupSourceAccountId = profile.optString(AccountEntry.COLUMN_ID, "");
 
-                if (backupSourceAccountId.equals(accountId)) {
-                    ContentValues pv = new ContentValues();
-                    if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
-                        pv.put(AccountEntry.COLUMN_FULL_NAME, profile.optString(AccountEntry.COLUMN_FULL_NAME));
+                ContentValues pv = new ContentValues();
+                if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
+                    pv.put(AccountEntry.COLUMN_FULL_NAME, profile.optString(AccountEntry.COLUMN_FULL_NAME));
+                }
+                if (profile.has(AccountEntry.COLUMN_PHONE)) {
+                    if (profile.isNull(AccountEntry.COLUMN_PHONE)) pv.putNull(AccountEntry.COLUMN_PHONE);
+                    else pv.put(AccountEntry.COLUMN_PHONE, profile.optString(AccountEntry.COLUMN_PHONE));
+                }
+                if (profile.has(AccountEntry.COLUMN_EMAIL)) {
+                    if (profile.isNull(AccountEntry.COLUMN_EMAIL)) pv.putNull(AccountEntry.COLUMN_EMAIL);
+                    else pv.put(AccountEntry.COLUMN_EMAIL, profile.optString(AccountEntry.COLUMN_EMAIL));
+                }
+                if (profile.has(AccountEntry.COLUMN_DOB)) {
+                    if (profile.isNull(AccountEntry.COLUMN_DOB)) pv.putNull(AccountEntry.COLUMN_DOB);
+                    else pv.put(AccountEntry.COLUMN_DOB, profile.optString(AccountEntry.COLUMN_DOB));
+                }
+                if (profile.has(AccountEntry.COLUMN_ADDRESS)) {
+                    if (profile.isNull(AccountEntry.COLUMN_ADDRESS)) pv.putNull(AccountEntry.COLUMN_ADDRESS);
+                    else pv.put(AccountEntry.COLUMN_ADDRESS, profile.optString(AccountEntry.COLUMN_ADDRESS));
+                }
+                String base64Pic = profile.optString("profile_pic_base64", "");
+                if (!base64Pic.isEmpty()) {
+                    byte[] imgBytes = Base64.decode(base64Pic, Base64.NO_WRAP);
+                    File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
+                    try (FileOutputStream fos = new FileOutputStream(destFile)) {
+                        fos.write(imgBytes);
+                        pv.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, destFile.getAbsolutePath());
                     }
-                    if (profile.has(AccountEntry.COLUMN_PHONE)) {
-                        if (profile.isNull(AccountEntry.COLUMN_PHONE)) pv.putNull(AccountEntry.COLUMN_PHONE);
-                        else pv.put(AccountEntry.COLUMN_PHONE, profile.optString(AccountEntry.COLUMN_PHONE));
-                    }
-                    if (profile.has(AccountEntry.COLUMN_EMAIL)) {
-                        if (profile.isNull(AccountEntry.COLUMN_EMAIL)) pv.putNull(AccountEntry.COLUMN_EMAIL);
-                        else pv.put(AccountEntry.COLUMN_EMAIL, profile.optString(AccountEntry.COLUMN_EMAIL));
-                    }
-                    if (profile.has(AccountEntry.COLUMN_DOB)) {
-                        if (profile.isNull(AccountEntry.COLUMN_DOB)) pv.putNull(AccountEntry.COLUMN_DOB);
-                        else pv.put(AccountEntry.COLUMN_DOB, profile.optString(AccountEntry.COLUMN_DOB));
-                    }
-                    if (profile.has(AccountEntry.COLUMN_ADDRESS)) {
-                        if (profile.isNull(AccountEntry.COLUMN_ADDRESS)) pv.putNull(AccountEntry.COLUMN_ADDRESS);
-                        else pv.put(AccountEntry.COLUMN_ADDRESS, profile.optString(AccountEntry.COLUMN_ADDRESS));
-                    }
-                    String base64Pic = profile.optString("profile_pic_base64", "");
-                    if (!base64Pic.isEmpty()) {
-                        byte[] imgBytes = Base64.decode(base64Pic, Base64.NO_WRAP);
-                        File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
-                        try (FileOutputStream fos = new FileOutputStream(destFile)) {
-                            fos.write(imgBytes);
-                            pv.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, destFile.getAbsolutePath());
-                        }
-                    }
-                    if (pv.size() > 0) {
-                        db.update(AccountEntry.TABLE_NAME, pv, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
-                    }
+                }
+                if (pv.size() > 0) {
+                    db.update(AccountEntry.TABLE_NAME, pv, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
                 }
             }
 
+            // 3. Restore Tables
             JSONObject tablesJson = root.optJSONObject("tables");
             if (tablesJson != null) {
                 String[] restoreOrder = new String[]{
@@ -879,8 +898,6 @@ public class MainActivity extends BaseActivity {
                         TutorSyncContract.AuditLogEntry.TABLE_NAME
                 };
 
-                // FIX: Only remap if the backup explicitly states it belongs to a different account.
-                // Removes the overly aggressive hasCrossAccountCollisionInBackup check that caused duplicates.
                 boolean needsCrossAccountRemap = !backupSourceAccountId.isEmpty() && !backupSourceAccountId.equals(accountId);
 
                 String[] remapColumns = new String[]{
