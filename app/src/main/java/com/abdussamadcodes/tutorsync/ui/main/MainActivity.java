@@ -1102,7 +1102,6 @@ public class MainActivity extends BaseActivity {
         }
         return cv;
     }
-
     @Nullable
     private byte[] readFileBytes(@NonNull File file) {
         try (FileInputStream fis = new FileInputStream(file);
