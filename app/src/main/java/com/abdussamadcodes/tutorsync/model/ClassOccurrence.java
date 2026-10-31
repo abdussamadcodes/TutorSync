@@ -2,6 +2,7 @@ package com.abdussamadcodes.tutorsync.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 
 public class ClassOccurrence {
     private final String id;
@@ -12,11 +13,18 @@ public class ClassOccurrence {
     private final long date;
     private final int startTimeMinutes;
     private final int durationMinutes;
+    private final long updatedAt;
 
     public ClassOccurrence(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
                            @Nullable String subjectId, @Nullable String scheduleId, long date,
                            int startTimeMinutes, int durationMinutes) {
-        this.id = id;
+        this(id, accountId, studentId, subjectId, scheduleId, date, startTimeMinutes, durationMinutes, System.currentTimeMillis());
+    }
+
+    public ClassOccurrence(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
+                           @Nullable String subjectId, @Nullable String scheduleId, long date,
+                           int startTimeMinutes, int durationMinutes, long updatedAt) {
+        this.id = TutorSyncContract.ensureValidUuid(id);
         this.accountId = accountId;
         this.studentId = studentId;
         this.subjectId = subjectId;
@@ -24,6 +32,7 @@ public class ClassOccurrence {
         this.date = date;
         this.startTimeMinutes = startTimeMinutes;
         this.durationMinutes = durationMinutes;
+        this.updatedAt = updatedAt > 0 ? updatedAt : System.currentTimeMillis();
     }
 
     @NonNull public String getId() { return id; }
@@ -34,4 +43,6 @@ public class ClassOccurrence {
     public long getDate() { return date; }
     public int getStartTimeMinutes() { return startTimeMinutes; }
     public int getDurationMinutes() { return durationMinutes; }
+    public long getUpdatedAt() { return updatedAt; }
+    public long getLastModified() { return updatedAt; }
 }

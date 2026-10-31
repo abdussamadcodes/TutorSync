@@ -2,6 +2,7 @@ package com.abdussamadcodes.tutorsync.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,6 +23,7 @@ public class FinancialTransaction {
     private final String parentTxnId;
     private final boolean isReversed;
     private final long createdAt;
+    private final long updatedAt;
     private final List<String> relatedInvoiceDisplayIds = new ArrayList<>();
 
     public FinancialTransaction(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
@@ -29,7 +31,16 @@ public class FinancialTransaction {
                                 long timestamp, @NonNull String method, @Nullable String referenceNo,
                                 @Nullable String notes, @Nullable String parentTxnId,
                                 boolean isReversed, long createdAt) {
-        this.id = id;
+        this(id, accountId, studentId, txnIdDisplay, type, amountMinor, timestamp, method,
+                referenceNo, notes, parentTxnId, isReversed, createdAt, createdAt);
+    }
+
+    public FinancialTransaction(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
+                                @NonNull String txnIdDisplay, @NonNull String type, int amountMinor,
+                                long timestamp, @NonNull String method, @Nullable String referenceNo,
+                                @Nullable String notes, @Nullable String parentTxnId,
+                                boolean isReversed, long createdAt, long updatedAt) {
+        this.id = TutorSyncContract.ensureValidUuid(id);
         this.accountId = accountId;
         this.studentId = studentId;
         this.txnIdDisplay = txnIdDisplay;
@@ -41,7 +52,8 @@ public class FinancialTransaction {
         this.notes = notes;
         this.parentTxnId = parentTxnId;
         this.isReversed = isReversed;
-        this.createdAt = createdAt;
+        this.createdAt = createdAt > 0 ? createdAt : System.currentTimeMillis();
+        this.updatedAt = updatedAt > 0 ? updatedAt : this.createdAt;
     }
 
     @NonNull public String getId() { return id; }
@@ -57,5 +69,7 @@ public class FinancialTransaction {
     @Nullable public String getParentTxnId() { return parentTxnId; }
     public boolean isReversed() { return isReversed; }
     public long getCreatedAt() { return createdAt; }
+    public long getUpdatedAt() { return updatedAt; }
+    public long getLastModified() { return updatedAt; }
     @NonNull public List<String> getRelatedInvoiceDisplayIds() { return relatedInvoiceDisplayIds; }
 }

@@ -2,6 +2,7 @@ package com.abdussamadcodes.tutorsync.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 
 public class Student {
     private final String id;
@@ -14,11 +15,18 @@ public class Student {
     private final String guardianPhone;
     private final String address;
     private final boolean isActive;
+    private final long updatedAt;
 
     public Student(@NonNull String id, @NonNull String accountId, @Nullable String studentIdDisplay, @NonNull String name,
                    @Nullable String grade, @Nullable String school, @Nullable String guardianName,
                    @Nullable String guardianPhone, @Nullable String address, boolean isActive) {
-        this.id = id;
+        this(id, accountId, studentIdDisplay, name, grade, school, guardianName, guardianPhone, address, isActive, System.currentTimeMillis());
+    }
+
+    public Student(@NonNull String id, @NonNull String accountId, @Nullable String studentIdDisplay, @NonNull String name,
+                   @Nullable String grade, @Nullable String school, @Nullable String guardianName,
+                   @Nullable String guardianPhone, @Nullable String address, boolean isActive, long updatedAt) {
+        this.id = TutorSyncContract.ensureValidUuid(id);
         this.accountId = accountId;
         this.studentIdDisplay = studentIdDisplay;
         this.name = name;
@@ -28,6 +36,7 @@ public class Student {
         this.guardianPhone = guardianPhone;
         this.address = address;
         this.isActive = isActive;
+        this.updatedAt = updatedAt > 0 ? updatedAt : System.currentTimeMillis();
     }
 
     @NonNull public String getId() { return id; }
@@ -40,6 +49,8 @@ public class Student {
     @Nullable public String getGuardianPhone() { return guardianPhone; }
     @Nullable public String getAddress() { return address; }
     public boolean isActive() { return isActive; }
+    public long getUpdatedAt() { return updatedAt; }
+    public long getLastModified() { return updatedAt; }
 
     @NonNull
     public String getFormattedDisplayName() {

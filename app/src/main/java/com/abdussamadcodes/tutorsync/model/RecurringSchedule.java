@@ -2,6 +2,7 @@ package com.abdussamadcodes.tutorsync.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 
 public class RecurringSchedule {
     public static final String MODEL_MONTHLY = "MONTHLY";
@@ -20,12 +21,13 @@ public class RecurringSchedule {
     private final String billingModel;
     private final int feeAmountMinor;
     private final int anchorDay;
+    private final long updatedAt;
 
     public RecurringSchedule(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
                              @NonNull String subjectId, int dayOfWeek, int startTimeMinutes,
                              int durationMinutes, long startDate, long endDate) {
         this(id, accountId, studentId, subjectId, null, dayOfWeek, startTimeMinutes,
-                durationMinutes, startDate, endDate, MODEL_MONTHLY, 0, 1);
+                durationMinutes, startDate, endDate, MODEL_MONTHLY, 0, 1, System.currentTimeMillis());
     }
 
     public RecurringSchedule(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
@@ -33,7 +35,16 @@ public class RecurringSchedule {
                              int dayOfWeek, int startTimeMinutes, int durationMinutes,
                              long startDate, long endDate, @NonNull String billingModel,
                              int feeAmountMinor, int anchorDay) {
-        this.id = id;
+        this(id, accountId, studentId, subjectId, scheduleGroupId, dayOfWeek, startTimeMinutes,
+                durationMinutes, startDate, endDate, billingModel, feeAmountMinor, anchorDay, System.currentTimeMillis());
+    }
+
+    public RecurringSchedule(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
+                             @NonNull String subjectId, @Nullable String scheduleGroupId,
+                             int dayOfWeek, int startTimeMinutes, int durationMinutes,
+                             long startDate, long endDate, @NonNull String billingModel,
+                             int feeAmountMinor, int anchorDay, long updatedAt) {
+        this.id = TutorSyncContract.ensureValidUuid(id);
         this.accountId = accountId;
         this.studentId = studentId;
         this.subjectId = subjectId;
@@ -46,6 +57,7 @@ public class RecurringSchedule {
         this.billingModel = billingModel;
         this.feeAmountMinor = feeAmountMinor;
         this.anchorDay = anchorDay;
+        this.updatedAt = updatedAt > 0 ? updatedAt : System.currentTimeMillis();
     }
 
     @NonNull public String getId() { return id; }
@@ -61,4 +73,6 @@ public class RecurringSchedule {
     @NonNull public String getBillingModel() { return billingModel; }
     public int getFeeAmountMinor() { return feeAmountMinor; }
     public int getAnchorDay() { return anchorDay; }
+    public long getUpdatedAt() { return updatedAt; }
+    public long getLastModified() { return updatedAt; }
 }

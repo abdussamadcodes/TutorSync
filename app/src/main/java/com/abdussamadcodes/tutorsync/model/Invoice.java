@@ -2,6 +2,7 @@ package com.abdussamadcodes.tutorsync.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 
 public class Invoice {
     public static final String STATUS_UNPAID = "UNPAID";
@@ -24,12 +25,13 @@ public class Invoice {
     private final int paidAmount; // Derived from payment_allocations
     private final String notes;
     private final long createdAt;
+    private final long updatedAt;
 
     public Invoice(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
                    @Nullable String invoiceIdDisplay, @NonNull String billingPeriod,
                    int totalAmount, int paidAmount, @NonNull String status, long dueDate, long createdAt) {
         this(id, accountId, studentId, invoiceIdDisplay, billingPeriod, createdAt, createdAt,
-                createdAt, dueDate, totalAmount, 0, totalAmount, paidAmount, null, createdAt);
+                createdAt, dueDate, totalAmount, 0, totalAmount, paidAmount, null, createdAt, createdAt);
     }
 
     public Invoice(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
@@ -37,7 +39,16 @@ public class Invoice {
                    long periodStart, long periodEnd, long issueDate, long dueDate,
                    int subtotalMinor, int discountMinor, int totalAmount, int paidAmount,
                    @Nullable String notes, long createdAt) {
-        this.id = id;
+        this(id, accountId, studentId, invoiceIdDisplay, billingPeriod, periodStart, periodEnd,
+                issueDate, dueDate, subtotalMinor, discountMinor, totalAmount, paidAmount, notes, createdAt, createdAt);
+    }
+
+    public Invoice(@NonNull String id, @NonNull String accountId, @NonNull String studentId,
+                   @Nullable String invoiceIdDisplay, @NonNull String billingPeriod,
+                   long periodStart, long periodEnd, long issueDate, long dueDate,
+                   int subtotalMinor, int discountMinor, int totalAmount, int paidAmount,
+                   @Nullable String notes, long createdAt, long updatedAt) {
+        this.id = TutorSyncContract.ensureValidUuid(id);
         this.accountId = accountId;
         this.studentId = studentId;
         this.invoiceIdDisplay = invoiceIdDisplay;
@@ -51,7 +62,8 @@ public class Invoice {
         this.totalAmount = totalAmount;
         this.paidAmount = Math.max(0, paidAmount);
         this.notes = notes;
-        this.createdAt = createdAt;
+        this.createdAt = createdAt > 0 ? createdAt : System.currentTimeMillis();
+        this.updatedAt = updatedAt > 0 ? updatedAt : this.createdAt;
     }
 
     @NonNull public String getId() { return id; }
@@ -72,10 +84,9 @@ public class Invoice {
     public int getOutstandingBalance() { return Math.max(0, totalAmount - paidAmount); }
     @Nullable public String getNotes() { return notes; }
     public long getCreatedAt() { return createdAt; }
+    public long getUpdatedAt() { return updatedAt; }
+    public long getLastModified() { return updatedAt; }
 
-    /**
-     * Dynamically calculates invoice payment status from underlying amounts and due date.
-     */
     @NonNull
     public String getStatus() {
         int balance = getOutstandingBalance();
