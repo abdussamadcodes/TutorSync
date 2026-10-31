@@ -3,8 +3,6 @@ package com.abdussamadcodes.tutorsync.ui.main;
 import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.database.sqlite.SQLiteDatabase;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
@@ -52,14 +50,13 @@ import com.abdussamadcodes.tutorsync.ui.subject.SubjectFormActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectListActivity;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.BackupRestoreManager;
+import com.abdussamadcodes.tutorsync.util.ImageUtils;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -90,15 +87,23 @@ public class MainActivity extends BaseActivity {
     private final ActivityResultLauncher<String> pickProfilePhotoLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
                 if (uri != null) {
-                    String savedPath = copyProfileImageToInternalStorage(uri);
+                    String accountId = sessionManager.getActiveAccountId();
+                    if (accountId.isEmpty()) return;
+
+                    // Compress new photo and delete any previous unsaved pending photo from this dialog session
+                    String savedPath = ImageUtils.compressAndSaveImage(
+                            this,
+                            uri,
+                            "profile_" + accountId,
+                            pendingProfilePicPath
+                    );
                     if (savedPath != null) {
                         pendingProfilePicPath = savedPath;
                         if (activeDialogProfileImageView != null) {
-                            Bitmap bmp = BitmapFactory.decodeFile(savedPath);
-                            if (bmp != null) {
-                                activeDialogProfileImageView.setImageBitmap(bmp);
-                            }
+                            ImageUtils.loadProfileImageIntoView(savedPath, activeDialogProfileImageView);
                         }
+                    } else {
+                        showMessage(binding.getRoot(), R.string.profile_photo_error);
                     }
                 }
             });
@@ -440,7 +445,7 @@ public class MainActivity extends BaseActivity {
         String currentEmail = (account != null && account.getEmail() != null) ? account.getEmail() : "";
         String currentDob = (account != null && account.getDob() != null) ? account.getDob() : "";
         String currentAddress = (account != null && account.getAddress() != null) ? account.getAddress() : "";
-        String currentPicPath = (account != null && account.getProfilePicPath() != null) ? account.getProfilePicPath() : "";
+        final String currentPicPath = (account != null && account.getProfilePicPath() != null) ? account.getProfilePicPath() : "";
 
         etUsername.setText(currentUsername);
         etFullName.setText(currentFullName);
@@ -450,9 +455,10 @@ public class MainActivity extends BaseActivity {
         etAddress.setText(currentAddress);
         loadProfileImageIntoView(currentPicPath, ivDialogProfilePic);
 
-        sheetView.findViewById(R.id.btnPickProfilePhoto).setOnClickListener(v ->
-                pickProfilePhotoLauncher.launch("image/*")
-        );
+        sheetView.findViewById(R.id.btnPickProfilePhoto).setOnClickListener(v -> {
+            AppLockManager.getInstance().markExternalFlowStarted();
+            pickProfilePhotoLauncher.launch("image/*");
+        });
 
         etDob.setOnClickListener(v -> {
             Calendar cal = Calendar.getInstance();
@@ -479,6 +485,10 @@ public class MainActivity extends BaseActivity {
 
             if (pendingProfilePicPath != null) {
                 accountStore.updateProfilePicPath(accountId, pendingProfilePicPath);
+                if (!currentPicPath.isEmpty() && !currentPicPath.equals(pendingProfilePicPath)) {
+                    ImageUtils.deleteProfileImage(this, currentPicPath);
+                }
+                pendingProfilePicPath = null;
             }
 
             boolean updated = accountStore.updateProfile(
@@ -493,7 +503,14 @@ public class MainActivity extends BaseActivity {
             }
         });
 
-        bottomSheet.setOnDismissListener(d -> activeDialogProfileImageView = null);
+        bottomSheet.setOnDismissListener(d -> {
+            activeDialogProfileImageView = null;
+            // Clean up any unsaved pending image if the user cancelled/dismissed
+            if (pendingProfilePicPath != null && !pendingProfilePicPath.equals(currentPicPath)) {
+                ImageUtils.deleteProfileImage(this, pendingProfilePicPath);
+                pendingProfilePicPath = null;
+            }
+        });
         bottomSheet.show();
     }
 
@@ -655,36 +672,8 @@ public class MainActivity extends BaseActivity {
     // 4. PROFILE IMAGE & BACKUP HELPERS
     // =========================================================================
     private void loadProfileImageIntoView(@Nullable String path, @NonNull ImageView target) {
-        if (path != null && !path.isEmpty()) {
-            File file = new File(path);
-            if (file.exists()) {
-                Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
-                if (bitmap != null) {
-                    target.setImageBitmap(bitmap);
-                    return;
-                }
-            }
-        }
-        target.setImageResource(R.drawable.ic_tutor_logo);
-    }
-
-    @Nullable
-    private String copyProfileImageToInternalStorage(@NonNull Uri sourceUri) {
-        String accountId = sessionManager.getActiveAccountId();
-        if (accountId.isEmpty()) return null;
-
-        File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
-        try (InputStream in = getContentResolver().openInputStream(sourceUri);
-             OutputStream out = new FileOutputStream(destFile)) {
-            if (in == null) return null;
-            byte[] buffer = new byte[4096];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-            return destFile.getAbsolutePath();
-        } catch (Exception e) {
-            return null;
+        if (!ImageUtils.loadProfileImageIntoView(path, target)) {
+            target.setImageResource(R.drawable.ic_tutor_logo);
         }
     }
 

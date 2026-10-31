@@ -3,10 +3,7 @@ package com.abdussamadcodes.tutorsync.ui.account;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.ImageDecoder;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -27,12 +24,10 @@ import com.abdussamadcodes.tutorsync.security.AppLockManager;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
+import com.abdussamadcodes.tutorsync.util.ImageUtils;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.datepicker.MaterialDatePicker;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -128,21 +123,16 @@ public class TutorProfileActivity extends BaseActivity {
     }
 
     private void renderProfilePhoto() {
-        if (currentProfilePicPath != null && !currentProfilePicPath.isEmpty()) {
-            File imgFile = new File(currentProfilePicPath);
-            if (imgFile.exists() && imgFile.length() > 0) {
-                Bitmap bitmap = BitmapFactory.decodeFile(imgFile.getAbsolutePath());
-                if (bitmap != null) {
-                    binding.ivProfilePhoto.setImageDrawable(null);
-                    ImageViewCompat.setImageTintList(binding.ivProfilePhoto, null);
-                    binding.ivProfilePhoto.clearColorFilter();
-                    binding.ivProfilePhoto.setPadding(0, 0, 0, 0);
-                    binding.ivProfilePhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                    binding.ivProfilePhoto.setImageBitmap(bitmap);
-                    binding.btnRemovePhoto.setVisibility(View.VISIBLE);
-                    return;
-                }
-            }
+        Bitmap bitmap = ImageUtils.loadBitmapFromPath(currentProfilePicPath);
+        if (bitmap != null) {
+            binding.ivProfilePhoto.setImageDrawable(null);
+            ImageViewCompat.setImageTintList(binding.ivProfilePhoto, null);
+            binding.ivProfilePhoto.clearColorFilter();
+            binding.ivProfilePhoto.setPadding(0, 0, 0, 0);
+            binding.ivProfilePhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            binding.ivProfilePhoto.setImageBitmap(bitmap);
+            binding.btnRemovePhoto.setVisibility(View.VISIBLE);
+            return;
         }
 
         binding.ivProfilePhoto.setImageBitmap(null);
@@ -171,11 +161,7 @@ public class TutorProfileActivity extends BaseActivity {
 
         binding.btnRemovePhoto.setOnClickListener(v -> {
             if (currentProfilePicPath != null) {
-                File oldFile = new File(currentProfilePicPath);
-                if (oldFile.exists()) {
-                    //noinspection ResultOfMethodCallIgnored
-                    oldFile.delete();
-                }
+                ImageUtils.deleteProfileImage(this, currentProfilePicPath);
             }
             currentProfilePicPath = null;
             accountStore.updateProfilePicPath(activeAccountId, null);
@@ -204,81 +190,20 @@ public class TutorProfileActivity extends BaseActivity {
 
     private void onGalleryImagePicked(@Nullable Uri uri) {
         if (uri == null) return;
-        try {
-            Bitmap scaled = decodeAndScaleFromUri(uri, 512);
-            if (scaled == null) {
-                showMessage(binding.getRoot(), R.string.profile_photo_error);
-                return;
-            }
-
-            File destFile = new File(getFilesDir(), "profile_" + activeAccountId + ".jpg");
-            try (FileOutputStream fos = new FileOutputStream(destFile)) {
-                scaled.compress(Bitmap.CompressFormat.JPEG, 88, fos);
-                fos.flush();
-            }
-
-            currentProfilePicPath = destFile.getAbsolutePath();
-            accountStore.updateProfilePicPath(activeAccountId, currentProfilePicPath);
-            renderProfilePhoto();
-        } catch (Throwable t) {
+        String compressedPath = ImageUtils.compressAndSaveImage(
+                this,
+                uri,
+                "profile_" + activeAccountId,
+                currentProfilePicPath
+        );
+        if (compressedPath == null) {
             showMessage(binding.getRoot(), R.string.profile_photo_error);
-        }
-    }
-
-    @Nullable
-    private Bitmap decodeAndScaleFromUri(@NonNull Uri uri, int maxDimension) throws Exception {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            ImageDecoder.Source source = ImageDecoder.createSource(getContentResolver(), uri);
-            return ImageDecoder.decodeBitmap(source, (decoder, info, src) -> {
-                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
-                int width = info.getSize().getWidth();
-                int height = info.getSize().getHeight();
-                if (width > maxDimension || height > maxDimension) {
-                    float ratio = Math.min((float) maxDimension / width, (float) maxDimension / height);
-                    int targetWidth = Math.max(1, Math.round(width * ratio));
-                    int targetHeight = Math.max(1, Math.round(height * ratio));
-                    decoder.setTargetSize(targetWidth, targetHeight);
-                }
-            });
+            return;
         }
 
-        // Fallback for API 26-27: two-pass sampled decode
-        BitmapFactory.Options boundsOptions = new BitmapFactory.Options();
-        boundsOptions.inJustDecodeBounds = true;
-        try (InputStream boundsStream = getContentResolver().openInputStream(uri)) {
-            if (boundsStream == null) return null;
-            BitmapFactory.decodeStream(boundsStream, null, boundsOptions);
-        }
-
-        int sampleSize = 1;
-        int outW = boundsOptions.outWidth;
-        int outH = boundsOptions.outHeight;
-        while ((outW / sampleSize) > maxDimension * 2 || (outH / sampleSize) > maxDimension * 2) {
-            sampleSize *= 2;
-        }
-
-        BitmapFactory.Options decodeOptions = new BitmapFactory.Options();
-        decodeOptions.inSampleSize = sampleSize;
-        decodeOptions.inPreferredConfig = Bitmap.Config.ARGB_8888;
-
-        Bitmap decoded;
-        try (InputStream decodeStream = getContentResolver().openInputStream(uri)) {
-            if (decodeStream == null) return null;
-            decoded = BitmapFactory.decodeStream(decodeStream, null, decodeOptions);
-        }
-
-        if (decoded == null) return null;
-        return scaleBitmapDown(decoded, maxDimension);
-    }
-
-    private Bitmap scaleBitmapDown(Bitmap realImage, int maxImageSize) {
-        float ratio = Math.min(
-                (float) maxImageSize / realImage.getWidth(),
-                (float) maxImageSize / realImage.getHeight());
-        if (ratio >= 1.0f) return realImage;
-        int width = Math.max(1, Math.round(ratio * realImage.getWidth()));
-        int height = Math.max(1, Math.round(ratio * realImage.getHeight()));
-        return Bitmap.createScaledBitmap(realImage, width, height, true);
+        currentProfilePicPath = compressedPath;
+        accountStore.updateProfilePicPath(activeAccountId, currentProfilePicPath);
+        renderProfilePhoto();
     }
 
     private void saveProfile() {
