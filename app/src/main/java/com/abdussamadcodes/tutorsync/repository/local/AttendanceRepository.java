@@ -6,13 +6,13 @@ import android.database.sqlite.SQLiteDatabase;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
 import com.abdussamadcodes.tutorsync.model.AttendanceRecord;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.ScheduleFeeHistoryEntry;
 
 public class AttendanceRepository {
 
@@ -37,16 +37,21 @@ public class AttendanceRepository {
         }
     }
 
-    /**
-     * Resolves [billingModel, feeAmountMinor] for an occurrence using a 4-step fallback:
-     * 1. schedule_fee_history effective on the day of occDate (end-of-day inclusive)
-     * 2. Latest schedule_fee_history for scheduleGroupId
-     * 3. Active recurring_schedules by scheduleId, scheduleGroupId, or (studentId + startTimeMinutes)
-     * 4. Legacy fee_agreements for studentId
-     */
     @NonNull
     public static String[] resolveBillingForOccurrence(
             @NonNull SQLiteDatabase db,
+            @Nullable String studentId,
+            @Nullable String scheduleId,
+            @Nullable String scheduleGroupId,
+            int startTimeMinutes,
+            long occDateMillis) {
+        return resolveBillingForOccurrence(db, null, studentId, scheduleId, scheduleGroupId, startTimeMinutes, occDateMillis);
+    }
+
+    @NonNull
+    public static String[] resolveBillingForOccurrence(
+            @NonNull SQLiteDatabase db,
+            @Nullable String accountId,
             @Nullable String studentId,
             @Nullable String scheduleId,
             @Nullable String scheduleGroupId,
@@ -56,17 +61,22 @@ public class AttendanceRepository {
         String billingModel = null;
         int feeMinor = 0;
         long endOfDayMillis = occDateMillis + 86_399_999L;
+        String accFilter = (accountId != null && !accountId.isEmpty()) ? accountId : null;
 
         // 1. Check schedule_fee_history at end of occurrence day
         if (scheduleGroupId != null && !scheduleGroupId.isEmpty()) {
+            String sel = (accFilter != null ? ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " : "") +
+                    ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
+                    ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " <= ? AND (" +
+                    ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL OR " +
+                    ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " >= ?)";
+            String[] args = accFilter != null
+                    ? new String[]{accFilter, scheduleGroupId, String.valueOf(endOfDayMillis), String.valueOf(occDateMillis)}
+                    : new String[]{scheduleGroupId, String.valueOf(endOfDayMillis), String.valueOf(occDateMillis)};
+
             try (Cursor hc = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
                     new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR},
-                    ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
-                            ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " <= ? AND (" +
-                            ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL OR " +
-                            ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " >= ?)",
-                    new String[]{scheduleGroupId, String.valueOf(endOfDayMillis), String.valueOf(occDateMillis)},
-                    null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
+                    sel, args, null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
                 if (hc.moveToFirst()) {
                     billingModel = hc.getString(0);
                     feeMinor = hc.getInt(1);
@@ -75,11 +85,12 @@ public class AttendanceRepository {
 
             // 2. Fallback to latest schedule_fee_history for this group
             if (billingModel == null || feeMinor <= 0) {
+                String sel2 = (accFilter != null ? ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " : "") +
+                        ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?";
+                String[] args2 = accFilter != null ? new String[]{accFilter, scheduleGroupId} : new String[]{scheduleGroupId};
                 try (Cursor hc = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
                         new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR},
-                        ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?",
-                        new String[]{scheduleGroupId},
-                        null, null, ScheduleFeeHistoryEntry.COLUMN_CREATED_AT + " DESC", "1")) {
+                        sel2, args2, null, null, ScheduleFeeHistoryEntry.COLUMN_CREATED_AT + " DESC", "1")) {
                     if (hc.moveToFirst()) {
                         billingModel = hc.getString(0);
                         feeMinor = hc.getInt(1);
@@ -90,9 +101,12 @@ public class AttendanceRepository {
 
         // 3. Fallback to recurring_schedules (by schedule_id, schedule_group_id, or student_id)
         if ((billingModel == null || feeMinor <= 0) && scheduleId != null) {
+            String sel = (accFilter != null ? ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " : "") +
+                    ScheduleEntry.COLUMN_ID + " = ?";
+            String[] args = accFilter != null ? new String[]{accFilter, scheduleId} : new String[]{scheduleId};
             try (Cursor sc = db.query(ScheduleEntry.TABLE_NAME,
                     new String[]{ScheduleEntry.COLUMN_BILLING_MODEL, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR},
-                    ScheduleEntry.COLUMN_ID + " = ?", new String[]{scheduleId}, null, null, null, "1")) {
+                    sel, args, null, null, null, "1")) {
                 if (sc.moveToFirst()) {
                     billingModel = sc.getString(0);
                     feeMinor = sc.getInt(1);
@@ -101,9 +115,12 @@ public class AttendanceRepository {
         }
 
         if ((billingModel == null || feeMinor <= 0) && scheduleGroupId != null) {
+            String sel = (accFilter != null ? ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " : "") +
+                    ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?";
+            String[] args = accFilter != null ? new String[]{accFilter, scheduleGroupId} : new String[]{scheduleGroupId};
             try (Cursor sc = db.query(ScheduleEntry.TABLE_NAME,
                     new String[]{ScheduleEntry.COLUMN_BILLING_MODEL, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR},
-                    ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?", new String[]{scheduleGroupId}, null, null, null, "1")) {
+                    sel, args, null, null, null, "1")) {
                 if (sc.moveToFirst()) {
                     billingModel = sc.getString(0);
                     feeMinor = sc.getInt(1);
@@ -112,11 +129,14 @@ public class AttendanceRepository {
         }
 
         if ((billingModel == null || feeMinor <= 0) && studentId != null) {
+            String sel = (accFilter != null ? ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " : "") +
+                    ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " + ScheduleEntry.COLUMN_START_TIME_MINUTES + " = ?";
+            String[] args = accFilter != null
+                    ? new String[]{accFilter, studentId, String.valueOf(startTimeMinutes)}
+                    : new String[]{studentId, String.valueOf(startTimeMinutes)};
             try (Cursor sc = db.query(ScheduleEntry.TABLE_NAME,
                     new String[]{ScheduleEntry.COLUMN_BILLING_MODEL, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR},
-                    ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " + ScheduleEntry.COLUMN_START_TIME_MINUTES + " = ?",
-                    new String[]{studentId, String.valueOf(startTimeMinutes)},
-                    null, null, ScheduleEntry.COLUMN_UPDATED_AT + " DESC", "1")) {
+                    sel, args, null, null, ScheduleEntry.COLUMN_UPDATED_AT + " DESC", "1")) {
                 if (sc.moveToFirst()) {
                     billingModel = sc.getString(0);
                     feeMinor = sc.getInt(1);
@@ -125,11 +145,12 @@ public class AttendanceRepository {
         }
 
         if ((billingModel == null || feeMinor <= 0) && studentId != null) {
+            String sel = (accFilter != null ? ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " : "") +
+                    ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " + ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR + " > 0";
+            String[] args = accFilter != null ? new String[]{accFilter, studentId} : new String[]{studentId};
             try (Cursor sc = db.query(ScheduleEntry.TABLE_NAME,
                     new String[]{ScheduleEntry.COLUMN_BILLING_MODEL, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR},
-                    ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " + ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR + " > 0",
-                    new String[]{studentId},
-                    null, null, ScheduleEntry.COLUMN_UPDATED_AT + " DESC", "1")) {
+                    sel, args, null, null, ScheduleEntry.COLUMN_UPDATED_AT + " DESC", "1")) {
                 if (sc.moveToFirst()) {
                     billingModel = sc.getString(0);
                     feeMinor = sc.getInt(1);
@@ -139,9 +160,12 @@ public class AttendanceRepository {
 
         // 4. Fallback to legacy student fee_agreements
         if ((billingModel == null || feeMinor <= 0) && studentId != null) {
+            String sel = (accFilter != null ? FeeAgreementEntry.COLUMN_ACCOUNT_ID + " = ? AND " : "") +
+                    FeeAgreementEntry.COLUMN_STUDENT_ID + " = ?";
+            String[] args = accFilter != null ? new String[]{accFilter, studentId} : new String[]{studentId};
             try (Cursor fc = db.query(FeeAgreementEntry.TABLE_NAME,
                     new String[]{FeeAgreementEntry.COLUMN_FEE_TYPE, FeeAgreementEntry.COLUMN_AMOUNT_MINOR},
-                    FeeAgreementEntry.COLUMN_STUDENT_ID + " = ?", new String[]{studentId}, null, null, null, "1")) {
+                    sel, args, null, null, null, "1")) {
                 if (fc.moveToFirst()) {
                     billingModel = fc.getString(0);
                     feeMinor = fc.getInt(1);
@@ -162,6 +186,7 @@ public class AttendanceRepository {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         db.beginTransaction();
         try {
+            String accountId = record.getAccountId();
             String scheduleGroupId = null;
             String studentId = null;
             String subjectId = null;
@@ -171,7 +196,8 @@ public class AttendanceRepository {
             int duration = 60;
 
             try (Cursor oc = db.query(OccurrenceEntry.TABLE_NAME, null,
-                    OccurrenceEntry.COLUMN_ID + " = ?", new String[]{record.getOccurrenceId()}, null, null, null)) {
+                    OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_ID + " = ?",
+                    new String[]{accountId, record.getOccurrenceId()}, null, null, null)) {
                 if (oc.moveToFirst()) {
                     studentId = oc.getString(oc.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_STUDENT_ID));
                     subjectId = oc.getString(oc.getColumnIndexOrThrow(OccurrenceEntry.COLUMN_SUBJECT_ID));
@@ -183,7 +209,7 @@ public class AttendanceRepository {
                 }
             }
 
-            String[] resolved = resolveBillingForOccurrence(db, studentId, scheduleId, scheduleGroupId, startTimeMinutes, occDate);
+            String[] resolved = resolveBillingForOccurrence(db, accountId, studentId, scheduleId, scheduleGroupId, startTimeMinutes, occDate);
             String billingModel = resolved[0];
             int applicableFeeMinor = record.getApplicableFeeMinor() > 0
                     ? record.getApplicableFeeMinor() : Integer.parseInt(resolved[1]);
@@ -195,7 +221,6 @@ public class AttendanceRepository {
                 finalDecision = AttendanceRecord.DECISION_INCLUDED_MONTHLY;
                 applicableFeeMinor = 0;
             } else {
-                // PER_CLASS rules
                 if (AttendanceRecord.DECISION_WAIVE.equals(finalDecision)) {
                     applicableFeeMinor = 0;
                 } else if (AttendanceRecord.STATUS_PRESENT.equals(status) || AttendanceRecord.STATUS_STUDENT_ABSENT.equals(status)) {
@@ -206,12 +231,15 @@ public class AttendanceRepository {
                 }
             }
 
+            long now = System.currentTimeMillis();
+            long modTime = record.getUpdatedAt() > 0 ? record.getUpdatedAt() : now;
+
             String makeupOccId = record.getMakeupOccurrenceId();
             if (scheduleMakeupClass && makeupDateMillis > 0 && studentId != null) {
                 makeupOccId = UUID.randomUUID().toString();
                 ContentValues occVal = new ContentValues();
                 occVal.put(OccurrenceEntry.COLUMN_ID, makeupOccId);
-                occVal.put(OccurrenceEntry.COLUMN_ACCOUNT_ID, record.getAccountId());
+                occVal.put(OccurrenceEntry.COLUMN_ACCOUNT_ID, accountId);
                 occVal.put(OccurrenceEntry.COLUMN_STUDENT_ID, studentId);
                 occVal.put(OccurrenceEntry.COLUMN_SUBJECT_ID, subjectId);
                 occVal.put(OccurrenceEntry.COLUMN_SCHEDULE_ID, scheduleId);
@@ -220,23 +248,59 @@ public class AttendanceRepository {
                 occVal.put(OccurrenceEntry.COLUMN_START_TIME_MINUTES, makeupStartMinutes);
                 occVal.put(OccurrenceEntry.COLUMN_DURATION_MINUTES, duration);
                 occVal.put(OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID, record.getOccurrenceId());
+                occVal.put(OccurrenceEntry.COLUMN_CREATED_AT, modTime);
+                occVal.put(OccurrenceEntry.COLUMN_UPDATED_AT, modTime);
+                occVal.put(OccurrenceEntry.COLUMN_LAST_MODIFIED, modTime);
                 db.insert(OccurrenceEntry.TABLE_NAME, null, occVal);
             }
 
+            String existingId = null;
+            long existingCreatedAt = modTime;
+            String existingBilledItemId = record.getBilledInvoiceItemId();
+
+            try (Cursor ec = db.query(AttendanceEntry.TABLE_NAME,
+                    new String[]{AttendanceEntry.COLUMN_ID, AttendanceEntry.COLUMN_CREATED_AT, AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID},
+                    AttendanceEntry.COLUMN_ACCOUNT_ID + " = ? AND (" +
+                            AttendanceEntry.COLUMN_ID + " = ? OR " +
+                            AttendanceEntry.COLUMN_OCCURRENCE_ID + " = ?)",
+                    new String[]{accountId, record.getId(), record.getOccurrenceId()}, null, null, null)) {
+                if (ec.moveToFirst()) {
+                    existingId = ec.getString(0);
+                    if (!ec.isNull(1) && ec.getLong(1) > 0) {
+                        existingCreatedAt = ec.getLong(1);
+                    }
+                    if (existingBilledItemId == null && !ec.isNull(2)) {
+                        existingBilledItemId = ec.getString(2);
+                    }
+                }
+            }
+
+            String targetId = existingId != null ? existingId : TutorSyncContract.ensureValidUuid(record.getId());
+
             ContentValues values = new ContentValues();
-            values.put(AttendanceEntry.COLUMN_ID, record.getId());
-            values.put(AttendanceEntry.COLUMN_ACCOUNT_ID, record.getAccountId());
+            values.put(AttendanceEntry.COLUMN_ID, targetId);
+            values.put(AttendanceEntry.COLUMN_ACCOUNT_ID, accountId);
             values.put(AttendanceEntry.COLUMN_OCCURRENCE_ID, record.getOccurrenceId());
             values.put(AttendanceEntry.COLUMN_STATUS, status);
             values.put(AttendanceEntry.COLUMN_CHARGE_DECISION, finalDecision);
             values.put(AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR, applicableFeeMinor);
             values.put(AttendanceEntry.COLUMN_NEEDS_RESCHEDULE, record.isNeedsReschedule() ? 1 : 0);
             values.put(AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID, makeupOccId);
-            values.put(AttendanceEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+            values.put(AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID, existingBilledItemId);
+            values.put(AttendanceEntry.COLUMN_CREATED_AT, existingCreatedAt);
+            values.put(AttendanceEntry.COLUMN_UPDATED_AT, modTime);
+            values.put(AttendanceEntry.COLUMN_LAST_MODIFIED, modTime);
 
-            long rowId = db.insertWithOnConflict(AttendanceEntry.TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            boolean ok;
+            if (existingId != null) {
+                ok = db.update(AttendanceEntry.TABLE_NAME, values,
+                        AttendanceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + AttendanceEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, existingId}) > 0;
+            } else {
+                ok = db.insert(AttendanceEntry.TABLE_NAME, null, values) != -1;
+            }
             db.setTransactionSuccessful();
-            return rowId != -1 ? 1 : 0;
+            return ok ? 1 : 0;
         } catch (Exception e) {
             return 0;
         } finally {
@@ -249,16 +313,11 @@ public class AttendanceRepository {
         return recordAttendanceWithBilling(record, false, -1L, 0);
     }
 
-    /**
-     * Returns all attended / chargeable per-class records for a student (both unbilled and billed)
-     * so the tutor can see immediate per-class charges in the Student Fee Hub.
-     */
     @NonNull
     public List<UnbilledClassCharge> getPerClassAttendanceChargesForStudent(@NonNull String accountId, @NonNull String studentId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         List<UnbilledClassCharge> list = new ArrayList<>();
 
-        // First heal any misclassified per-class attendance rows for this student
         healPerClassAttendanceRecords(db, accountId, studentId);
 
         String sql = "SELECT a." + AttendanceEntry.COLUMN_ID + ", o." + OccurrenceEntry.COLUMN_ID + ", " +
@@ -266,7 +325,9 @@ public class AttendanceRepository {
                 "a." + AttendanceEntry.COLUMN_STATUS + ", a." + AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR + ", " +
                 "a." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " " +
                 "FROM " + AttendanceEntry.TABLE_NAME + " a " +
-                "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o " +
+                "ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                "AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " " +
                 "WHERE o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ? " +
                 "AND a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = 'CHARGE' " +
                 "GROUP BY o." + OccurrenceEntry.COLUMN_DATE + ", o." + OccurrenceEntry.COLUMN_START_TIME_MINUTES + " " +
@@ -290,23 +351,24 @@ public class AttendanceRepository {
         return list;
     }
 
-    /**
-     * Auto-heals any attendance records where the student's schedule is PER_CLASS but the attendance
-     * record was previously saved with 0 fee or INCLUDED_IN_MONTHLY due to midnight timestamp comparison.
-     */
     public static void healPerClassAttendanceRecords(@NonNull SQLiteDatabase db, @NonNull String accountId, @Nullable String studentFilterId) {
-        String whereStudent = studentFilterId != null ? " AND o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = '" + studentFilterId + "' " : "";
         String sql = "SELECT a." + AttendanceEntry.COLUMN_ID + ", o." + OccurrenceEntry.COLUMN_STUDENT_ID + ", " +
                 "o." + OccurrenceEntry.COLUMN_SCHEDULE_ID + ", o." + OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID + ", " +
                 "o." + OccurrenceEntry.COLUMN_START_TIME_MINUTES + ", o." + OccurrenceEntry.COLUMN_DATE + ", " +
                 "a." + AttendanceEntry.COLUMN_STATUS + ", a." + AttendanceEntry.COLUMN_CHARGE_DECISION + ", " +
                 "a." + AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR + " " +
                 "FROM " + AttendanceEntry.TABLE_NAME + " a " +
-                "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o " +
+                "ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                "AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " " +
                 "WHERE o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? " +
-                "AND a." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " IS NULL" + whereStudent;
+                "AND a." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " IS NULL" +
+                (studentFilterId != null ? " AND o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ?" : "");
 
-        try (Cursor c = db.rawQuery(sql, new String[]{accountId})) {
+        String[] args = studentFilterId != null ? new String[]{accountId, studentFilterId} : new String[]{accountId};
+
+        long now = System.currentTimeMillis();
+        try (Cursor c = db.rawQuery(sql, args)) {
             while (c.moveToNext()) {
                 String attId = c.getString(0);
                 String stuId = c.getString(1);
@@ -318,7 +380,7 @@ public class AttendanceRepository {
                 String decision = c.getString(7);
                 int feeMinor = c.getInt(8);
 
-                String[] resolved = resolveBillingForOccurrence(db, stuId, schedId, groupId, startMin, occDate);
+                String[] resolved = resolveBillingForOccurrence(db, accountId, stuId, schedId, groupId, startMin, occDate);
                 String model = resolved[0];
                 int resolvedFee = Integer.parseInt(resolved[1]);
 
@@ -328,11 +390,52 @@ public class AttendanceRepository {
                         ContentValues up = new ContentValues();
                         up.put(AttendanceEntry.COLUMN_CHARGE_DECISION, AttendanceRecord.DECISION_CHARGE);
                         up.put(AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR, resolvedFee);
-                        db.update(AttendanceEntry.TABLE_NAME, up, AttendanceEntry.COLUMN_ID + " = ?", new String[]{attId});
+                        up.put(AttendanceEntry.COLUMN_UPDATED_AT, now);
+                        up.put(AttendanceEntry.COLUMN_LAST_MODIFIED, now);
+                        db.update(AttendanceEntry.TABLE_NAME, up,
+                                AttendanceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + AttendanceEntry.COLUMN_ID + " = ?",
+                                new String[]{accountId, attId});
                     }
                 }
             }
         }
+    }
+
+    public int getPresentCountForStudentThisMonth(@NonNull String accountId, @NonNull String studentId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        int chargeableCount = 0;
+
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.DAY_OF_MONTH, 1);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        long startOfMonth = cal.getTimeInMillis();
+
+        cal.add(Calendar.MONTH, 1);
+        long endOfMonth = cal.getTimeInMillis();
+
+        String query = "SELECT COUNT(DISTINCT o." + OccurrenceEntry.COLUMN_DATE + " || '-' || o." + OccurrenceEntry.COLUMN_START_TIME_MINUTES + ") " +
+                "FROM " + AttendanceEntry.TABLE_NAME + " a " +
+                "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o " +
+                "ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                "AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " " +
+                "WHERE o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                "AND o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ? " +
+                "AND a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = 'CHARGE' " +
+                "AND o." + OccurrenceEntry.COLUMN_DATE + " >= ? " +
+                "AND o." + OccurrenceEntry.COLUMN_DATE + " < ?";
+
+        try (Cursor cursor = db.rawQuery(query,
+                new String[]{accountId, studentId, String.valueOf(startOfMonth), String.valueOf(endOfMonth)})) {
+            if (cursor.moveToFirst()) {
+                chargeableCount = cursor.getInt(0);
+            }
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+        return chargeableCount;
     }
 
     public int getPresentCountForStudentThisMonth(@NonNull String studentId) {
@@ -352,13 +455,16 @@ public class AttendanceRepository {
 
         String query = "SELECT COUNT(DISTINCT o." + OccurrenceEntry.COLUMN_DATE + " || '-' || o." + OccurrenceEntry.COLUMN_START_TIME_MINUTES + ") " +
                 "FROM " + AttendanceEntry.TABLE_NAME + " a " +
-                "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o " +
+                "ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                "AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " " +
                 "WHERE o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ? " +
                 "AND a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = 'CHARGE' " +
                 "AND o." + OccurrenceEntry.COLUMN_DATE + " >= ? " +
                 "AND o." + OccurrenceEntry.COLUMN_DATE + " < ?";
 
-        try (Cursor cursor = db.rawQuery(query, new String[]{studentId, String.valueOf(startOfMonth), String.valueOf(endOfMonth)})) {
+        try (Cursor cursor = db.rawQuery(query,
+                new String[]{studentId, String.valueOf(startOfMonth), String.valueOf(endOfMonth)})) {
             if (cursor.moveToFirst()) {
                 chargeableCount = cursor.getInt(0);
             }

@@ -152,15 +152,20 @@ public class StudentTransactionsActivity extends BaseActivity {
     private void refreshHistory() {
         contentContainer.removeAllViews();
         String accountId = sessionManager.getActiveAccountId();
+        if (studentId == null || studentId.isEmpty()) {
+            finish();
+            return;
+        }
         studentRepo.migrateLegacyStudentIds(accountId);
-        currentStudent = studentRepo.getStudentById(studentId);
+        currentStudent = !accountId.isEmpty()
+                ? studentRepo.getStudentById(accountId, studentId)
+                : studentRepo.getStudentById(studentId);
         if (currentStudent == null) {
             finish();
             return;
         }
         toolbar.setTitle(currentStudent.getFormattedDisplayName());
 
-        // 1. Fetch schedules & fee agreements for this student
         List<RecurringSchedule> allSchedules = scheduleRepo.getSchedulesForAccount(accountId);
         Map<String, RecurringSchedule> studentScheduleGroups = new LinkedHashMap<>();
         for (RecurringSchedule rs : allSchedules) {
@@ -171,9 +176,10 @@ public class StudentTransactionsActivity extends BaseActivity {
                 }
             }
         }
-        FeeAgreement fallbackAgreement = feeRepo.getAgreementForStudent(studentId);
+        FeeAgreement fallbackAgreement = !accountId.isEmpty()
+                ? feeRepo.getAgreementForStudent(accountId, studentId)
+                : feeRepo.getAgreementForStudent(studentId);
 
-        // 2. Fetch attended per-class charges
         List<UnbilledClassCharge> classCharges = attendanceRepo.getPerClassAttendanceChargesForStudent(accountId, studentId);
         int unbilledClassTotalMinor = 0;
         int unbilledClassCount = 0;
@@ -184,7 +190,6 @@ public class StudentTransactionsActivity extends BaseActivity {
             }
         }
 
-        // 3. Fetch invoices for this student
         List<Invoice> allAccountInvoices = invoiceRepo.getFilteredInvoicesForAccount(accountId, "ALL");
         List<Invoice> studentInvoices = new ArrayList<>();
         List<Invoice> studentOpenInvoices = new ArrayList<>();
@@ -205,7 +210,6 @@ public class StudentTransactionsActivity extends BaseActivity {
         }
         Collections.reverse(studentOpenInvoices);
 
-        // --- CARD 1: Financial Summary Overview ---
         MaterialCardView summaryCard = createSectionCard();
         LinearLayout summaryCol = createCardBody(summaryCard);
         addCardHeader(summaryCol, getString(R.string.ledger_financial_overview));
@@ -217,7 +221,6 @@ public class StudentTransactionsActivity extends BaseActivity {
                 totalInvoicedMinor / 100.0, totalPaidMinor / 100.0), false);
         contentContainer.addView(summaryCard);
 
-        // --- CARD 2: Active Fee Rate & Schedules ---
         MaterialCardView feeCard = createSectionCard();
         LinearLayout feeCol = createCardBody(feeCard);
         addCardHeader(feeCol, getString(R.string.ledger_fee_rate_header));
@@ -236,7 +239,6 @@ public class StudentTransactionsActivity extends BaseActivity {
                 String modelStr = formatBillingModelLabel(modelCode);
                 TextView row = addBodyLine(feeCol, getString(R.string.ledger_schedule_fee_row_fmt,
                         timeStr, feeVal / 100.0, modelStr), false);
-                // Tapping a schedule row opens the fee sheet pre-selected to that schedule
                 row.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, groupKey));
             }
         } else if (fallbackAgreement != null) {
@@ -253,7 +255,6 @@ public class StudentTransactionsActivity extends BaseActivity {
         feeCol.addView(btnEditFee);
         contentContainer.addView(feeCard);
 
-        // --- CARD 3: Attended Classes & Per-Class Charges ---
         MaterialCardView attendanceCard = createSectionCard();
         LinearLayout attCol = createCardBody(attendanceCard);
         addCardHeader(attCol, getString(R.string.ledger_attended_classes_header));
@@ -288,7 +289,6 @@ public class StudentTransactionsActivity extends BaseActivity {
         attCol.addView(btnGenInvoice);
         contentContainer.addView(attendanceCard);
 
-        // --- CARD 4: Student Invoices ---
         MaterialCardView invCard = createSectionCard();
         LinearLayout invCol = createCardBody(invCard);
         addCardHeader(invCol, getString(R.string.ledger_student_invoices_header));
@@ -321,7 +321,6 @@ public class StudentTransactionsActivity extends BaseActivity {
         }
         contentContainer.addView(invCard);
 
-        // --- CARD 5: Transactions (Payments & Refunds) ---
         MaterialCardView txnCard = createSectionCard();
         LinearLayout txnCol = createCardBody(txnCard);
         addCardHeader(txnCol, getString(R.string.invoice_payment_history));
@@ -346,10 +345,6 @@ public class StudentTransactionsActivity extends BaseActivity {
         contentContainer.addView(txnCard);
     }
 
-    /**
-     * Displays the bottom sheet to update a student's fee rate.
-     * When the student has schedules, shows selectable chips so the tutor chooses which schedule to update.
-     */
     private void showFeeRateBottomSheet(
             Map<String, RecurringSchedule> scheduleGroups,
             @Nullable FeeAgreement existing,

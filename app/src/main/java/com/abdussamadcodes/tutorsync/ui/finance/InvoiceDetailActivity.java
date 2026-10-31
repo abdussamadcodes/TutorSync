@@ -116,14 +116,18 @@ public class InvoiceDetailActivity extends BaseActivity {
 
     private void refreshDetails() {
         rootContent.removeAllViews();
-        currentInvoice = invoiceRepo.getInvoiceById(invoiceId);
+        String accountId = sessionManager.getActiveAccountId();
+        currentInvoice = !accountId.isEmpty()
+                ? invoiceRepo.getInvoiceById(accountId, invoiceId)
+                : invoiceRepo.getInvoiceById(invoiceId);
         if (currentInvoice == null) {
             finish();
             return;
         }
-        currentStudent = studentRepo.getStudentById(currentInvoice.getStudentId());
-        currentItems = invoiceRepo.getItemsForInvoice(invoiceId);
-        currentTransactions = txnRepo.getTransactionsForInvoice(invoiceId);
+        String invAccount = currentInvoice.getAccountId();
+        currentStudent = studentRepo.getStudentById(invAccount, currentInvoice.getStudentId());
+        currentItems = invoiceRepo.getItemsForInvoice(invAccount, invoiceId);
+        currentTransactions = txnRepo.getTransactionsForInvoice(invAccount, invoiceId);
 
         SimpleDateFormat df = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
         SimpleDateFormat dtf = new SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault());
@@ -221,7 +225,7 @@ public class InvoiceDetailActivity extends BaseActivity {
                             return;
                         }
                         FinancialTransaction txn = txnRepo.recordPaymentWithAllocations(
-                                sessionManager.getActiveAccountId(),
+                                currentInvoice.getAccountId(),
                                 currentInvoice.getStudentId(),
                                 amountMinor,
                                 spMethod.getSelectedItem().toString(),
@@ -259,7 +263,7 @@ public class InvoiceDetailActivity extends BaseActivity {
                         }
                     } else if (which == 1 && FinancialTransaction.TYPE_PAYMENT.equals(txn.getType())) {
                         boolean ok = txnRepo.recordRefundForTransaction(
-                                sessionManager.getActiveAccountId(), txn.getId(), txn.getAmountMinor(), "Tutor refund");
+                                currentInvoice.getAccountId(), txn.getId(), txn.getAmountMinor(), "Tutor refund");
                         if (ok) {
                             showMessage(rootContent, getString(R.string.invoice_refund_saved_msg));
                             refreshDetails();

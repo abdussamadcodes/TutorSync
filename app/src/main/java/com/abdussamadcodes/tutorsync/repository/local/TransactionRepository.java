@@ -40,10 +40,6 @@ public class TransactionRepository {
         return prefix + String.format(Locale.US, "%06d", nextNumber);
     }
 
-    /**
-     * Records a payment and allocates it across one or more invoices (FIFO or explicit map).
-     * Automatically synchronizes legacy mirror columns on invoices while keeping payment_allocations authoritative.
-     */
     @Nullable
     public FinancialTransaction recordPaymentWithAllocations(
             @NonNull String accountId,
@@ -83,11 +79,13 @@ public class TransactionRepository {
             tv.put(TransactionEntry.COLUMN_NOTES, notes);
             tv.put(TransactionEntry.COLUMN_IS_REVERSED, 0);
             tv.put(TransactionEntry.COLUMN_CREATED_AT, now);
+            tv.put(TransactionEntry.COLUMN_UPDATED_AT, now);
+            tv.put(TransactionEntry.COLUMN_LAST_MODIFIED, now);
             db.insertOrThrow(TransactionEntry.TABLE_NAME, null, tv);
 
             FinancialTransaction created = new FinancialTransaction(
                     txnId, accountId, studentId, displayId, FinancialTransaction.TYPE_PAYMENT,
-                    totalPaymentMinor, now, method, referenceNo, notes, null, false, now
+                    totalPaymentMinor, now, method, referenceNo, notes, null, false, now, now
             );
 
             for (Map.Entry<String, Integer> entry : invoiceAllocationsMinor.entrySet()) {
@@ -101,9 +99,11 @@ public class TransactionRepository {
                 av.put(PaymentAllocationEntry.COLUMN_INVOICE_ID, invoiceId);
                 av.put(PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, allocMinor);
                 av.put(PaymentAllocationEntry.COLUMN_CREATED_AT, now);
+                av.put(PaymentAllocationEntry.COLUMN_UPDATED_AT, now);
+                av.put(PaymentAllocationEntry.COLUMN_LAST_MODIFIED, now);
                 db.insertOrThrow(PaymentAllocationEntry.TABLE_NAME, null, av);
 
-                syncInvoiceMirrorColumns(db, invoiceId);
+                syncInvoiceMirrorColumns(db, accountId, invoiceId);
             }
 
             InvoiceRepository.logAudit(db, accountId, studentId, "TRANSACTION", txnId, "PAYMENT_RECEIVED",
@@ -119,9 +119,6 @@ public class TransactionRepository {
         }
     }
 
-    /**
-     * Allocates a lump-sum student payment automatically across their oldest unpaid/partially-paid invoices (FIFO).
-     */
     @Nullable
     public FinancialTransaction recordStudentLumpSumPaymentFIFO(
             @NonNull String accountId,
@@ -144,15 +141,11 @@ public class TransactionRepository {
             remaining -= alloc;
         }
         if (remaining > 0 || allocations.isEmpty()) {
-            return null; // Rejects overpayment exceeding total outstanding student dues
+            return null;
         }
         return recordPaymentWithAllocations(accountId, studentId, paymentAmountMinor, method, referenceNo, notes, allocations);
     }
 
-    /**
-     * Records a refund or payment reversal with negative payment_allocations and a permanent audit trail.
-     * Prevents refunding reversed transactions, refunding non-payment transactions, or exceeding remaining refundable balance.
-     */
     public boolean recordRefundForTransaction(
             @NonNull String accountId,
             @NonNull String originalTransactionId,
@@ -162,11 +155,11 @@ public class TransactionRepository {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         db.beginTransaction();
         try {
-            String studentId = null;
-            String method = "Cash";
-            String origType = null;
-            boolean origReversed = false;
-            int origAmount = 0;
+            String studentId;
+            String method;
+            String origType;
+            boolean origReversed;
+            int origAmount;
 
             try (Cursor c = db.query(TransactionEntry.TABLE_NAME, null,
                     TransactionEntry.COLUMN_ID + " = ? AND " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ?",
@@ -219,25 +212,31 @@ public class TransactionRepository {
             tv.put(TransactionEntry.COLUMN_PARENT_TXN_ID, originalTransactionId);
             tv.put(TransactionEntry.COLUMN_IS_REVERSED, 0);
             tv.put(TransactionEntry.COLUMN_CREATED_AT, now);
+            tv.put(TransactionEntry.COLUMN_UPDATED_AT, now);
+            tv.put(TransactionEntry.COLUMN_LAST_MODIFIED, now);
             db.insertOrThrow(TransactionEntry.TABLE_NAME, null, tv);
 
-            // Compute net remaining allocation per invoice for this original transaction
             int remainingToDeallocate = refundAmountMinor;
             String netAllocSql =
                     "SELECT pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + ", " +
                             "pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + " + COALESCE((" +
                             "   SELECT SUM(rpa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + ") " +
                             "   FROM " + PaymentAllocationEntry.TABLE_NAME + " rpa " +
-                            "   INNER JOIN " + TransactionEntry.TABLE_NAME + " rt ON rpa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = rt." + TransactionEntry.COLUMN_ID + " " +
-                            "   WHERE rt." + TransactionEntry.COLUMN_PARENT_TXN_ID + " = ? " +
+                            "   INNER JOIN " + TransactionEntry.TABLE_NAME + " rt " +
+                            "   ON rpa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = rt." + TransactionEntry.COLUMN_ID + " " +
+                            "   AND rpa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = rt." + TransactionEntry.COLUMN_ACCOUNT_ID + " " +
+                            "   WHERE rt." + TransactionEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                            "   AND rt." + TransactionEntry.COLUMN_PARENT_TXN_ID + " = ? " +
                             "   AND rt." + TransactionEntry.COLUMN_IS_REVERSED + " = 0 " +
                             "   AND rpa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID +
                             "), 0) AS net_alloc_minor " +
                             "FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
-                            "WHERE pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ? " +
+                            "WHERE pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                            "AND pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ? " +
                             "ORDER BY pa." + PaymentAllocationEntry.COLUMN_CREATED_AT + " DESC";
 
-            try (Cursor ac = db.rawQuery(netAllocSql, new String[]{originalTransactionId, originalTransactionId})) {
+            try (Cursor ac = db.rawQuery(netAllocSql,
+                    new String[]{accountId, originalTransactionId, accountId, originalTransactionId})) {
                 while (ac.moveToNext() && remainingToDeallocate > 0) {
                     String invId = ac.getString(0);
                     int netInvoiceAlloc = Math.max(0, ac.getInt(1));
@@ -252,9 +251,11 @@ public class TransactionRepository {
                     revAlloc.put(PaymentAllocationEntry.COLUMN_INVOICE_ID, invId);
                     revAlloc.put(PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, -dealloc);
                     revAlloc.put(PaymentAllocationEntry.COLUMN_CREATED_AT, now);
+                    revAlloc.put(PaymentAllocationEntry.COLUMN_UPDATED_AT, now);
+                    revAlloc.put(PaymentAllocationEntry.COLUMN_LAST_MODIFIED, now);
                     db.insertOrThrow(PaymentAllocationEntry.TABLE_NAME, null, revAlloc);
 
-                    syncInvoiceMirrorColumns(db, invId);
+                    syncInvoiceMirrorColumns(db, accountId, invId);
                     remainingToDeallocate -= dealloc;
                 }
             }
@@ -272,22 +273,26 @@ public class TransactionRepository {
         }
     }
 
-    private void syncInvoiceMirrorColumns(SQLiteDatabase db, String invoiceId) {
+    private void syncInvoiceMirrorColumns(SQLiteDatabase db, String accountId, String invoiceId) {
         int derivedPaid = 0;
         int totalAmount = 0;
         long dueDate = 0L;
         try (Cursor c = db.rawQuery(
                 "SELECT COALESCE(SUM(pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + "), 0) " +
                         "FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
-                        "INNER JOIN " + TransactionEntry.TABLE_NAME + " t ON pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = t." + TransactionEntry.COLUMN_ID + " " +
-                        "WHERE pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? " +
+                        "INNER JOIN " + TransactionEntry.TABLE_NAME + " t " +
+                        "ON pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = t." + TransactionEntry.COLUMN_ID + " " +
+                        "AND pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = t." + TransactionEntry.COLUMN_ACCOUNT_ID + " " +
+                        "WHERE pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                        "AND pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? " +
                         "AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0",
-                new String[]{invoiceId})) {
+                new String[]{accountId, invoiceId})) {
             if (c.moveToFirst()) derivedPaid = Math.max(0, c.getInt(0));
         }
         try (Cursor c = db.query(InvoiceEntry.TABLE_NAME,
                 new String[]{InvoiceEntry.COLUMN_TOTAL_AMOUNT, InvoiceEntry.COLUMN_DUE_DATE},
-                InvoiceEntry.COLUMN_ID + " = ?", new String[]{invoiceId}, null, null, null)) {
+                InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, invoiceId}, null, null, null)) {
             if (c.moveToFirst()) {
                 totalAmount = c.getInt(0);
                 dueDate = c.getLong(1);
@@ -308,7 +313,10 @@ public class TransactionRepository {
         iv.put(InvoiceEntry.COLUMN_PAID_AMOUNT, derivedPaid);
         iv.put(InvoiceEntry.COLUMN_STATUS, status);
         iv.put(InvoiceEntry.COLUMN_UPDATED_AT, now);
-        db.update(InvoiceEntry.TABLE_NAME, iv, InvoiceEntry.COLUMN_ID + " = ?", new String[]{invoiceId});
+        iv.put(InvoiceEntry.COLUMN_LAST_MODIFIED, now);
+        db.update(InvoiceEntry.TABLE_NAME, iv,
+                InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, invoiceId});
     }
 
     @NonNull
@@ -320,7 +328,30 @@ public class TransactionRepository {
                 new String[]{accountId, studentId}, null, null, TransactionEntry.COLUMN_TIMESTAMP + " DESC")) {
             while (c.moveToNext()) {
                 FinancialTransaction txn = mapCursorToTransaction(c);
-                populateRelatedInvoiceDisplayIds(db, txn);
+                populateRelatedInvoiceDisplayIds(db, accountId, txn);
+                list.add(txn);
+            }
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+        return list;
+    }
+
+    @NonNull
+    public List<FinancialTransaction> getTransactionsForInvoice(@NonNull String accountId, @NonNull String invoiceId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        List<FinancialTransaction> list = new ArrayList<>();
+        String sql = "SELECT DISTINCT t.* FROM " + TransactionEntry.TABLE_NAME + " t " +
+                "INNER JOIN " + PaymentAllocationEntry.TABLE_NAME + " pa " +
+                "ON t." + TransactionEntry.COLUMN_ID + " = pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " " +
+                "AND t." + TransactionEntry.COLUMN_ACCOUNT_ID + " = pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " " +
+                "WHERE pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                "AND pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? " +
+                "ORDER BY t." + TransactionEntry.COLUMN_TIMESTAMP + " DESC";
+        try (Cursor c = db.rawQuery(sql, new String[]{accountId, invoiceId})) {
+            while (c.moveToNext()) {
+                FinancialTransaction txn = mapCursorToTransaction(c);
+                populateRelatedInvoiceDisplayIds(db, accountId, txn);
                 list.add(txn);
             }
         } finally {
@@ -334,13 +365,15 @@ public class TransactionRepository {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         List<FinancialTransaction> list = new ArrayList<>();
         String sql = "SELECT DISTINCT t.* FROM " + TransactionEntry.TABLE_NAME + " t " +
-                "INNER JOIN " + PaymentAllocationEntry.TABLE_NAME + " pa ON t." + TransactionEntry.COLUMN_ID + " = pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " " +
+                "INNER JOIN " + PaymentAllocationEntry.TABLE_NAME + " pa " +
+                "ON t." + TransactionEntry.COLUMN_ID + " = pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " " +
+                "AND t." + TransactionEntry.COLUMN_ACCOUNT_ID + " = pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " " +
                 "WHERE pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? " +
                 "ORDER BY t." + TransactionEntry.COLUMN_TIMESTAMP + " DESC";
         try (Cursor c = db.rawQuery(sql, new String[]{invoiceId})) {
             while (c.moveToNext()) {
                 FinancialTransaction txn = mapCursorToTransaction(c);
-                populateRelatedInvoiceDisplayIds(db, txn);
+                populateRelatedInvoiceDisplayIds(db, txn.getAccountId(), txn);
                 list.add(txn);
             }
         } finally {
@@ -349,12 +382,15 @@ public class TransactionRepository {
         return list;
     }
 
-    private void populateRelatedInvoiceDisplayIds(SQLiteDatabase db, FinancialTransaction txn) {
+    private void populateRelatedInvoiceDisplayIds(SQLiteDatabase db, String accountId, FinancialTransaction txn) {
         String sql = "SELECT DISTINCT i." + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY +
                 " FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
-                " INNER JOIN " + InvoiceEntry.TABLE_NAME + " i ON pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID +
-                " WHERE pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ?";
-        try (Cursor c = db.rawQuery(sql, new String[]{txn.getId()})) {
+                " INNER JOIN " + InvoiceEntry.TABLE_NAME + " i " +
+                " ON pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID +
+                " AND pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID +
+                " WHERE pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                " AND pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ?";
+        try (Cursor c = db.rawQuery(sql, new String[]{accountId, txn.getId()})) {
             while (c.moveToNext()) {
                 String disp = c.getString(0);
                 if (disp != null) txn.getRelatedInvoiceDisplayIds().add(disp);
@@ -363,6 +399,12 @@ public class TransactionRepository {
     }
 
     private FinancialTransaction mapCursorToTransaction(Cursor c) {
+        long created = c.getLong(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_CREATED_AT));
+        long lastMod = created;
+        int lastModIdx = c.getColumnIndex(TransactionEntry.COLUMN_LAST_MODIFIED);
+        if (lastModIdx != -1 && !cursorIsNullOrZero(c, lastModIdx)) {
+            lastMod = c.getLong(lastModIdx);
+        }
         return new FinancialTransaction(
                 c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_ID)),
                 c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_ACCOUNT_ID)),
@@ -376,7 +418,12 @@ public class TransactionRepository {
                 c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_NOTES)),
                 c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_PARENT_TXN_ID)),
                 c.getInt(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_IS_REVERSED)) == 1,
-                c.getLong(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_CREATED_AT))
+                created,
+                lastMod
         );
+    }
+
+    private boolean cursorIsNullOrZero(Cursor c, int idx) {
+        return c.isNull(idx) || c.getLong(idx) <= 0L;
     }
 }
