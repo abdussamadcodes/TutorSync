@@ -1,10 +1,15 @@
 package com.abdussamadcodes.tutorsync.ui.finance;
 
 import android.content.Intent;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -58,6 +63,10 @@ import java.util.UUID;
 
 public class StudentTransactionsActivity extends BaseActivity {
 
+    private static final int TAB_INVOICES = 0;
+    private static final int TAB_PAYMENTS = 1;
+    private static final int TAB_CLASSES = 2;
+
     private String studentId;
     private Student currentStudent;
     private SessionManager sessionManager;
@@ -71,6 +80,7 @@ public class StudentTransactionsActivity extends BaseActivity {
 
     private LinearLayout contentContainer;
     private MaterialToolbar toolbar;
+    private int activeTab = TAB_INVOICES;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -103,6 +113,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         ScrollView scrollView = new ScrollView(this);
+        scrollView.setClipToPadding(false);
         CoordinatorLayout.LayoutParams scrollLp = new CoordinatorLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         scrollLp.setBehavior(new AppBarLayout.ScrollingViewBehavior());
@@ -110,7 +121,7 @@ public class StudentTransactionsActivity extends BaseActivity {
 
         contentContainer = new LinearLayout(this);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setPadding(dp(16), dp(12), dp(16), dp(32));
+        contentContainer.setPadding(dp(16), dp(12), dp(16), dp(40));
         scrollView.addView(contentContainer);
         root.addView(scrollView);
 
@@ -149,6 +160,10 @@ public class StudentTransactionsActivity extends BaseActivity {
                 : getString(R.string.fee_type_monthly);
     }
 
+    private String formatCurrency(int minorUnits) {
+        return String.format(Locale.getDefault(), "৳ %.2f", minorUnits / 100.0);
+    }
+
     private void refreshHistory() {
         contentContainer.removeAllViews();
         String accountId = sessionManager.getActiveAccountId();
@@ -165,6 +180,9 @@ public class StudentTransactionsActivity extends BaseActivity {
             return;
         }
         toolbar.setTitle(currentStudent.getFormattedDisplayName());
+        if (currentStudent.getGrade() != null && !currentStudent.getGrade().trim().isEmpty()) {
+            toolbar.setSubtitle("Class / Grade: " + currentStudent.getGrade().trim());
+        }
 
         List<RecurringSchedule> allSchedules = scheduleRepo.getSchedulesForAccount(accountId);
         Map<String, RecurringSchedule> studentScheduleGroups = new LinkedHashMap<>();
@@ -210,20 +228,195 @@ public class StudentTransactionsActivity extends BaseActivity {
         }
         Collections.reverse(studentOpenInvoices);
 
-        MaterialCardView summaryCard = createSectionCard();
-        LinearLayout summaryCol = createCardBody(summaryCard);
-        addCardHeader(summaryCol, getString(R.string.ledger_financial_overview));
-        addBodyLine(summaryCol, getString(R.string.ledger_unbilled_classes_fmt,
-                unbilledClassTotalMinor / 100.0, unbilledClassCount), true);
-        addBodyLine(summaryCol, getString(R.string.ledger_invoiced_due_fmt,
-                totalInvoiceDueMinor / 100.0), true);
-        addBodyLine(summaryCol, getString(R.string.ledger_total_billed_paid_fmt,
-                totalInvoicedMinor / 100.0, totalPaidMinor / 100.0), false);
-        contentContainer.addView(summaryCard);
+        List<FinancialTransaction> txns = txnRepo.getTransactionsForStudent(accountId, studentId);
+
+        // 1. HERO FINANCIAL OVERVIEW & PRIMARY ACTIONS CARD
+        buildHeroOverviewCard(
+                accountId,
+                totalInvoiceDueMinor,
+                unbilledClassTotalMinor,
+                unbilledClassCount,
+                totalInvoicedMinor,
+                totalPaidMinor,
+                studentOpenInvoices
+        );
+
+        // 2. COMPACT FEE PLAN & SCHEDULE RATES CARD
+        buildFeePlanCard(studentScheduleGroups, fallbackAgreement);
+
+        // 3. SEGMENTED TABS FOR INVOICES, PAYMENTS, AND CLASS CHARGES
+        buildLedgerTabsAndContent(
+                accountId,
+                studentInvoices,
+                txns,
+                classCharges,
+                unbilledClassCount,
+                unbilledClassTotalMinor
+        );
+    }
+
+    private void buildHeroOverviewCard(
+            String accountId,
+            int totalInvoiceDueMinor,
+            int unbilledClassTotalMinor,
+            int unbilledClassCount,
+            int totalInvoicedMinor,
+            int totalPaidMinor,
+            List<Invoice> studentOpenInvoices) {
+
+        MaterialCardView heroCard = createSectionCard();
+        LinearLayout body = createCardBody(heroCard);
+
+        // Header Row: Label + Status Pill
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText("OUTSTANDING INVOICE DUE");
+        tvLabel.setTextSize(11f);
+        tvLabel.setTypeface(null, Typeface.BOLD);
+        tvLabel.setLetterSpacing(0.06f);
+        tvLabel.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        topRow.addView(tvLabel, labelLp);
+
+        String statusText;
+        int badgeBgColor;
+        int badgeTextColor;
+        if (totalInvoiceDueMinor > 0) {
+            statusText = studentOpenInvoices.size() + " OPEN INVOICE" + (studentOpenInvoices.size() > 1 ? "S" : "");
+            badgeBgColor = Color.parseColor("#33FF9800");
+            badgeTextColor = Color.parseColor("#FFB74D");
+        } else if (unbilledClassCount > 0) {
+            statusText = unbilledClassCount + " UNBILLED";
+            badgeBgColor = Color.parseColor("#3329B6F6");
+            badgeTextColor = Color.parseColor("#4FC3F7");
+        } else {
+            statusText = "ALL SETTLED";
+            badgeBgColor = Color.parseColor("#334CAF50");
+            badgeTextColor = Color.parseColor("#81C784");
+        }
+        topRow.addView(createPillBadge(statusText, badgeBgColor, badgeTextColor));
+        body.addView(topRow);
+
+        // Big Hero Amount
+        TextView tvHeroDue = new TextView(this);
+        tvHeroDue.setText(formatCurrency(totalInvoiceDueMinor));
+        tvHeroDue.setTextSize(30f);
+        tvHeroDue.setTypeface(null, Typeface.BOLD);
+        tvHeroDue.setTextColor(totalInvoiceDueMinor > 0
+                ? Color.parseColor("#FFB74D")
+                : resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
+        tvHeroDue.setPadding(0, dp(4), 0, dp(14));
+        body.addView(tvHeroDue);
+
+        // 3-Column KPI Metric Grid
+        LinearLayout metricsRow = new LinearLayout(this);
+        metricsRow.setOrientation(LinearLayout.HORIZONTAL);
+        metricsRow.setWeightSum(3f);
+
+        metricsRow.addView(createMetricTile(
+                "Unbilled (" + unbilledClassCount + ")",
+                formatCurrency(unbilledClassTotalMinor),
+                unbilledClassCount > 0 ? Color.parseColor("#4FC3F7") : resolveAttrColor(com.google.android.material.R.attr.colorOnSurface)
+        ));
+        addHorizontalSpacer(metricsRow, dp(8));
+        metricsRow.addView(createMetricTile(
+                "Total Billed",
+                formatCurrency(totalInvoicedMinor),
+                resolveAttrColor(com.google.android.material.R.attr.colorOnSurface)
+        ));
+        addHorizontalSpacer(metricsRow, dp(8));
+        metricsRow.addView(createMetricTile(
+                "Total Paid",
+                formatCurrency(totalPaidMinor),
+                Color.parseColor("#81C784")
+        ));
+        body.addView(metricsRow);
+
+        // Quick Action Buttons Row
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actionRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        actionRowLp.topMargin = dp(14);
+        actionRow.setLayoutParams(actionRowLp);
+
+        if (totalInvoiceDueMinor > 0) {
+            MaterialButton btnPay = new MaterialButton(this);
+            btnPay.setText("Record Payment");
+            btnPay.setAllCaps(false);
+            btnPay.setCornerRadius(dp(10));
+            LinearLayout.LayoutParams payLp = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            btnPay.setLayoutParams(payLp);
+            btnPay.setOnClickListener(v -> showMultiInvoicePaymentDialog(studentOpenInvoices, totalInvoiceDueMinor));
+            actionRow.addView(btnPay);
+        }
+
+        MaterialButton btnInvoice = new MaterialButton(
+                this,
+                null,
+                totalInvoiceDueMinor > 0
+                        ? com.google.android.material.R.attr.materialButtonOutlinedStyle
+                        : com.google.android.material.R.attr.materialButtonStyle
+        );
+        btnInvoice.setAllCaps(false);
+        btnInvoice.setCornerRadius(dp(10));
+        btnInvoice.setText(unbilledClassCount > 0
+                ? String.format(Locale.getDefault(), "Bill Unbilled (৳%.0f)", unbilledClassTotalMinor / 100.0)
+                : getString(R.string.ledger_btn_generate_due_invoice));
+        LinearLayout.LayoutParams invLp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        if (totalInvoiceDueMinor > 0) {
+            invLp.leftMargin = dp(8);
+        }
+        btnInvoice.setLayoutParams(invLp);
+        btnInvoice.setOnClickListener(v -> {
+            int created = invoiceRepo.generateDueInvoicesForStudent(accountId, studentId);
+            if (created > 0) {
+                activeTab = TAB_INVOICES;
+                showMessage(contentContainer, getString(R.string.invoice_generated_success));
+                refreshHistory();
+            } else {
+                showMessage(contentContainer, getString(R.string.invoice_none_needed));
+            }
+        });
+        actionRow.addView(btnInvoice);
+
+        body.addView(actionRow);
+        contentContainer.addView(heroCard);
+    }
+
+    private void buildFeePlanCard(
+            Map<String, RecurringSchedule> studentScheduleGroups,
+            @Nullable FeeAgreement fallbackAgreement) {
 
         MaterialCardView feeCard = createSectionCard();
         LinearLayout feeCol = createCardBody(feeCard);
-        addCardHeader(feeCol, getString(R.string.ledger_fee_rate_header));
+
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(getString(R.string.ledger_fee_rate_header));
+        tvTitle.setTextSize(15f);
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+        headerRow.addView(tvTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        MaterialButton btnEditFee = new MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle);
+        btnEditFee.setText("Edit Rate");
+        btnEditFee.setAllCaps(false);
+        btnEditFee.setTextSize(13f);
+        btnEditFee.setMinimumHeight(0);
+        btnEditFee.setMinimumWidth(0);
+        btnEditFee.setPadding(dp(10), dp(4), dp(10), dp(4));
+        btnEditFee.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, null));
+        headerRow.addView(btnEditFee);
+        feeCol.addView(headerRow);
 
         if (!studentScheduleGroups.isEmpty()) {
             for (Map.Entry<String, RecurringSchedule> entry : studentScheduleGroups.entrySet()) {
@@ -237,112 +430,426 @@ public class StudentTransactionsActivity extends BaseActivity {
                     modelCode = fallbackAgreement.getFeeType();
                 }
                 String modelStr = formatBillingModelLabel(modelCode);
-                TextView row = addBodyLine(feeCol, getString(R.string.ledger_schedule_fee_row_fmt,
-                        timeStr, feeVal / 100.0, modelStr), false);
+
+                LinearLayout row = createSubtleRowContainer();
                 row.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, groupKey));
+
+                LinearLayout leftCol = new LinearLayout(this);
+                leftCol.setOrientation(LinearLayout.VERTICAL);
+
+                TextView tvSchedule = new TextView(this);
+                tvSchedule.setText("Schedule · " + timeStr);
+                tvSchedule.setTextSize(14f);
+                tvSchedule.setTypeface(null, Typeface.BOLD);
+                tvSchedule.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
+                leftCol.addView(tvSchedule);
+
+                TextView tvModel = new TextView(this);
+                tvModel.setText("Billing Model: " + modelStr + " (Tap to edit)");
+                tvModel.setTextSize(12f);
+                tvModel.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+                leftCol.addView(tvModel);
+
+                row.addView(leftCol, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                TextView tvRate = new TextView(this);
+                tvRate.setText(formatCurrency(feeVal));
+                tvRate.setTextSize(15f);
+                tvRate.setTypeface(null, Typeface.BOLD);
+                tvRate.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+                row.addView(tvRate);
+
+                feeCol.addView(row);
             }
         } else if (fallbackAgreement != null) {
             String modelStr = formatBillingModelLabel(fallbackAgreement.getFeeType());
-            addBodyLine(feeCol, getString(R.string.ledger_default_fee_row_fmt,
-                    fallbackAgreement.getAmountMinorUnits() / 100.0, modelStr), false);
+            LinearLayout row = createSubtleRowContainer();
+            row.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, null));
+
+            TextView tvLeft = new TextView(this);
+            tvLeft.setText("Default Plan (" + modelStr + ")");
+            tvLeft.setTextSize(14f);
+            tvLeft.setTypeface(null, Typeface.BOLD);
+            tvLeft.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
+            row.addView(tvLeft, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView tvRight = new TextView(this);
+            tvRight.setText(formatCurrency(fallbackAgreement.getAmountMinorUnits()));
+            tvRight.setTextSize(15f);
+            tvRight.setTypeface(null, Typeface.BOLD);
+            tvRight.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+            row.addView(tvRight);
+
+            feeCol.addView(row);
         } else {
-            addBodyLine(feeCol, getString(R.string.ledger_no_fee_configured), false);
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText(getString(R.string.ledger_no_fee_configured));
+            tvEmpty.setTextSize(13f);
+            tvEmpty.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+            tvEmpty.setPadding(0, dp(4), 0, dp(4));
+            feeCol.addView(tvEmpty);
         }
 
-        MaterialButton btnEditFee = new MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
-        btnEditFee.setText(getString(R.string.ledger_btn_set_update_fee));
-        btnEditFee.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, null));
-        feeCol.addView(btnEditFee);
         contentContainer.addView(feeCard);
+    }
 
-        MaterialCardView attendanceCard = createSectionCard();
-        LinearLayout attCol = createCardBody(attendanceCard);
-        addCardHeader(attCol, getString(R.string.ledger_attended_classes_header));
+    private void buildLedgerTabsAndContent(
+            String accountId,
+            List<Invoice> studentInvoices,
+            List<FinancialTransaction> txns,
+            List<UnbilledClassCharge> classCharges,
+            int unbilledClassCount,
+            int unbilledClassTotalMinor) {
+
+        // Segmented Filter Bar
+        LinearLayout tabBar = new LinearLayout(this);
+        tabBar.setOrientation(LinearLayout.HORIZONTAL);
+        tabBar.setWeightSum(3f);
+        tabBar.setPadding(dp(4), dp(4), dp(4), dp(4));
+        GradientDrawable tabBarBg = new GradientDrawable();
+        tabBarBg.setColor(resolveAttrColor(com.google.android.material.R.attr.colorSurface));
+        tabBarBg.setCornerRadius(dp(12));
+        tabBarBg.setStroke(dp(1), resolveAttrColor(com.google.android.material.R.attr.colorOutlineVariant));
+        tabBar.setBackground(tabBarBg);
+
+        LinearLayout.LayoutParams tabBarLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tabBarLp.bottomMargin = dp(12);
+        tabBar.setLayoutParams(tabBarLp);
+
+        tabBar.addView(createTabButton("Invoices (" + studentInvoices.size() + ")", TAB_INVOICES));
+        tabBar.addView(createTabButton("Payments (" + txns.size() + ")", TAB_PAYMENTS));
+        tabBar.addView(createTabButton("Classes (" + classCharges.size() + ")", TAB_CLASSES));
+        contentContainer.addView(tabBar);
+
+        if (activeTab == TAB_INVOICES) {
+            buildInvoicesListSection(studentInvoices);
+        } else if (activeTab == TAB_PAYMENTS) {
+            buildPaymentsListSection(txns);
+        } else {
+            buildClassesListSection(accountId, classCharges, unbilledClassCount, unbilledClassTotalMinor);
+        }
+    }
+
+    private View createTabButton(String title, int tabIndex) {
+        boolean selected = (activeTab == tabIndex);
+        TextView tv = new TextView(this);
+        tv.setText(title);
+        tv.setGravity(Gravity.CENTER);
+        tv.setTextSize(13f);
+        tv.setTypeface(null, selected ? Typeface.BOLD : Typeface.NORMAL);
+        tv.setPadding(dp(8), dp(10), dp(8), dp(10));
+
+        if (selected) {
+            GradientDrawable selBg = new GradientDrawable();
+            selBg.setColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+            selBg.setCornerRadius(dp(9));
+            tv.setBackground(selBg);
+            tv.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnPrimary));
+        } else {
+            tv.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+        }
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tv.setLayoutParams(lp);
+        tv.setOnClickListener(v -> {
+            if (activeTab != tabIndex) {
+                activeTab = tabIndex;
+                refreshHistory();
+            }
+        });
+        return tv;
+    }
+
+    private void buildInvoicesListSection(List<Invoice> studentInvoices) {
+        if (studentInvoices.isEmpty()) {
+            contentContainer.addView(createEmptyStateCard(getString(R.string.invoice_empty)));
+            return;
+        }
+
+        for (Invoice inv : studentInvoices) {
+            MaterialCardView card = createSectionCard();
+            card.setClickable(true);
+            card.setFocusable(true);
+            card.setOnClickListener(v -> {
+                Intent intent = new Intent(this, InvoiceDetailActivity.class);
+                intent.putExtra("invoice_id", inv.getId());
+                startActivity(intent);
+            });
+
+            LinearLayout col = createCardBody(card);
+
+            // Row 1: Invoice ID + Status Pill
+            LinearLayout topRow = new LinearLayout(this);
+            topRow.setOrientation(LinearLayout.HORIZONTAL);
+            topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            TextView tvId = new TextView(this);
+            tvId.setText(inv.getInvoiceIdDisplay());
+            tvId.setTextSize(15f);
+            tvId.setTypeface(null, Typeface.BOLD);
+            tvId.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
+            topRow.addView(tvId, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            int badgeBg;
+            int badgeFg;
+            if (Invoice.STATUS_PAID.equalsIgnoreCase(inv.getStatus())) {
+                badgeBg = Color.parseColor("#334CAF50");
+                badgeFg = Color.parseColor("#81C784");
+            } else if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(inv.getStatus())) {
+                badgeBg = Color.parseColor("#33FF9800");
+                badgeFg = Color.parseColor("#FFB74D");
+            } else {
+                badgeBg = Color.parseColor("#33EF5350");
+                badgeFg = Color.parseColor("#E57373");
+            }
+            topRow.addView(createPillBadge(inv.getStatus(), badgeBg, badgeFg));
+            col.addView(topRow);
+
+            // Row 2: Billing period + Tap cue
+            LinearLayout subRow = new LinearLayout(this);
+            subRow.setOrientation(LinearLayout.HORIZONTAL);
+            subRow.setPadding(0, dp(4), 0, dp(10));
+
+            TextView tvPeriod = new TextView(this);
+            tvPeriod.setText("Billing Period: " + inv.getBillingPeriod());
+            tvPeriod.setTextSize(12f);
+            tvPeriod.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+            subRow.addView(tvPeriod, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView tvOpen = new TextView(this);
+            tvOpen.setText("View Invoice ›");
+            tvOpen.setTextSize(12f);
+            tvOpen.setTypeface(null, Typeface.BOLD);
+            tvOpen.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+            subRow.addView(tvOpen);
+            col.addView(subRow);
+
+            // Row 3: 3-Column Breakdown (Total, Paid, Due)
+            LinearLayout amountsRow = new LinearLayout(this);
+            amountsRow.setOrientation(LinearLayout.HORIZONTAL);
+            amountsRow.setWeightSum(3f);
+
+            amountsRow.addView(createMetricTile(
+                    "Total",
+                    formatCurrency(inv.getTotalAmount()),
+                    resolveAttrColor(com.google.android.material.R.attr.colorOnSurface)
+            ));
+            addHorizontalSpacer(amountsRow, dp(6));
+            amountsRow.addView(createMetricTile(
+                    "Paid",
+                    formatCurrency(inv.getPaidAmount()),
+                    Color.parseColor("#81C784")
+            ));
+            addHorizontalSpacer(amountsRow, dp(6));
+            amountsRow.addView(createMetricTile(
+                    "Balance Due",
+                    formatCurrency(inv.getOutstandingBalance()),
+                    inv.getOutstandingBalance() > 0
+                            ? Color.parseColor("#FFB74D")
+                            : resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant)
+            ));
+            col.addView(amountsRow);
+
+            contentContainer.addView(card);
+        }
+    }
+
+    private void buildPaymentsListSection(List<FinancialTransaction> txns) {
+        if (txns.isEmpty()) {
+            contentContainer.addView(createEmptyStateCard(getString(R.string.invoice_no_payments)));
+            return;
+        }
+
+        SimpleDateFormat dtf = new SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault());
+        for (FinancialTransaction txn : txns) {
+            MaterialCardView card = createSectionCard();
+            card.setClickable(true);
+            card.setFocusable(true);
+            card.setOnClickListener(v -> showTransactionOptions(txn));
+
+            LinearLayout col = createCardBody(card);
+
+            boolean isRefund = FinancialTransaction.TYPE_REFUND.equalsIgnoreCase(txn.getType());
+
+            // Top row: Txn ID + Amount
+            LinearLayout topRow = new LinearLayout(this);
+            topRow.setOrientation(LinearLayout.HORIZONTAL);
+            topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            TextView tvTxnId = new TextView(this);
+            tvTxnId.setText(txn.getTxnIdDisplay());
+            tvTxnId.setTextSize(15f);
+            tvTxnId.setTypeface(null, Typeface.BOLD);
+            tvTxnId.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
+            topRow.addView(tvTxnId, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView tvAmt = new TextView(this);
+            tvAmt.setText((isRefund ? "- " : "+ ") + formatCurrency(txn.getAmountMinor()));
+            tvAmt.setTextSize(16f);
+            tvAmt.setTypeface(null, Typeface.BOLD);
+            tvAmt.setTextColor(isRefund ? Color.parseColor("#E57373") : Color.parseColor("#81C784"));
+            topRow.addView(tvAmt);
+            col.addView(topRow);
+
+            // Middle row: Date + Method & Type badge
+            LinearLayout midRow = new LinearLayout(this);
+            midRow.setOrientation(LinearLayout.HORIZONTAL);
+            midRow.setGravity(Gravity.CENTER_VERTICAL);
+            midRow.setPadding(0, dp(6), 0, dp(6));
+
+            TextView tvDate = new TextView(this);
+            tvDate.setText(dtf.format(new Date(txn.getTimestamp())) + " · " + txn.getMethod());
+            tvDate.setTextSize(12f);
+            tvDate.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+            midRow.addView(tvDate, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            midRow.addView(createPillBadge(
+                    txn.getType(),
+                    isRefund ? Color.parseColor("#33EF5350") : Color.parseColor("#334CAF50"),
+                    isRefund ? Color.parseColor("#E57373") : Color.parseColor("#81C784")
+            ));
+            col.addView(midRow);
+
+            // Bottom row: Linked Invoices + Receipt / Refund action cue
+            String invoicesStr = txn.getRelatedInvoiceDisplayIds().isEmpty()
+                    ? "Unallocated"
+                    : String.join(", ", txn.getRelatedInvoiceDisplayIds());
+
+            LinearLayout botRow = new LinearLayout(this);
+            botRow.setOrientation(LinearLayout.HORIZONTAL);
+            botRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            TextView tvInv = new TextView(this);
+            tvInv.setText("Invoice: " + invoicesStr);
+            tvInv.setTextSize(12f);
+            tvInv.setEllipsize(TextUtils.TruncateAt.END);
+            tvInv.setSingleLine(true);
+            tvInv.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+            botRow.addView(tvInv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView tvAction = new TextView(this);
+            tvAction.setText("Receipt / Refund ›");
+            tvAction.setTextSize(12f);
+            tvAction.setTypeface(null, Typeface.BOLD);
+            tvAction.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+            botRow.addView(tvAction);
+            col.addView(botRow);
+
+            contentContainer.addView(card);
+        }
+    }
+
+    private void buildClassesListSection(
+            String accountId,
+            List<UnbilledClassCharge> classCharges,
+            int unbilledClassCount,
+            int unbilledClassTotalMinor) {
+
+        MaterialCardView card = createSectionCard();
+        LinearLayout col = createCardBody(card);
+
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        headerRow.setPadding(0, 0, 0, dp(8));
+
+        TextView tvHeader = new TextView(this);
+        tvHeader.setText(getString(R.string.ledger_attended_classes_header));
+        tvHeader.setTextSize(15f);
+        tvHeader.setTypeface(null, Typeface.BOLD);
+        tvHeader.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+        headerRow.addView(tvHeader, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (unbilledClassCount > 0) {
+            headerRow.addView(createPillBadge(
+                    unbilledClassCount + " Unbilled (" + formatCurrency(unbilledClassTotalMinor) + ")",
+                    Color.parseColor("#3329B6F6"),
+                    Color.parseColor("#4FC3F7")
+            ));
+        }
+        col.addView(headerRow);
 
         SimpleDateFormat df = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
         if (classCharges.isEmpty()) {
-            addBodyLine(attCol, getString(R.string.ledger_no_per_class_sessions), false);
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText(getString(R.string.ledger_no_per_class_sessions));
+            tvEmpty.setTextSize(13f);
+            tvEmpty.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+            tvEmpty.setPadding(0, dp(8), 0, dp(8));
+            col.addView(tvEmpty);
         } else {
             for (UnbilledClassCharge cc : classCharges) {
-                String timeStr = formatTimeMinutes(cc.startTimeMinutes);
-                String badge = cc.isBilled ? getString(R.string.ledger_badge_billed) : getString(R.string.ledger_badge_unbilled);
-                addBodyLine(attCol, String.format(Locale.getDefault(),
-                        "%s · %s (%s) — ৳ %.2f  %s",
-                        df.format(new Date(cc.dateMillis)), timeStr,
-                        cc.status, cc.feeMinor / 100.0, badge), !cc.isBilled);
+                LinearLayout row = createSubtleRowContainer();
+
+                LinearLayout leftCol = new LinearLayout(this);
+                leftCol.setOrientation(LinearLayout.VERTICAL);
+
+                TextView tvDate = new TextView(this);
+                tvDate.setText(df.format(new Date(cc.dateMillis)) + " · " + formatTimeMinutes(cc.startTimeMinutes));
+                tvDate.setTextSize(14f);
+                tvDate.setTypeface(null, Typeface.BOLD);
+                tvDate.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
+                leftCol.addView(tvDate);
+
+                TextView tvStatus = new TextView(this);
+                tvStatus.setText("Attendance: " + cc.status);
+                tvStatus.setTextSize(12f);
+                tvStatus.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+                leftCol.addView(tvStatus);
+
+                row.addView(leftCol, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                LinearLayout rightCol = new LinearLayout(this);
+                rightCol.setOrientation(LinearLayout.VERTICAL);
+                rightCol.setGravity(Gravity.END);
+
+                TextView tvFee = new TextView(this);
+                tvFee.setText(formatCurrency(cc.feeMinor));
+                tvFee.setTextSize(14f);
+                tvFee.setTypeface(null, Typeface.BOLD);
+                tvFee.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
+                rightCol.addView(tvFee);
+
+                View badge = createPillBadge(
+                        cc.isBilled ? "BILLED" : "UNBILLED",
+                        cc.isBilled ? Color.parseColor("#334CAF50") : Color.parseColor("#33FF9800"),
+                        cc.isBilled ? Color.parseColor("#81C784") : Color.parseColor("#FFB74D")
+                );
+                LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                badgeLp.topMargin = dp(4);
+                rightCol.addView(badge, badgeLp);
+
+                row.addView(rightCol);
+                col.addView(row);
             }
         }
 
-        MaterialButton btnGenInvoice = new MaterialButton(this);
-        btnGenInvoice.setText(unbilledClassCount > 0
-                ? getString(R.string.ledger_btn_generate_invoice_amt_fmt, unbilledClassTotalMinor / 100.0)
-                : getString(R.string.ledger_btn_generate_due_invoice));
-        btnGenInvoice.setOnClickListener(v -> {
-            int created = invoiceRepo.generateDueInvoicesForStudent(accountId, studentId);
-            if (created > 0) {
-                showMessage(contentContainer, getString(R.string.invoice_generated_success));
-                refreshHistory();
-            } else {
-                showMessage(contentContainer, getString(R.string.invoice_none_needed));
-            }
-        });
-        attCol.addView(btnGenInvoice);
-        contentContainer.addView(attendanceCard);
-
-        MaterialCardView invCard = createSectionCard();
-        LinearLayout invCol = createCardBody(invCard);
-        addCardHeader(invCol, getString(R.string.ledger_student_invoices_header));
-
-        if (studentInvoices.isEmpty()) {
-            addBodyLine(invCol, getString(R.string.invoice_empty), false);
-        } else {
-            for (Invoice inv : studentInvoices) {
-                String summaryLine = getString(R.string.invoice_card_amounts_fmt,
-                        inv.getTotalAmount() / 100.0, inv.getPaidAmount() / 100.0, inv.getOutstandingBalance() / 100.0);
-                TextView row = addBodyLine(invCol, String.format(Locale.getDefault(),
-                                "%s (%s) · %s\n%s   %s",
-                                inv.getInvoiceIdDisplay(), inv.getStatus(), inv.getBillingPeriod(),
-                                summaryLine, getString(R.string.ledger_tap_to_open)),
-                        inv.getOutstandingBalance() > 0);
-                row.setOnClickListener(v -> {
-                    Intent intent = new Intent(this, InvoiceDetailActivity.class);
-                    intent.putExtra("invoice_id", inv.getId());
-                    startActivity(intent);
-                });
-            }
+        if (unbilledClassCount > 0) {
+            MaterialButton btnGen = new MaterialButton(this);
+            btnGen.setAllCaps(false);
+            btnGen.setText(String.format(Locale.getDefault(),
+                    "Generate Invoice for %d Unbilled Class(es) (%s)",
+                    unbilledClassCount, formatCurrency(unbilledClassTotalMinor)));
+            LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            btnLp.topMargin = dp(10);
+            btnGen.setLayoutParams(btnLp);
+            btnGen.setOnClickListener(v -> {
+                int created = invoiceRepo.generateDueInvoicesForStudent(accountId, studentId);
+                if (created > 0) {
+                    activeTab = TAB_INVOICES;
+                    showMessage(contentContainer, getString(R.string.invoice_generated_success));
+                    refreshHistory();
+                } else {
+                    showMessage(contentContainer, getString(R.string.invoice_none_needed));
+                }
+            });
+            col.addView(btnGen);
         }
 
-        if (totalInvoiceDueMinor > 0) {
-            final int maxPayableMinor = totalInvoiceDueMinor;
-            MaterialButton btnPayMulti = new MaterialButton(this);
-            btnPayMulti.setText(getString(R.string.ledger_btn_pay_multi));
-            btnPayMulti.setOnClickListener(v -> showMultiInvoicePaymentDialog(studentOpenInvoices, maxPayableMinor));
-            invCol.addView(btnPayMulti);
-        }
-        contentContainer.addView(invCard);
-
-        MaterialCardView txnCard = createSectionCard();
-        LinearLayout txnCol = createCardBody(txnCard);
-        addCardHeader(txnCol, getString(R.string.invoice_payment_history));
-
-        List<FinancialTransaction> txns = txnRepo.getTransactionsForStudent(accountId, studentId);
-        SimpleDateFormat dtf = new SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault());
-        if (txns.isEmpty()) {
-            addBodyLine(txnCol, getString(R.string.invoice_no_payments), false);
-        } else {
-            for (FinancialTransaction txn : txns) {
-                String invoicesStr = txn.getRelatedInvoiceDisplayIds().isEmpty()
-                        ? "N/A" : String.join(", ", txn.getRelatedInvoiceDisplayIds());
-                String text = String.format(Locale.getDefault(),
-                        "%s (%s) — ৳%.2f\n%s · %s | %s   %s",
-                        txn.getTxnIdDisplay(), txn.getType(), txn.getAmountMinor() / 100.0,
-                        dtf.format(new Date(txn.getTimestamp())), txn.getMethod(),
-                        invoicesStr, getString(R.string.ledger_tap_for_receipt));
-                TextView tv = addBodyLine(txnCol, text, false);
-                tv.setOnClickListener(v -> showTransactionOptions(txn));
-            }
-        }
-        contentContainer.addView(txnCard);
+        contentContainer.addView(card);
     }
 
     private void showFeeRateBottomSheet(
@@ -468,14 +975,31 @@ public class StudentTransactionsActivity extends BaseActivity {
     private void showMultiInvoicePaymentDialog(List<Invoice> openInvoicesChronological, int totalDueMinor) {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(16);
-        layout.setPadding(pad, pad, pad, 0);
+        int pad = dp(20);
+        layout.setPadding(pad, dp(12), pad, dp(4));
+
+        TextView tvSummary = new TextView(this);
+        tvSummary.setText(String.format(Locale.getDefault(),
+                "Open invoices: %d  ·  Total Due: %s",
+                openInvoicesChronological.size(), formatCurrency(totalDueMinor)));
+        tvSummary.setTextSize(13f);
+        tvSummary.setTypeface(null, Typeface.BOLD);
+        tvSummary.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
+        tvSummary.setPadding(0, 0, 0, dp(10));
+        layout.addView(tvSummary);
 
         EditText etAmount = new EditText(this);
         etAmount.setHint(getString(R.string.invoice_payment_amount));
         etAmount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         etAmount.setText(String.format(Locale.US, "%.2f", totalDueMinor / 100.0));
         layout.addView(etAmount);
+
+        TextView tvMethodLabel = new TextView(this);
+        tvMethodLabel.setText("Payment Method");
+        tvMethodLabel.setTextSize(12f);
+        tvMethodLabel.setPadding(dp(4), dp(10), 0, dp(2));
+        tvMethodLabel.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+        layout.addView(tvMethodLabel);
 
         Spinner spMethod = new Spinner(this);
         String[] methods = {"Cash", "bKash", "Nagad", "Bank Transfer"};
@@ -491,7 +1015,7 @@ public class StudentTransactionsActivity extends BaseActivity {
         layout.addView(etNotes);
 
         new MaterialAlertDialogBuilder(this)
-                .setTitle(getString(R.string.ledger_btn_pay_multi))
+                .setTitle("Record Payment")
                 .setView(layout)
                 .setPositiveButton(getString(R.string.action_save), (d, w) -> {
                     try {
@@ -511,6 +1035,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                                 openInvoicesChronological
                         );
                         if (created != null) {
+                            activeTab = TAB_PAYMENTS;
                             showMessage(contentContainer, getString(R.string.invoice_payment_saved_fmt, created.getTxnIdDisplay()));
                             refreshHistory();
                         }
@@ -523,12 +1048,13 @@ public class StudentTransactionsActivity extends BaseActivity {
     }
 
     private void showTransactionOptions(FinancialTransaction txn) {
-        String[] items = {
-                getString(R.string.invoice_share_receipt_pdf),
-                getString(R.string.invoice_issue_refund)
-        };
+        boolean isPayment = FinancialTransaction.TYPE_PAYMENT.equals(txn.getType());
+        String[] items = isPayment
+                ? new String[]{getString(R.string.invoice_share_receipt_pdf), getString(R.string.invoice_issue_refund)}
+                : new String[]{getString(R.string.invoice_share_receipt_pdf)};
+
         new MaterialAlertDialogBuilder(this)
-                .setTitle(txn.getTxnIdDisplay())
+                .setTitle(txn.getTxnIdDisplay() + " (" + formatCurrency(txn.getAmountMinor()) + ")")
                 .setItems(items, (d, which) -> {
                     if (which == 0) {
                         try {
@@ -538,28 +1064,154 @@ public class StudentTransactionsActivity extends BaseActivity {
                         } catch (Exception e) {
                             showMessage(contentContainer, e.getMessage());
                         }
-                    } else if (which == 1 && FinancialTransaction.TYPE_PAYMENT.equals(txn.getType())) {
-                        boolean ok = txnRepo.recordRefundForTransaction(
-                                sessionManager.getActiveAccountId(), txn.getId(), txn.getAmountMinor(), "Tutor refund");
-                        if (ok) {
-                            showMessage(contentContainer, getString(R.string.invoice_refund_saved_msg));
-                            refreshHistory();
-                        }
+                    } else if (which == 1 && isPayment) {
+                        showRefundDialog(txn);
                     }
                 })
                 .show();
+    }
+
+    private void showRefundDialog(FinancialTransaction txn) {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        layout.setPadding(pad, dp(12), pad, dp(4));
+
+        EditText etRefundAmt = new EditText(this);
+        etRefundAmt.setHint("Refund Amount (৳)");
+        etRefundAmt.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        etRefundAmt.setText(String.format(Locale.US, "%.2f", txn.getAmountMinor() / 100.0));
+        layout.addView(etRefundAmt);
+
+        EditText etReason = new EditText(this);
+        etReason.setHint("Reason for refund");
+        etReason.setText("Tutor refund");
+        layout.addView(etReason);
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(getString(R.string.invoice_issue_refund))
+                .setView(layout)
+                .setPositiveButton(getString(R.string.action_save), (d, w) -> {
+                    try {
+                        double bdt = Double.parseDouble(etRefundAmt.getText().toString().trim());
+                        int refundMinor = (int) Math.round(bdt * 100);
+                        String reason = etReason.getText().toString().trim();
+                        if (reason.isEmpty()) reason = "Tutor refund";
+
+                        boolean ok = txnRepo.recordRefundForTransaction(
+                                sessionManager.getActiveAccountId(), txn.getId(), refundMinor, reason);
+                        if (ok) {
+                            showMessage(contentContainer, getString(R.string.invoice_refund_saved_msg));
+                            refreshHistory();
+                        } else {
+                            showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
+                        }
+                    } catch (NumberFormatException e) {
+                        showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
+                    }
+                })
+                .setNegativeButton(getString(R.string.action_cancel), null)
+                .show();
+    }
+
+    private View createMetricTile(String label, String value, int valueColor) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setPadding(dp(10), dp(10), dp(10), dp(10));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#18FFFFFF"));
+        bg.setCornerRadius(dp(10));
+        bg.setStroke(dp(1), resolveAttrColor(com.google.android.material.R.attr.colorOutlineVariant));
+        tile.setBackground(bg);
+
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText(label);
+        tvLabel.setTextSize(11f);
+        tvLabel.setSingleLine(true);
+        tvLabel.setEllipsize(TextUtils.TruncateAt.END);
+        tvLabel.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+        tile.addView(tvLabel);
+
+        TextView tvValue = new TextView(this);
+        tvValue.setText(value);
+        tvValue.setTextSize(14f);
+        tvValue.setTypeface(null, Typeface.BOLD);
+        tvValue.setSingleLine(true);
+        tvValue.setEllipsize(TextUtils.TruncateAt.END);
+        tvValue.setTextColor(valueColor);
+        tvValue.setPadding(0, dp(3), 0, 0);
+        tile.addView(tvValue);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tile.setLayoutParams(lp);
+        return tile;
+    }
+
+    private LinearLayout createSubtleRowContainer() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#14FFFFFF"));
+        bg.setCornerRadius(dp(10));
+        row.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(8);
+        row.setLayoutParams(lp);
+        return row;
+    }
+
+    private View createPillBadge(String text, int bgColor, int textColor) {
+        TextView badge = new TextView(this);
+        badge.setText(text);
+        badge.setTextSize(11f);
+        badge.setTypeface(null, Typeface.BOLD);
+        badge.setTextColor(textColor);
+        badge.setPadding(dp(10), dp(3), dp(10), dp(3));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(bgColor);
+        bg.setCornerRadius(dp(50));
+        badge.setBackground(bg);
+        return badge;
+    }
+
+    private MaterialCardView createEmptyStateCard(String message) {
+        MaterialCardView card = createSectionCard();
+        LinearLayout col = createCardBody(card);
+        col.setGravity(Gravity.CENTER);
+        col.setPadding(dp(20), dp(28), dp(20), dp(28));
+
+        TextView tv = new TextView(this);
+        tv.setText(message);
+        tv.setTextSize(14f);
+        tv.setGravity(Gravity.CENTER);
+        tv.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
+        col.addView(tv);
+        return card;
+    }
+
+    private void addHorizontalSpacer(LinearLayout parent, int widthPx) {
+        View spacer = new View(this);
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(widthPx, dp(1)));
+        parent.addView(spacer);
     }
 
     private MaterialCardView createSectionCard() {
         MaterialCardView card = new MaterialCardView(this);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(14);
+        lp.bottomMargin = dp(12);
         card.setLayoutParams(lp);
         card.setRadius(dp(14));
         card.setCardElevation(dp(1));
         card.setStrokeWidth(dp(1));
-        card.setStrokeColor(resolveAttrColor(com.google.android.material.R.attr.colorOutlineVariant));
+        card.setStrokeColor(ColorStateList.valueOf(resolveAttrColor(com.google.android.material.R.attr.colorOutlineVariant)));
         card.setCardBackgroundColor(resolveAttrColor(com.google.android.material.R.attr.colorSurface));
         return card;
     }
@@ -570,29 +1222,6 @@ public class StudentTransactionsActivity extends BaseActivity {
         col.setPadding(dp(16), dp(16), dp(16), dp(16));
         card.addView(col);
         return col;
-    }
-
-    private void addCardHeader(LinearLayout parent, String title) {
-        TextView tv = new TextView(this);
-        tv.setText(title);
-        tv.setTextSize(16f);
-        tv.setTypeface(null, Typeface.BOLD);
-        tv.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
-        tv.setPadding(0, 0, 0, dp(8));
-        parent.addView(tv);
-    }
-
-    private TextView addBodyLine(LinearLayout parent, String text, boolean highlight) {
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextSize(14f);
-        if (highlight) tv.setTypeface(null, Typeface.BOLD);
-        tv.setTextColor(resolveAttrColor(highlight
-                ? com.google.android.material.R.attr.colorOnSurface
-                : com.google.android.material.R.attr.colorOnSurfaceVariant));
-        tv.setPadding(0, dp(6), 0, dp(6));
-        parent.addView(tv);
-        return tv;
     }
 
     private int dp(int value) {
