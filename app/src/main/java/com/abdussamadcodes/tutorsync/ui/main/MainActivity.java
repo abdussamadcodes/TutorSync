@@ -1,16 +1,13 @@
 package com.abdussamadcodes.tutorsync.ui.main;
 
 import android.app.DatePickerDialog;
-import android.content.ContentValues;
 import android.content.Intent;
-import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
-import android.util.Base64;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -27,8 +24,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry;
 import com.abdussamadcodes.tutorsync.databinding.ActivityMainBinding;
 import com.abdussamadcodes.tutorsync.model.Account;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
@@ -56,28 +51,21 @@ import com.abdussamadcodes.tutorsync.ui.student.StudentListActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectFormActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectListActivity;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
+import com.abdussamadcodes.tutorsync.util.BackupRestoreManager;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 
 public class MainActivity extends BaseActivity {
     private ActivityMainBinding binding;
@@ -181,7 +169,6 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         if (sessionManager.hasActiveSession()) {
-            // Ensure visible tab container always matches the active tab
             switchToTab(lastActiveTabId);
             refreshStatusLabels();
             loadDashboardData();
@@ -560,14 +547,12 @@ public class MainActivity extends BaseActivity {
             }
 
             try {
-                // 1. Verify current password against stored PBKDF2 hash & salt
                 String currentComputedHash = PasswordHasher.hashPassword(currentPass, account.getSalt());
                 if (!currentComputedHash.equals(account.getPasswordHash())) {
                     tilCurrent.setError(getString(R.string.err_incorrect_current_password));
                     return;
                 }
 
-                // 2. Enforce password strength rules
                 if (newPass.length() < 8) {
                     tilNew.setError(getString(R.string.auth_err_pass_length));
                     return;
@@ -597,7 +582,6 @@ public class MainActivity extends BaseActivity {
                     return;
                 }
 
-                // 3. Hash new password with a fresh salt and update SQLite
                 String newSalt = PasswordHasher.generateSalt();
                 String newHash = PasswordHasher.hashPassword(newPass, newSalt);
 
@@ -670,16 +654,6 @@ public class MainActivity extends BaseActivity {
     // =========================================================================
     // 4. PROFILE IMAGE & BACKUP HELPERS
     // =========================================================================
-    @NonNull
-    private String getColumnStringOrEmpty(@NonNull Cursor cursor, @NonNull String columnName) {
-        int idx = cursor.getColumnIndex(columnName);
-        if (idx != -1 && !cursor.isNull(idx)) {
-            String val = cursor.getString(idx);
-            return val != null ? val : "";
-        }
-        return "";
-    }
-
     private void loadProfileImageIntoView(@Nullable String path, @NonNull ImageView target) {
         if (path != null && !path.isEmpty()) {
             File file = new File(path);
@@ -719,83 +693,10 @@ public class MainActivity extends BaseActivity {
         if (accountId.isEmpty()) return;
 
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try {
-            JSONObject root = new JSONObject();
-            root.put("backup_version", 1);
-            root.put("exported_at", System.currentTimeMillis());
-
-            // 1. Export Preferences (Excluding AppLock for local independence)
-            JSONObject prefs = new JSONObject();
-            prefs.put("language_code", appPreferences.getLanguageCode());
-            prefs.put("theme_mode", appPreferences.getThemeMode());
-            root.put("preferences", prefs);
-
-            // 2. Export Profile
-            try (Cursor c = db.query(AccountEntry.TABLE_NAME, null,
-                    AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}, null, null, null)) {
-                if (c.moveToFirst()) {
-                    JSONObject profile = cursorRowToJson(c);
-                    String picPath = getColumnStringOrEmpty(c, AccountEntry.COLUMN_PROFILE_PIC_PATH);
-                    if (!picPath.isEmpty()) {
-                        File picFile = new File(picPath);
-                        if (picFile.exists()) {
-                            byte[] bytes = readFileBytes(picFile);
-                            if (bytes != null) {
-                                profile.put("profile_pic_base64", Base64.encodeToString(bytes, Base64.NO_WRAP));
-                            }
-                        }
-                    }
-                    root.put("profile", profile);
-                }
-            }
-
-            // 3. Export Tables
-            String[] accountScopedTables = new String[]{
-                    TutorSyncContract.StudentEntry.TABLE_NAME,
-                    TutorSyncContract.SubjectEntry.TABLE_NAME,
-                    TutorSyncContract.ScheduleEntry.TABLE_NAME,
-                    TutorSyncContract.ScheduleFeeHistoryEntry.TABLE_NAME,
-                    TutorSyncContract.OccurrenceEntry.TABLE_NAME,
-                    TutorSyncContract.AttendanceEntry.TABLE_NAME,
-                    TutorSyncContract.LessonEntry.TABLE_NAME,
-                    TutorSyncContract.FeeAgreementEntry.TABLE_NAME,
-                    TutorSyncContract.InvoiceEntry.TABLE_NAME,
-                    TutorSyncContract.InvoiceItemEntry.TABLE_NAME,
-                    TutorSyncContract.PaymentEntry.TABLE_NAME,
-                    TutorSyncContract.TransactionEntry.TABLE_NAME,
-                    TutorSyncContract.PaymentAllocationEntry.TABLE_NAME,
-                    TutorSyncContract.AuditLogEntry.TABLE_NAME
-            };
-
-            JSONObject tablesJson = new JSONObject();
-            for (String table : accountScopedTables) {
-                try (Cursor c = db.query(table, null, "account_id = ?", new String[]{accountId}, null, null, null)) {
-                    JSONArray arr = new JSONArray();
-                    while (c.moveToNext()) {
-                        arr.put(cursorRowToJson(c));
-                    }
-                    tablesJson.put(table, arr);
-                } catch (Exception ignored) {}
-            }
-
-            try (Cursor c = db.rawQuery(
-                    "SELECT ss.* FROM " + TutorSyncContract.StudentSubjectEntry.TABLE_NAME + " ss " +
-                            "INNER JOIN " + TutorSyncContract.StudentEntry.TABLE_NAME + " s ON ss.student_id = s.id " +
-                            "WHERE s.account_id = ?", new String[]{accountId})) {
-                JSONArray arr = new JSONArray();
-                while (c.moveToNext()) {
-                    arr.put(cursorRowToJson(c));
-                }
-                tablesJson.put(TutorSyncContract.StudentSubjectEntry.TABLE_NAME, arr);
-            } catch (Exception ignored) {}
-
-            root.put("tables", tablesJson);
-
-            try (OutputStream out = getContentResolver().openOutputStream(uri)) {
-                if (out != null) {
-                    out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
-                    Toast.makeText(this, "Backup exported successfully!", Toast.LENGTH_SHORT).show();
-                }
+        try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+            if (out != null) {
+                BackupRestoreManager.exportAccountBackupToStream(this, db, accountId, out);
+                Toast.makeText(this, "Backup exported successfully!", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
             Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -809,311 +710,23 @@ public class MainActivity extends BaseActivity {
         if (accountId.isEmpty()) return;
 
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        db.beginTransaction();
-        try {
-            StringBuilder sb = new StringBuilder();
-            try (InputStream in = getContentResolver().openInputStream(uri)) {
-                if (in == null) return;
-                byte[] buf = new byte[4096];
-                int n;
-                while ((n = in.read(buf)) != -1) {
-                    sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
-                }
-            }
-
-            JSONObject root = new JSONObject(sb.toString());
-
-            // 1. Restore Theme & Language (App Lock remains strictly independent)
-            JSONObject prefs = root.optJSONObject("preferences");
-            if (prefs != null) {
-                String lang = prefs.optString("language_code", "");
-                if (!lang.isEmpty()) appPreferences.setLanguageCode(lang);
-
-                String theme = prefs.optString("theme_mode", "");
-                if (!theme.isEmpty()) {
-                    appPreferences.setThemeMode(theme);
-                    LocaleThemeHelper.applyThemeMode(theme);
-                }
-            }
-
-            // 2. Restore Profile Information (Only if backup is from the same account)
-            JSONObject profile = root.optJSONObject("profile");
-            String backupSourceAccountId = "";
-
-            if (profile != null) {
-                backupSourceAccountId = profile.optString(AccountEntry.COLUMN_ID, "");
-                boolean isSameAccount = backupSourceAccountId.isEmpty() || backupSourceAccountId.equals(accountId);
-
-                if (isSameAccount) {
-                    ContentValues pv = new ContentValues();
-                    if (profile.has(AccountEntry.COLUMN_FULL_NAME) && !profile.isNull(AccountEntry.COLUMN_FULL_NAME)) {
-                        pv.put(AccountEntry.COLUMN_FULL_NAME, profile.optString(AccountEntry.COLUMN_FULL_NAME));
-                    }
-                    if (profile.has(AccountEntry.COLUMN_PHONE)) {
-                        if (profile.isNull(AccountEntry.COLUMN_PHONE)) pv.putNull(AccountEntry.COLUMN_PHONE);
-                        else pv.put(AccountEntry.COLUMN_PHONE, profile.optString(AccountEntry.COLUMN_PHONE));
-                    }
-                    if (profile.has(AccountEntry.COLUMN_EMAIL)) {
-                        if (profile.isNull(AccountEntry.COLUMN_EMAIL)) pv.putNull(AccountEntry.COLUMN_EMAIL);
-                        else pv.put(AccountEntry.COLUMN_EMAIL, profile.optString(AccountEntry.COLUMN_EMAIL));
-                    }
-                    if (profile.has(AccountEntry.COLUMN_DOB)) {
-                        if (profile.isNull(AccountEntry.COLUMN_DOB)) pv.putNull(AccountEntry.COLUMN_DOB);
-                        else pv.put(AccountEntry.COLUMN_DOB, profile.optString(AccountEntry.COLUMN_DOB));
-                    }
-                    if (profile.has(AccountEntry.COLUMN_ADDRESS)) {
-                        if (profile.isNull(AccountEntry.COLUMN_ADDRESS)) pv.putNull(AccountEntry.COLUMN_ADDRESS);
-                        else pv.put(AccountEntry.COLUMN_ADDRESS, profile.optString(AccountEntry.COLUMN_ADDRESS));
-                    }
-                    String base64Pic = profile.optString("profile_pic_base64", "");
-                    if (!base64Pic.isEmpty()) {
-                        byte[] imgBytes = Base64.decode(base64Pic, Base64.NO_WRAP);
-                        File destFile = new File(getFilesDir(), "profile_" + accountId + ".jpg");
-                        try (FileOutputStream fos = new FileOutputStream(destFile)) {
-                            fos.write(imgBytes);
-                            pv.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, destFile.getAbsolutePath());
-                        }
-                    }
-                    if (pv.size() > 0) {
-                        db.update(AccountEntry.TABLE_NAME, pv, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
-                    }
-                }
-            }
-
-            // 3. Restore Tables
-            JSONObject tablesJson = root.optJSONObject("tables");
-            if (tablesJson != null) {
-                String[] restoreOrder = new String[]{
-                        TutorSyncContract.StudentEntry.TABLE_NAME,
-                        TutorSyncContract.SubjectEntry.TABLE_NAME,
-                        TutorSyncContract.StudentSubjectEntry.TABLE_NAME,
-                        TutorSyncContract.ScheduleEntry.TABLE_NAME,
-                        TutorSyncContract.ScheduleFeeHistoryEntry.TABLE_NAME,
-                        TutorSyncContract.OccurrenceEntry.TABLE_NAME,
-                        TutorSyncContract.AttendanceEntry.TABLE_NAME,
-                        TutorSyncContract.LessonEntry.TABLE_NAME,
-                        TutorSyncContract.FeeAgreementEntry.TABLE_NAME,
-                        TutorSyncContract.InvoiceEntry.TABLE_NAME,
-                        TutorSyncContract.InvoiceItemEntry.TABLE_NAME,
-                        TutorSyncContract.PaymentEntry.TABLE_NAME,
-                        TutorSyncContract.TransactionEntry.TABLE_NAME,
-                        TutorSyncContract.PaymentAllocationEntry.TABLE_NAME,
-                        TutorSyncContract.AuditLogEntry.TABLE_NAME
-                };
-
-                boolean needsCrossAccountRemap = !backupSourceAccountId.isEmpty() && !backupSourceAccountId.equals(accountId);
-
-                String[] remapColumns = new String[]{
-                        "id",
-                        "student_id",
-                        "subject_id",
-                        "schedule_id",
-                        "schedule_group_id",
-                        "occurrence_id",
-                        "rescheduled_from_id",
-                        "makeup_occurrence_id",
-                        "billed_invoice_item_id",
-                        "invoice_id",
-                        "transaction_id",
-                        "parent_txn_id",
-                        "entity_id"
-                };
-
-                for (String table : restoreOrder) {
-                    JSONArray rows = tablesJson.optJSONArray(table);
-                    if (rows == null) continue;
-                    for (int i = 0; i < rows.length(); i++) {
-                        JSONObject rowObj = rows.getJSONObject(i);
-                        ContentValues cv = jsonToContentValues(rowObj);
-                        if (!TutorSyncContract.StudentSubjectEntry.TABLE_NAME.equals(table)) {
-                            cv.put("account_id", accountId);
-                        }
-                        if (needsCrossAccountRemap) {
-                            remapEntityIdsForAccount(cv, remapColumns, accountId);
-                        }
-                        upsertRowWithoutCascadeDelete(db, table, cv, accountId);
-                    }
-                }
-            }
-
-            db.setTransactionSuccessful();
-            Toast.makeText(this, "Backup restored successfully!", Toast.LENGTH_SHORT).show();
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in == null) return;
+            BackupRestoreManager.ImportResult result =
+                    BackupRestoreManager.importAccountBackupFromStream(this, db, accountId, in);
+            Toast.makeText(this,
+                    String.format(Locale.US, "Backup restored (%d added, %d updated, %d unchanged)",
+                            result.insertedCount, result.updatedCount, result.skippedCount),
+                    Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "Restore failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Restore failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
         } finally {
-            db.endTransaction();
             DatabaseManager.getInstance().closeDatabase();
         }
 
         studentRepo.migrateLegacyStudentIds(accountId);
         invoiceRepo.migrateLegacyInvoiceIds(accountId);
+        refreshStatusLabels();
         loadDashboardData();
-    }
-
-    private void remapEntityIdsForAccount(
-            @NonNull ContentValues cv,
-            @NonNull String[] remapColumns,
-            @NonNull String activeAccountId) {
-        for (String col : remapColumns) {
-            if (!cv.containsKey(col)) continue;
-            String rawVal = cv.getAsString(col);
-            if (rawVal == null || rawVal.trim().isEmpty()) continue;
-
-            if ("schedule_group_id".equals(col) && rawVal.startsWith("GRP-")) {
-                int lastDash = rawVal.lastIndexOf('-');
-                if (lastDash > 4) {
-                    String oldStuId = rawVal.substring(4, lastDash);
-                    String suffix = rawVal.substring(lastDash);
-                    String mappedStuId = deterministicAccountScopedId(activeAccountId, oldStuId);
-                    cv.put(col, "GRP-" + mappedStuId + suffix);
-                    continue;
-                }
-            }
-            cv.put(col, deterministicAccountScopedId(activeAccountId, rawVal));
-        }
-    }
-
-    @NonNull
-    private String deterministicAccountScopedId(@NonNull String activeAccountId, @NonNull String originalId) {
-        return UUID.nameUUIDFromBytes((activeAccountId + ":" + originalId).getBytes(StandardCharsets.UTF_8)).toString();
-    }
-
-    private void upsertRowWithoutCascadeDelete(
-            @NonNull SQLiteDatabase db,
-            @NonNull String table,
-            @NonNull ContentValues cv,
-            @NonNull String activeAccountId) {
-        String id = cv.getAsString("id");
-        if (id == null || id.isEmpty()) {
-            id = UUID.randomUUID().toString();
-            cv.put("id", id);
-            db.insert(table, null, cv);
-            return;
-        }
-
-        if (TutorSyncContract.StudentSubjectEntry.TABLE_NAME.equals(table)) {
-            String stuId = cv.getAsString(TutorSyncContract.StudentSubjectEntry.COLUMN_STUDENT_ID);
-            String subId = cv.getAsString(TutorSyncContract.StudentSubjectEntry.COLUMN_SUBJECT_ID);
-            if (stuId != null && subId != null) {
-                try (Cursor c = db.query(table, new String[]{"id"},
-                        TutorSyncContract.StudentSubjectEntry.COLUMN_STUDENT_ID + " = ? AND " +
-                                TutorSyncContract.StudentSubjectEntry.COLUMN_SUBJECT_ID + " = ?",
-                        new String[]{stuId, subId}, null, null, null)) {
-                    if (c.moveToFirst()) {
-                        return;
-                    }
-                }
-            }
-        } else if (TutorSyncContract.AttendanceEntry.TABLE_NAME.equals(table)) {
-            String occId = cv.getAsString(TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID);
-            if (occId != null) {
-                try (Cursor c = db.query(table, new String[]{"id"},
-                        TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " = ?",
-                        new String[]{occId}, null, null, null)) {
-                    if (c.moveToFirst()) {
-                        String existingId = c.getString(0);
-                        cv.put("id", existingId);
-                        db.update(table, cv, "id = ?", new String[]{existingId});
-                        return;
-                    }
-                }
-            }
-        } else if (TutorSyncContract.FeeAgreementEntry.TABLE_NAME.equals(table)) {
-            String stuId = cv.getAsString(TutorSyncContract.FeeAgreementEntry.COLUMN_STUDENT_ID);
-            if (stuId != null) {
-                try (Cursor c = db.query(table, new String[]{"id"},
-                        TutorSyncContract.FeeAgreementEntry.COLUMN_STUDENT_ID + " = ?",
-                        new String[]{stuId}, null, null, null)) {
-                    if (c.moveToFirst()) {
-                        String existingId = c.getString(0);
-                        cv.put("id", existingId);
-                        db.update(table, cv, "id = ?", new String[]{existingId});
-                        return;
-                    }
-                }
-            }
-        } else if (TutorSyncContract.StudentEntry.TABLE_NAME.equals(table)) {
-            String dispId = cv.getAsString(TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY);
-            if (dispId != null && !dispId.isEmpty()) {
-                try (Cursor c = db.query(table, new String[]{"id"},
-                        TutorSyncContract.StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                                TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " = ? AND id != ?",
-                        new String[]{activeAccountId, dispId, id}, null, null, null)) {
-                    if (c.moveToFirst()) {
-                        cv.putNull(TutorSyncContract.StudentEntry.COLUMN_STUDENT_ID_DISPLAY);
-                    }
-                }
-            }
-        }
-
-        boolean exists = false;
-        try (Cursor c = db.query(table, new String[]{"id"}, "id = ?", new String[]{id}, null, null, null)) {
-            if (c.moveToFirst()) {
-                exists = true;
-            }
-        }
-
-        if (exists) {
-            db.update(table, cv, "id = ?", new String[]{id});
-        } else {
-            db.insertOrThrow(table, null, cv);
-        }
-    }
-
-    @NonNull
-    private JSONObject cursorRowToJson(@NonNull Cursor c) throws Exception {
-        JSONObject obj = new JSONObject();
-        for (int i = 0; i < c.getColumnCount(); i++) {
-            String col = c.getColumnName(i);
-            int type = c.getType(i);
-            if (type == Cursor.FIELD_TYPE_NULL) {
-                obj.put(col, JSONObject.NULL);
-            } else if (type == Cursor.FIELD_TYPE_INTEGER) {
-                obj.put(col, c.getLong(i));
-            } else if (type == Cursor.FIELD_TYPE_FLOAT) {
-                obj.put(col, c.getDouble(i));
-            } else {
-                obj.put(col, c.getString(i));
-            }
-        }
-        return obj;
-    }
-
-    @NonNull
-    private ContentValues jsonToContentValues(@NonNull JSONObject obj) throws Exception {
-        ContentValues cv = new ContentValues();
-        Iterator<String> keys = obj.keys();
-        while (keys.hasNext()) {
-            String key = keys.next();
-            if (obj.isNull(key)) {
-                cv.putNull(key);
-            } else {
-                Object val = obj.get(key);
-                if (val instanceof Long) {
-                    cv.put(key, (Long) val);
-                } else if (val instanceof Integer) {
-                    cv.put(key, (Integer) val);
-                } else if (val instanceof Double) {
-                    cv.put(key, (Double) val);
-                } else {
-                    cv.put(key, String.valueOf(val));
-                }
-            }
-        }
-        return cv;
-    }
-    @Nullable
-    private byte[] readFileBytes(@NonNull File file) {
-        try (FileInputStream fis = new FileInputStream(file);
-             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-            byte[] buf = new byte[4096];
-            int n;
-            while ((n = fis.read(buf)) != -1) {
-                bos.write(buf, 0, n);
-            }
-            return bos.toByteArray();
-        } catch (Exception e) {
-            return null;
-        }
     }
 }

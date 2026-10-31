@@ -9,6 +9,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry;
 import com.abdussamadcodes.tutorsync.model.Account;
 
@@ -24,7 +25,7 @@ public class LocalAccountStore {
 
         try {
             ContentValues values = new ContentValues();
-            values.put(AccountEntry.COLUMN_ID, account.getId());
+            values.put(AccountEntry.COLUMN_ID, TutorSyncContract.ensureValidUuid(account.getId()));
             values.put(AccountEntry.COLUMN_FULL_NAME, account.getFullName());
             values.put(AccountEntry.COLUMN_USERNAME, account.getUsername().toLowerCase());
             values.put(AccountEntry.COLUMN_PASSWORD_HASH, account.getPasswordHash());
@@ -38,6 +39,7 @@ public class LocalAccountStore {
             long currentTime = System.currentTimeMillis();
             values.put(AccountEntry.COLUMN_CREATED_AT, currentTime);
             values.put(AccountEntry.COLUMN_UPDATED_AT, currentTime);
+            values.put(AccountEntry.COLUMN_LAST_MODIFIED, currentTime);
 
             long newRowId = db.insert(AccountEntry.TABLE_NAME, null, values);
             success = newRowId != -1;
@@ -119,10 +121,12 @@ public class LocalAccountStore {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         boolean success = false;
         try {
+            long now = System.currentTimeMillis();
             ContentValues values = new ContentValues();
             values.put(AccountEntry.COLUMN_PASSWORD_HASH, newPasswordHash);
             values.put(AccountEntry.COLUMN_SALT, newSalt);
-            values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+            values.put(AccountEntry.COLUMN_UPDATED_AT, now);
+            values.put(AccountEntry.COLUMN_LAST_MODIFIED, now);
 
             int rowsAffected = db.update(AccountEntry.TABLE_NAME, values, AccountEntry.COLUMN_ID + " = ?", new String[]{ accountId });
             success = rowsAffected > 0;
@@ -136,13 +140,15 @@ public class LocalAccountStore {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         boolean success = false;
         try {
+            long now = System.currentTimeMillis();
             ContentValues values = new ContentValues();
             if (path == null) {
                 values.putNull(AccountEntry.COLUMN_PROFILE_PIC_PATH);
             } else {
                 values.put(AccountEntry.COLUMN_PROFILE_PIC_PATH, path);
             }
-            values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+            values.put(AccountEntry.COLUMN_UPDATED_AT, now);
+            values.put(AccountEntry.COLUMN_LAST_MODIFIED, now);
 
             int rowsAffected = db.update(AccountEntry.TABLE_NAME, values, AccountEntry.COLUMN_ID + " = ?", new String[]{ accountId });
             success = rowsAffected > 0;
@@ -158,13 +164,15 @@ public class LocalAccountStore {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         boolean success = false;
         try {
+            long now = System.currentTimeMillis();
             ContentValues values = new ContentValues();
             values.put(AccountEntry.COLUMN_FULL_NAME, fullName);
             values.put(AccountEntry.COLUMN_PHONE, phone);
             values.put(AccountEntry.COLUMN_EMAIL, email);
             values.put(AccountEntry.COLUMN_ADDRESS, address);
             values.put(AccountEntry.COLUMN_DOB, dob);
-            values.put(AccountEntry.COLUMN_UPDATED_AT, System.currentTimeMillis());
+            values.put(AccountEntry.COLUMN_UPDATED_AT, now);
+            values.put(AccountEntry.COLUMN_LAST_MODIFIED, now);
 
             int rowsAffected = db.update(AccountEntry.TABLE_NAME, values, AccountEntry.COLUMN_ID + " = ?", new String[]{ accountId });
             success = rowsAffected > 0;
