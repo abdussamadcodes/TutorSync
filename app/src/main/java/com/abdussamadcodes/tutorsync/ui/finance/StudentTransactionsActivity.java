@@ -167,14 +167,12 @@ public class StudentTransactionsActivity extends BaseActivity {
     private void refreshHistory() {
         contentContainer.removeAllViews();
         String accountId = sessionManager.getActiveAccountId();
-        if (studentId == null || studentId.isEmpty()) {
+        if (accountId.isEmpty() || studentId == null || studentId.isEmpty()) {
             finish();
             return;
         }
         studentRepo.migrateLegacyStudentIds(accountId);
-        currentStudent = !accountId.isEmpty()
-                ? studentRepo.getStudentById(accountId, studentId)
-                : studentRepo.getStudentById(studentId);
+        currentStudent = studentRepo.getStudentById(accountId, studentId);
         if (currentStudent == null) {
             finish();
             return;
@@ -194,9 +192,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 }
             }
         }
-        FeeAgreement fallbackAgreement = !accountId.isEmpty()
-                ? feeRepo.getAgreementForStudent(accountId, studentId)
-                : feeRepo.getAgreementForStudent(studentId);
+        FeeAgreement fallbackAgreement = feeRepo.getAgreementForStudent(accountId, studentId);
 
         List<UnbilledClassCharge> classCharges = attendanceRepo.getPerClassAttendanceChargesForStudent(accountId, studentId);
         int unbilledClassTotalMinor = 0;

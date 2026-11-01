@@ -387,26 +387,32 @@ public class InvoiceRepository {
         return result;
     }
 
-    @Nullable
-    public Invoice getInvoiceById(@NonNull String accountId, @NonNull String invoiceId) {
+    @NonNull
+    public List<Invoice> getInvoicesForStudent(@NonNull String accountId, @NonNull String studentId) {
+        List<Invoice> result = new ArrayList<>();
+        if (accountId.trim().isEmpty() || studentId.trim().isEmpty()) return result;
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         String sql = SQL_SELECT_INVOICE_WITH_DERIVED_PAID +
-                "WHERE i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND i." + InvoiceEntry.COLUMN_ID + " = ?";
-        try (Cursor cursor = db.rawQuery(sql, new String[]{accountId, invoiceId})) {
-            if (cursor.moveToFirst()) {
-                return mapCursorToInvoice(cursor);
+                "WHERE i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND i." + InvoiceEntry.COLUMN_STUDENT_ID + " = ? " +
+                "AND i." + InvoiceEntry.COLUMN_IS_VOID + " = 0 " +
+                "ORDER BY i." + InvoiceEntry.COLUMN_CREATED_AT + " DESC";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{accountId, studentId})) {
+            while (cursor.moveToNext()) {
+                result.add(mapCursorToInvoice(cursor));
             }
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
-        return null;
+        return result;
     }
 
     @Nullable
-    public Invoice getInvoiceById(@NonNull String invoiceId) {
+    public Invoice getInvoiceById(@NonNull String accountId, @NonNull String invoiceId) {
+        if (accountId.trim().isEmpty() || invoiceId.trim().isEmpty()) return null;
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String sql = SQL_SELECT_INVOICE_WITH_DERIVED_PAID + "WHERE i." + InvoiceEntry.COLUMN_ID + " = ?";
-        try (Cursor cursor = db.rawQuery(sql, new String[]{invoiceId})) {
+        String sql = SQL_SELECT_INVOICE_WITH_DERIVED_PAID +
+                "WHERE i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND i." + InvoiceEntry.COLUMN_ID + " = ?";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{accountId, invoiceId})) {
             if (cursor.moveToFirst()) {
                 return mapCursorToInvoice(cursor);
             }
@@ -423,22 +429,6 @@ public class InvoiceRepository {
         try (Cursor c = db.query(InvoiceItemEntry.TABLE_NAME, null,
                 InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceItemEntry.COLUMN_INVOICE_ID + " = ?",
                 new String[]{accountId, invoiceId}, null, null, InvoiceItemEntry.COLUMN_CREATED_AT + " ASC")) {
-            while (c.moveToNext()) {
-                items.add(mapCursorToInvoiceItem(c));
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        return items;
-    }
-
-    @NonNull
-    public List<InvoiceItem> getItemsForInvoice(@NonNull String invoiceId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        List<InvoiceItem> items = new ArrayList<>();
-        try (Cursor c = db.query(InvoiceItemEntry.TABLE_NAME, null,
-                InvoiceItemEntry.COLUMN_INVOICE_ID + " = ?",
-                new String[]{invoiceId}, null, null, InvoiceItemEntry.COLUMN_CREATED_AT + " ASC")) {
             while (c.moveToNext()) {
                 items.add(mapCursorToInvoiceItem(c));
             }
@@ -497,16 +487,14 @@ public class InvoiceRepository {
         int discount = cursor.getInt(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_DISCOUNT_MINOR));
         long created = cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_CREATED_AT));
         long issueDate = cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_ISSUE_DATE));
+        long dueDate = cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_DUE_DATE));
+        long pStart = cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_PERIOD_START));
+        long pEnd = cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_PERIOD_END));
 
         long lastMod = created;
         int lastModIdx = cursor.getColumnIndex(InvoiceEntry.COLUMN_LAST_MODIFIED);
         if (lastModIdx != -1 && !cursor.isNull(lastModIdx) && cursor.getLong(lastModIdx) > 0) {
             lastMod = cursor.getLong(lastModIdx);
-        } else {
-            int upIdx = cursor.getColumnIndex(InvoiceEntry.COLUMN_UPDATED_AT);
-            if (upIdx != -1 && !cursor.isNull(upIdx) && cursor.getLong(upIdx) > 0) {
-                lastMod = cursor.getLong(upIdx);
-            }
         }
 
         return new Invoice(
@@ -515,10 +503,10 @@ public class InvoiceRepository {
                 cursor.getString(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_STUDENT_ID)),
                 cursor.getString(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY)),
                 cursor.getString(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_BILLING_PERIOD)),
-                cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_PERIOD_START)),
-                cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_PERIOD_END)),
+                pStart,
+                pEnd,
                 issueDate > 0 ? issueDate : created,
-                cursor.getLong(cursor.getColumnIndexOrThrow(InvoiceEntry.COLUMN_DUE_DATE)),
+                dueDate,
                 subtotal > 0 ? subtotal : totalAmount,
                 discount,
                 totalAmount,
@@ -529,21 +517,25 @@ public class InvoiceRepository {
         );
     }
 
-    public static void logAudit(SQLiteDatabase db, String accountId, String studentId,
-                                String entityType, String entityId, String action, String details) {
-        long now = System.currentTimeMillis();
-        ContentValues av = new ContentValues();
-        av.put(AuditLogEntry.COLUMN_ID, UUID.randomUUID().toString());
-        av.put(AuditLogEntry.COLUMN_ACCOUNT_ID, accountId);
-        av.put(AuditLogEntry.COLUMN_STUDENT_ID, studentId);
-        av.put(AuditLogEntry.COLUMN_ENTITY_TYPE, entityType);
-        av.put(AuditLogEntry.COLUMN_ENTITY_ID, entityId);
-        av.put(AuditLogEntry.COLUMN_ACTION, action);
-        av.put(AuditLogEntry.COLUMN_DETAILS, details);
-        av.put(AuditLogEntry.COLUMN_TIMESTAMP, now);
-        av.put(AuditLogEntry.COLUMN_CREATED_AT, now);
-        av.put(AuditLogEntry.COLUMN_UPDATED_AT, now);
-        av.put(AuditLogEntry.COLUMN_LAST_MODIFIED, now);
-        db.insert(AuditLogEntry.TABLE_NAME, null, av);
+    public static void logAudit(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                @Nullable String studentId, @NonNull String entityType,
+                                @NonNull String entityId, @NonNull String action,
+                                @NonNull String details) {
+        try {
+            long now = System.currentTimeMillis();
+            ContentValues cv = new ContentValues();
+            cv.put(AuditLogEntry.COLUMN_ID, UUID.randomUUID().toString());
+            cv.put(AuditLogEntry.COLUMN_ACCOUNT_ID, accountId);
+            cv.put(AuditLogEntry.COLUMN_STUDENT_ID, studentId);
+            cv.put(AuditLogEntry.COLUMN_ENTITY_TYPE, entityType);
+            cv.put(AuditLogEntry.COLUMN_ENTITY_ID, entityId);
+            cv.put(AuditLogEntry.COLUMN_ACTION, action);
+            cv.put(AuditLogEntry.COLUMN_DETAILS, details);
+            cv.put(AuditLogEntry.COLUMN_TIMESTAMP, now);
+            cv.put(AuditLogEntry.COLUMN_CREATED_AT, now);
+            cv.put(AuditLogEntry.COLUMN_UPDATED_AT, now);
+            cv.put(AuditLogEntry.COLUMN_LAST_MODIFIED, now);
+            db.insert(AuditLogEntry.TABLE_NAME, null, cv);
+        } catch (Exception ignored) {}
     }
 }

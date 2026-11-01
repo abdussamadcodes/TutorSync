@@ -117,9 +117,11 @@ public class InvoiceDetailActivity extends BaseActivity {
     private void refreshDetails() {
         rootContent.removeAllViews();
         String accountId = sessionManager.getActiveAccountId();
-        currentInvoice = !accountId.isEmpty()
-                ? invoiceRepo.getInvoiceById(accountId, invoiceId)
-                : invoiceRepo.getInvoiceById(invoiceId);
+        if (accountId.isEmpty() || invoiceId == null || invoiceId.isEmpty()) {
+            finish();
+            return;
+        }
+        currentInvoice = invoiceRepo.getInvoiceById(accountId, invoiceId);
         if (currentInvoice == null) {
             finish();
             return;

@@ -162,8 +162,8 @@ public class ScheduleFormActivity extends BaseActivity {
             }
 
             // If schedule fee was 0 on legacy schedule, prefill from student's FeeAgreement if present
-            if (editFeeMinor <= 0 && editStudentId != null) {
-                FeeAgreement fa = new FeeAgreementRepository().getAgreementForStudent(editStudentId);
+            if (editFeeMinor <= 0 && editStudentId != null && !accountId.isEmpty()) {
+                FeeAgreement fa = new FeeAgreementRepository().getAgreementForStudent(accountId, editStudentId);
                 if (fa != null && fa.getAmountMinorUnits() > 0) {
                     editFeeMinor = fa.getAmountMinorUnits();
                     editBillingModel = fa.getFeeType();
@@ -269,9 +269,11 @@ public class ScheduleFormActivity extends BaseActivity {
     }
 
     private void prefillFeeFromStudentAgreementIfEmpty(String studentId) {
+        String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) return;
         String currentFeeText = binding.etScheduleFee.getText() != null ? binding.etScheduleFee.getText().toString().trim() : "";
         if (currentFeeText.isEmpty()) {
-            FeeAgreement fa = new FeeAgreementRepository().getAgreementForStudent(studentId);
+            FeeAgreement fa = new FeeAgreementRepository().getAgreementForStudent(accountId, studentId);
             if (fa != null && fa.getAmountMinorUnits() > 0) {
                 binding.etScheduleFee.setText(String.format(Locale.US, "%.0f", fa.getAmountMinorUnits() / 100.0));
                 if (FeeAgreement.TYPE_PER_CLASS.equals(fa.getFeeType())) {
@@ -446,7 +448,7 @@ public class ScheduleFormActivity extends BaseActivity {
             EnrollmentRepository enrollRepo = new EnrollmentRepository();
             List<String> commonSubjectIds = null;
             for (Student s : chosenStudents) {
-                List<String> enrolledIds = enrollRepo.getEnrolledSubjectIdsForStudent(s.getId());
+                List<String> enrolledIds = enrollRepo.getEnrolledSubjectIdsForStudent(accountId, s.getId());
                 if (commonSubjectIds == null) {
                     commonSubjectIds = new ArrayList<>(enrolledIds);
                 } else {
@@ -524,6 +526,7 @@ public class ScheduleFormActivity extends BaseActivity {
                 ? RecurringSchedule.MODEL_PER_CLASS : RecurringSchedule.MODEL_MONTHLY;
 
         String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) return;
         String durationStr = binding.etDuration.getText() != null ? binding.etDuration.getText().toString() : "";
         int duration = Integer.parseInt(durationStr.isEmpty() ? "60" : durationStr);
 
@@ -534,8 +537,8 @@ public class ScheduleFormActivity extends BaseActivity {
 
         if (isEditMode && editScheduleIds != null) {
             for (String oldId : editScheduleIds) {
-                scheduleRepo.deleteScheduleSafely(oldId);
-                occurrenceRepo.deleteFutureOccurrencesByScheduleId(oldId);
+                scheduleRepo.deleteScheduleSafely(accountId, oldId);
+                occurrenceRepo.deleteFutureOccurrencesByScheduleId(accountId, oldId);
             }
         }
 
@@ -603,16 +606,17 @@ public class ScheduleFormActivity extends BaseActivity {
                 }
             }
 
-            // Link any orphaned occurrences for this student & time to this groupId
+            // Link any orphaned occurrences for this student & time in this account to this groupId
             SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
             try {
                 ContentValues upOcc = new ContentValues();
                 upOcc.put(OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID, groupId);
                 db.update(OccurrenceEntry.TABLE_NAME, upOcc,
-                        OccurrenceEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                        OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                                OccurrenceEntry.COLUMN_STUDENT_ID + " = ? AND " +
                                 OccurrenceEntry.COLUMN_START_TIME_MINUTES + " = ? AND " +
                                 OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID + " IS NULL",
-                        new String[]{student.getId(), String.valueOf(selectedStartMinute)});
+                        new String[]{accountId, student.getId(), String.valueOf(selectedStartMinute)});
             } finally {
                 DatabaseManager.getInstance().closeDatabase();
             }

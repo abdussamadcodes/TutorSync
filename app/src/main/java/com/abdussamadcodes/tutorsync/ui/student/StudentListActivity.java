@@ -108,7 +108,8 @@ public class StudentListActivity extends BaseActivity {
                     .setTitle(R.string.dialog_delete_student_title)
                     .setMessage(R.string.dialog_delete_student_msg)
                     .setPositiveButton(R.string.dialog_delete, (d, w) -> {
-                        if (studentRepo.deleteStudent(student.getId())) {
+                        String accountId = sessionManager.getActiveAccountId();
+                        if (!accountId.isEmpty() && studentRepo.deleteStudent(accountId, student.getId())) {
                             loadStudents();
                         }
                     })
@@ -121,8 +122,9 @@ public class StudentListActivity extends BaseActivity {
 
     private void showEnrollmentDialog(Student student) {
         String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) return;
         List<Subject> availableSubjects = subjectRepo.getActiveSubjectsForAccount(accountId);
-        List<String> enrolledIds = enrollmentRepo.getEnrolledSubjectIdsForStudent(student.getId());
+        List<String> enrolledIds = enrollmentRepo.getEnrolledSubjectIdsForStudent(accountId, student.getId());
 
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_enroll_subject, null);
         AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(dialogView).create();
@@ -148,7 +150,7 @@ public class StudentListActivity extends BaseActivity {
 
             btnSave.setOnClickListener(v -> {
                 java.util.Set<String> finalSelectedIds = subjectAdapter.getSelectedSubjectIds();
-                enrollmentRepo.syncStudentEnrollments(student.getId(), finalSelectedIds);
+                enrollmentRepo.syncStudentEnrollments(accountId, student.getId(), finalSelectedIds);
                 dialog.dismiss();
             });
         }

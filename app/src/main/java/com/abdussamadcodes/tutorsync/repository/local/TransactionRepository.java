@@ -360,28 +360,6 @@ public class TransactionRepository {
         return list;
     }
 
-    @NonNull
-    public List<FinancialTransaction> getTransactionsForInvoice(@NonNull String invoiceId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        List<FinancialTransaction> list = new ArrayList<>();
-        String sql = "SELECT DISTINCT t.* FROM " + TransactionEntry.TABLE_NAME + " t " +
-                "INNER JOIN " + PaymentAllocationEntry.TABLE_NAME + " pa " +
-                "ON t." + TransactionEntry.COLUMN_ID + " = pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " " +
-                "AND t." + TransactionEntry.COLUMN_ACCOUNT_ID + " = pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " " +
-                "WHERE pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? " +
-                "ORDER BY t." + TransactionEntry.COLUMN_TIMESTAMP + " DESC";
-        try (Cursor c = db.rawQuery(sql, new String[]{invoiceId})) {
-            while (c.moveToNext()) {
-                FinancialTransaction txn = mapCursorToTransaction(c);
-                populateRelatedInvoiceDisplayIds(db, txn.getAccountId(), txn);
-                list.add(txn);
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        return list;
-    }
-
     private void populateRelatedInvoiceDisplayIds(SQLiteDatabase db, String accountId, FinancialTransaction txn) {
         String sql = "SELECT DISTINCT i." + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY +
                 " FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +

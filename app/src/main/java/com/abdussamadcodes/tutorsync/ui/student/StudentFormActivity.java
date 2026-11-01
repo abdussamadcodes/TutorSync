@@ -37,14 +37,16 @@ public class StudentFormActivity extends BaseActivity {
         } else {
             // Hide the ID field completely for new students (it's auto-generated)
             binding.etStudentId.setVisibility(View.GONE);
-            ((View)binding.etStudentId.getParent().getParent()).setVisibility(View.GONE);
+            ((View) binding.etStudentId.getParent().getParent()).setVisibility(View.GONE);
         }
 
         binding.btnSave.setOnClickListener(v -> saveStudent());
     }
 
     private void loadExistingStudentData() {
-        Student student = repository.getStudentById(existingStudentId);
+        String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty() || existingStudentId == null) return;
+        Student student = repository.getStudentById(accountId, existingStudentId);
         if (student != null) {
             binding.etStudentId.setText(student.getStudentIdDisplay());
             binding.etStudentId.setEnabled(false);

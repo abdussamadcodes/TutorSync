@@ -117,8 +117,9 @@ public class AttendanceBottomSheetFragment extends BottomSheetDialogFragment {
         binding.btnSaveAttendance.setOnClickListener(v -> saveRecord());
 
         binding.btnRemoveClass.setOnClickListener(v -> {
+            if (accountId == null || accountId.trim().isEmpty()) return;
             for (String occId : occurrenceIds) {
-                occurrenceRepo.deleteOccurrence(occId);
+                occurrenceRepo.deleteOccurrence(accountId, occId);
             }
             Toast.makeText(requireContext(), "Class removed from dashboard", Toast.LENGTH_SHORT).show();
             notifyDashboardRefresh();
