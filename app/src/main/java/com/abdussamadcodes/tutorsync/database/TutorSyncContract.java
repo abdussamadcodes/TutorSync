@@ -9,7 +9,7 @@ public final class TutorSyncContract {
     private TutorSyncContract() {}
 
     public static final String DATABASE_NAME = "tutorsync.db";
-    public static final int DATABASE_VERSION = 7;
+    public static final int DATABASE_VERSION = 8;
 
     public static final String COLUMN_SYNC_CREATED_AT = "created_at";
     public static final String COLUMN_SYNC_UPDATED_AT = "updated_at";
@@ -23,7 +23,6 @@ public final class TutorSyncContract {
                 try {
                     return UUID.fromString(trimmed).toString();
                 } catch (IllegalArgumentException ignored) {
-                    // Preserve existing non-empty deterministic or legacy IDs without generating new ones
                     return trimmed;
                 }
             }

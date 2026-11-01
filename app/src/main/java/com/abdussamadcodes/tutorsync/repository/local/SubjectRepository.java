@@ -7,9 +7,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.SubjectEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
@@ -199,23 +200,104 @@ public class SubjectRepository {
     }
 
     public boolean deleteSubject(@NonNull String accountId, @NonNull String subjectId) {
+        if (accountId.trim().isEmpty() || subjectId.trim().isEmpty()) return false;
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        db.beginTransaction();
         try {
-            return db.delete(SubjectEntry.TABLE_NAME,
-                    SubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " + SubjectEntry.COLUMN_ID + " = ?",
-                    new String[]{accountId, subjectId}) > 0;
+            Calendar cal = Calendar.getInstance();
+            cal.set(Calendar.HOUR_OF_DAY, 0);
+            cal.set(Calendar.MINUTE, 0);
+            cal.set(Calendar.SECOND, 0);
+            cal.set(Calendar.MILLISECOND, 0);
+            long startOfTodayMillis = cal.getTimeInMillis();
+            long now = System.currentTimeMillis();
+
+            // 1. Remove active enrollments for this subject
+            db.delete(StudentSubjectEntry.TABLE_NAME,
+                    StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentSubjectEntry.COLUMN_SUBJECT_ID + " = ?",
+                    new String[]{accountId, subjectId});
+
+            // 2. Safely detach historical occurrences & remove recurring schedules for this subject
+            List<String> scheduleIds = new ArrayList<>();
+            try (Cursor c = db.query(ScheduleEntry.TABLE_NAME, new String[]{ScheduleEntry.COLUMN_ID},
+                    ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleEntry.COLUMN_SUBJECT_ID + " = ?",
+                    new String[]{accountId, subjectId}, null, null, null)) {
+                while (c.moveToNext()) {
+                    scheduleIds.add(c.getString(0));
+                }
+            }
+            for (String schedId : scheduleIds) {
+                ScheduleRepository.detachPastAndRecordedOccurrencesForSchedule(db, accountId, schedId, startOfTodayMillis, now);
+                ScheduleRepository.deleteUnrecordedFutureOccurrencesForSchedule(db, accountId, schedId, startOfTodayMillis);
+                db.delete(ScheduleEntry.TABLE_NAME,
+                        ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, schedId});
+            }
+
+            // 3. Delete any remaining unrecorded future occurrences directly referencing this subject
+            String unrecordedFutureWhere = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                    OccurrenceEntry.COLUMN_SUBJECT_ID + " = ? AND " +
+                    OccurrenceEntry.COLUMN_DATE + " >= ? AND " +
+                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " + AttendanceEntry.COLUMN_OCCURRENCE_ID +
+                    " FROM " + AttendanceEntry.TABLE_NAME + " WHERE " + AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?) AND " +
+                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " + LessonEntry.COLUMN_OCCURRENCE_ID +
+                    " FROM " + LessonEntry.TABLE_NAME + " WHERE " + LessonEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                    LessonEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) AND " +
+                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " + InvoiceItemEntry.COLUMN_OCCURRENCE_ID +
+                    " FROM " + InvoiceItemEntry.TABLE_NAME + " WHERE " + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                    InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL)";
+            db.delete(OccurrenceEntry.TABLE_NAME, unrecordedFutureWhere,
+                    new String[]{accountId, subjectId, String.valueOf(startOfTodayMillis), accountId, accountId, accountId});
+
+            // 4. If historical occurrences still reference this subject, soft-delete to preserve history
+            boolean hasRemainingOccurrences = false;
+            try (Cursor c = db.query(OccurrenceEntry.TABLE_NAME, new String[]{OccurrenceEntry.COLUMN_ID},
+                    OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_SUBJECT_ID + " = ?",
+                    new String[]{accountId, subjectId}, null, null, null, "1")) {
+                if (c.moveToFirst()) {
+                    hasRemainingOccurrences = true;
+                }
+            }
+
+            boolean result;
+            if (hasRemainingOccurrences) {
+                ContentValues softDelete = new ContentValues();
+                softDelete.put(SubjectEntry.COLUMN_IS_ACTIVE, 0);
+                softDelete.put(SubjectEntry.COLUMN_IS_DELETED, 1);
+                softDelete.put(SubjectEntry.COLUMN_UPDATED_AT, now);
+                softDelete.put(SubjectEntry.COLUMN_LAST_MODIFIED, now);
+                result = db.update(SubjectEntry.TABLE_NAME, softDelete,
+                        SubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " + SubjectEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, subjectId}) > 0;
+            } else {
+                result = db.delete(SubjectEntry.TABLE_NAME,
+                        SubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " + SubjectEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, subjectId}) > 0;
+            }
+
+            db.setTransactionSuccessful();
+            return result;
+        } catch (Exception e) {
+            return false;
         } finally {
+            db.endTransaction();
             DatabaseManager.getInstance().closeDatabase();
         }
     }
 
     public boolean deleteSubject(@NonNull String subjectId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try {
-            return db.delete(SubjectEntry.TABLE_NAME, SubjectEntry.COLUMN_ID + " = ?", new String[]{subjectId}) > 0;
+        String accountId = null;
+        try (Cursor c = db.query(SubjectEntry.TABLE_NAME, new String[]{SubjectEntry.COLUMN_ACCOUNT_ID},
+                SubjectEntry.COLUMN_ID + " = ?", new String[]{subjectId}, null, null, null)) {
+            if (c.moveToFirst()) {
+                accountId = c.getString(0);
+            }
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
+        if (accountId == null || accountId.isEmpty()) return false;
+        return deleteSubject(accountId, subjectId);
     }
 
     @NonNull

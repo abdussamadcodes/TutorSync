@@ -156,7 +156,7 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                 "FOREIGN KEY(" + OccurrenceEntry.COLUMN_ACCOUNT_ID + ", " + OccurrenceEntry.COLUMN_STUDENT_ID + ") REFERENCES " +
                 StudentEntry.TABLE_NAME + "(" + StudentEntry.COLUMN_ACCOUNT_ID + ", " + StudentEntry.COLUMN_ID + ") ON DELETE CASCADE, " +
                 "FOREIGN KEY(" + OccurrenceEntry.COLUMN_ACCOUNT_ID + ", " + OccurrenceEntry.COLUMN_SCHEDULE_ID + ") REFERENCES " +
-                ScheduleEntry.TABLE_NAME + "(" + ScheduleEntry.COLUMN_ACCOUNT_ID + ", " + ScheduleEntry.COLUMN_ID + ") ON DELETE CASCADE)";
+                ScheduleEntry.TABLE_NAME + "(" + ScheduleEntry.COLUMN_ACCOUNT_ID + ", " + ScheduleEntry.COLUMN_ID + ") ON DELETE NO ACTION)";
     }
 
     private static String buildCreateAttendanceSql(String tableName) {
@@ -365,6 +365,7 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         createAllTables(db);
         createIndexes(db);
+        createTriggers(db);
         sSchemaVerifiedThisProcess = true;
     }
 
@@ -414,12 +415,39 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_student_subjects_lookup ON " + StudentSubjectEntry.TABLE_NAME + "(" + StudentSubjectEntry.COLUMN_ACCOUNT_ID + ", " + StudentSubjectEntry.COLUMN_STUDENT_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_schedules_account_student ON " + ScheduleEntry.TABLE_NAME + "(" + ScheduleEntry.COLUMN_ACCOUNT_ID + ", " + ScheduleEntry.COLUMN_STUDENT_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_occurrences_account_date ON " + OccurrenceEntry.TABLE_NAME + "(" + OccurrenceEntry.COLUMN_ACCOUNT_ID + ", " + OccurrenceEntry.COLUMN_DATE + ")");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_occurrences_account_schedule ON " + OccurrenceEntry.TABLE_NAME + "(" + OccurrenceEntry.COLUMN_ACCOUNT_ID + ", " + OccurrenceEntry.COLUMN_SCHEDULE_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_account_occ ON " + AttendanceEntry.TABLE_NAME + "(" + AttendanceEntry.COLUMN_ACCOUNT_ID + ", " + AttendanceEntry.COLUMN_OCCURRENCE_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_invoices_account_student ON " + InvoiceEntry.TABLE_NAME + "(" + InvoiceEntry.COLUMN_ACCOUNT_ID + ", " + InvoiceEntry.COLUMN_STUDENT_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON " + InvoiceItemEntry.TABLE_NAME + "(" + InvoiceItemEntry.COLUMN_ACCOUNT_ID + ", " + InvoiceItemEntry.COLUMN_INVOICE_ID + ")");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_invoice_items_occ ON " + InvoiceItemEntry.TABLE_NAME + "(" + InvoiceItemEntry.COLUMN_ACCOUNT_ID + ", " + InvoiceItemEntry.COLUMN_OCCURRENCE_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_transactions_account_student ON " + TransactionEntry.TABLE_NAME + "(" + TransactionEntry.COLUMN_ACCOUNT_ID + ", " + TransactionEntry.COLUMN_STUDENT_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_allocations_invoice ON " + PaymentAllocationEntry.TABLE_NAME + "(" + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + ", " + PaymentAllocationEntry.COLUMN_INVOICE_ID + ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_allocations_txn ON " + PaymentAllocationEntry.TABLE_NAME + "(" + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + ", " + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + ")");
+    }
+
+    private void createTriggers(SQLiteDatabase db) {
+        // Trigger to intercept recurring_schedules deletion:
+        // Detaches historical occurrences (attendance, lessons, billing) by setting schedule_id = NULL
+        // Deletes only unrecorded future occurrences so ghost classes do not linger
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS trg_recurring_schedules_cascade_guard " +
+                "BEFORE DELETE ON " + ScheduleEntry.TABLE_NAME + " " +
+                "FOR EACH ROW " +
+                "BEGIN " +
+                "  UPDATE " + OccurrenceEntry.TABLE_NAME + " " +
+                "  SET " + OccurrenceEntry.COLUMN_SCHEDULE_ID + " = NULL, " +
+                "      " + OccurrenceEntry.COLUMN_UPDATED_AT + " = (strftime('%s', 'now') * 1000), " +
+                "      " + OccurrenceEntry.COLUMN_LAST_MODIFIED + " = (strftime('%s', 'now') * 1000) " +
+                "  WHERE " + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = OLD." + ScheduleEntry.COLUMN_ACCOUNT_ID + " " +
+                "    AND " + OccurrenceEntry.COLUMN_SCHEDULE_ID + " = OLD." + ScheduleEntry.COLUMN_ID + " " +
+                "    AND (" +
+                "        " + OccurrenceEntry.COLUMN_ID + " IN (SELECT " + AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " + AttendanceEntry.TABLE_NAME + " WHERE " + AttendanceEntry.COLUMN_ACCOUNT_ID + " = OLD." + ScheduleEntry.COLUMN_ACCOUNT_ID + ") OR " +
+                "        " + OccurrenceEntry.COLUMN_ID + " IN (SELECT " + LessonEntry.COLUMN_OCCURRENCE_ID + " FROM " + LessonEntry.TABLE_NAME + " WHERE " + LessonEntry.COLUMN_ACCOUNT_ID + " = OLD." + ScheduleEntry.COLUMN_ACCOUNT_ID + " AND " + LessonEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) OR " +
+                "        " + OccurrenceEntry.COLUMN_ID + " IN (SELECT " + InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " FROM " + InvoiceItemEntry.TABLE_NAME + " WHERE " + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = OLD." + ScheduleEntry.COLUMN_ACCOUNT_ID + " AND " + InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL)" +
+                "    ); " +
+                "  DELETE FROM " + OccurrenceEntry.TABLE_NAME + " " +
+                "  WHERE " + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = OLD." + ScheduleEntry.COLUMN_ACCOUNT_ID + " " +
+                "    AND " + OccurrenceEntry.COLUMN_SCHEDULE_ID + " = OLD." + ScheduleEntry.COLUMN_ID + "; " +
+                "END;");
     }
 
     private void ensureSchemaIntegrity(SQLiteDatabase db) {
@@ -431,10 +459,10 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         }
 
         createIndexes(db);
+        createTriggers(db);
     }
 
     private void ensurePreMigrationColumns(SQLiteDatabase db) {
-        // Account columns
         addColumnIfNotExists(db, AccountEntry.TABLE_NAME, AccountEntry.COLUMN_PHONE, "TEXT");
         addColumnIfNotExists(db, AccountEntry.TABLE_NAME, AccountEntry.COLUMN_EMAIL, "TEXT");
         addColumnIfNotExists(db, AccountEntry.TABLE_NAME, AccountEntry.COLUMN_ADDRESS, "TEXT");
@@ -444,29 +472,24 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         addColumnIfNotExists(db, AccountEntry.TABLE_NAME, AccountEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, AccountEntry.TABLE_NAME, AccountEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Student columns
         addColumnIfNotExists(db, StudentEntry.TABLE_NAME, StudentEntry.COLUMN_STUDENT_ID_DISPLAY, "TEXT");
         addColumnIfNotExists(db, StudentEntry.TABLE_NAME, StudentEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, StudentEntry.TABLE_NAME, StudentEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, StudentEntry.TABLE_NAME, StudentEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Subject columns
         addColumnIfNotExists(db, SubjectEntry.TABLE_NAME, SubjectEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, SubjectEntry.TABLE_NAME, SubjectEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, SubjectEntry.TABLE_NAME, SubjectEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // StudentSubject columns
         addColumnIfNotExists(db, StudentSubjectEntry.TABLE_NAME, StudentSubjectEntry.COLUMN_ACCOUNT_ID, "TEXT");
         addColumnIfNotExists(db, StudentSubjectEntry.TABLE_NAME, StudentSubjectEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, StudentSubjectEntry.TABLE_NAME, StudentSubjectEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, StudentSubjectEntry.TABLE_NAME, StudentSubjectEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Schedule Fee History columns
         addColumnIfNotExists(db, ScheduleFeeHistoryEntry.TABLE_NAME, ScheduleFeeHistoryEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, ScheduleFeeHistoryEntry.TABLE_NAME, ScheduleFeeHistoryEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, ScheduleFeeHistoryEntry.TABLE_NAME, ScheduleFeeHistoryEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Schedule columns
         addColumnIfNotExists(db, ScheduleEntry.TABLE_NAME, ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID, "TEXT");
         addColumnIfNotExists(db, ScheduleEntry.TABLE_NAME, ScheduleEntry.COLUMN_BILLING_MODEL, "TEXT NOT NULL DEFAULT 'MONTHLY'");
         addColumnIfNotExists(db, ScheduleEntry.TABLE_NAME, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR, "INTEGER NOT NULL DEFAULT 0");
@@ -476,7 +499,6 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         addColumnIfNotExists(db, ScheduleEntry.TABLE_NAME, ScheduleEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, ScheduleEntry.TABLE_NAME, ScheduleEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Occurrence columns
         addColumnIfNotExists(db, OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_SUBJECT_ID, "TEXT");
         addColumnIfNotExists(db, OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID, "TEXT");
         addColumnIfNotExists(db, OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID, "TEXT");
@@ -484,7 +506,6 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         addColumnIfNotExists(db, OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, OccurrenceEntry.TABLE_NAME, OccurrenceEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Attendance columns
         addColumnIfNotExists(db, AttendanceEntry.TABLE_NAME, AttendanceEntry.COLUMN_CHARGE_DECISION, "TEXT NOT NULL DEFAULT 'CHARGE'");
         addColumnIfNotExists(db, AttendanceEntry.TABLE_NAME, AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, AttendanceEntry.TABLE_NAME, AttendanceEntry.COLUMN_NEEDS_RESCHEDULE, "INTEGER NOT NULL DEFAULT 0");
@@ -494,17 +515,14 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         addColumnIfNotExists(db, AttendanceEntry.TABLE_NAME, AttendanceEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, AttendanceEntry.TABLE_NAME, AttendanceEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Lesson columns
         addColumnIfNotExists(db, LessonEntry.TABLE_NAME, LessonEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, LessonEntry.TABLE_NAME, LessonEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, LessonEntry.TABLE_NAME, LessonEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // FeeAgreement columns
         addColumnIfNotExists(db, FeeAgreementEntry.TABLE_NAME, FeeAgreementEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, FeeAgreementEntry.TABLE_NAME, FeeAgreementEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, FeeAgreementEntry.TABLE_NAME, FeeAgreementEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Invoice columns
         addColumnIfNotExists(db, InvoiceEntry.TABLE_NAME, InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY, "TEXT");
         addColumnIfNotExists(db, InvoiceEntry.TABLE_NAME, InvoiceEntry.COLUMN_PERIOD_START, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceEntry.TABLE_NAME, InvoiceEntry.COLUMN_PERIOD_END, "INTEGER NOT NULL DEFAULT 0");
@@ -517,39 +535,32 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         addColumnIfNotExists(db, InvoiceEntry.TABLE_NAME, InvoiceEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceEntry.TABLE_NAME, InvoiceEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // InvoiceItem columns
         addColumnIfNotExists(db, InvoiceItemEntry.TABLE_NAME, InvoiceItemEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceItemEntry.TABLE_NAME, InvoiceItemEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceItemEntry.TABLE_NAME, InvoiceItemEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Payment columns
         addColumnIfNotExists(db, PaymentEntry.TABLE_NAME, PaymentEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, PaymentEntry.TABLE_NAME, PaymentEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, PaymentEntry.TABLE_NAME, PaymentEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Transaction columns
         addColumnIfNotExists(db, TransactionEntry.TABLE_NAME, TransactionEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, TransactionEntry.TABLE_NAME, TransactionEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, TransactionEntry.TABLE_NAME, TransactionEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // PaymentAllocation columns
         addColumnIfNotExists(db, PaymentAllocationEntry.TABLE_NAME, PaymentAllocationEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, PaymentAllocationEntry.TABLE_NAME, PaymentAllocationEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, PaymentAllocationEntry.TABLE_NAME, PaymentAllocationEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // AuditLog columns
         addColumnIfNotExists(db, AuditLogEntry.TABLE_NAME, AuditLogEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, AuditLogEntry.TABLE_NAME, AuditLogEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, AuditLogEntry.TABLE_NAME, AuditLogEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
-        // Backfill student_subjects.account_id from students.account_id where missing
         db.execSQL("UPDATE " + StudentSubjectEntry.TABLE_NAME +
                 " SET " + StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = (" +
                 "SELECT s." + StudentEntry.COLUMN_ACCOUNT_ID + " FROM " + StudentEntry.TABLE_NAME + " s " +
                 "WHERE s." + StudentEntry.COLUMN_ID + " = " + StudentSubjectEntry.TABLE_NAME + "." + StudentSubjectEntry.COLUMN_STUDENT_ID + " LIMIT 1) " +
                 "WHERE " + StudentSubjectEntry.COLUMN_ACCOUNT_ID + " IS NULL OR " + StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = ''");
 
-        // Normalize timestamps across tables where updated_at or last_modified was 0
         long now = System.currentTimeMillis();
         normalizeTimestamps(db, AccountEntry.TABLE_NAME, AccountEntry.COLUMN_CREATED_AT, now);
         normalizeTimestamps(db, StudentEntry.TABLE_NAME, StudentEntry.COLUMN_UPDATED_AT, now);
@@ -620,7 +631,6 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
             db.beginTransaction();
         }
         try {
-            // 1. Create staging v7 tables
             db.execSQL("DROP TABLE IF EXISTS students_v7");
             db.execSQL("DROP TABLE IF EXISTS subjects_v7");
             db.execSQL("DROP TABLE IF EXISTS student_subjects_v7");
@@ -653,7 +663,6 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
             db.execSQL(buildCreatePaymentAllocationsSql("payment_allocations_v7"));
             db.execSQL(buildCreateAuditLogsSql("audit_logs_v7"));
 
-            // 2. Copy all existing rows into staging tables
             db.execSQL("INSERT OR IGNORE INTO students_v7 (id, account_id, student_id_display, name, grade, school, guardian_name, guardian_phone, address, is_active, is_deleted, created_at, updated_at, last_modified) " +
                     "SELECT id, account_id, student_id_display, name, grade, school, guardian_name, guardian_phone, address, is_active, is_deleted, created_at, updated_at, last_modified FROM " + StudentEntry.TABLE_NAME +
                     " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
@@ -714,7 +723,6 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                     "SELECT id, account_id, student_id, entity_type, entity_id, action, details, timestamp, created_at, updated_at, last_modified FROM " + AuditLogEntry.TABLE_NAME +
                     " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
 
-            // 3. Drop legacy tables in reverse dependency order
             db.execSQL("DROP TABLE IF EXISTS " + AuditLogEntry.TABLE_NAME);
             db.execSQL("DROP TABLE IF EXISTS " + PaymentAllocationEntry.TABLE_NAME);
             db.execSQL("DROP TABLE IF EXISTS " + TransactionEntry.TABLE_NAME);
@@ -731,7 +739,6 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
             db.execSQL("DROP TABLE IF EXISTS " + SubjectEntry.TABLE_NAME);
             db.execSQL("DROP TABLE IF EXISTS " + StudentEntry.TABLE_NAME);
 
-            // 4. Rename v7 staging tables into place in parent-to-child order
             db.execSQL("ALTER TABLE students_v7 RENAME TO " + StudentEntry.TABLE_NAME);
             db.execSQL("ALTER TABLE subjects_v7 RENAME TO " + SubjectEntry.TABLE_NAME);
             db.execSQL("ALTER TABLE student_subjects_v7 RENAME TO " + StudentSubjectEntry.TABLE_NAME);
