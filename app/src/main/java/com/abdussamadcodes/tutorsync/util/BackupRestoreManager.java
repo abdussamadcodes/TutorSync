@@ -116,54 +116,38 @@ public final class BackupRestoreManager {
         root.put("exported_at", System.currentTimeMillis());
         root.put("source_account_id", accountId);
 
-        // Export non-security profile metadata (never export password_hash or salt)
-        try (Cursor c = db.query(AccountEntry.TABLE_NAME, null,
+        try (Cursor ac = db.query(AccountEntry.TABLE_NAME, null,
                 AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}, null, null, null)) {
-            if (c.moveToFirst()) {
-                JSONObject profile = cursorRowToJson(c);
+            if (ac.moveToFirst()) {
+                JSONObject profile = cursorRowToJson(ac);
                 profile.remove(AccountEntry.COLUMN_PASSWORD_HASH);
                 profile.remove(AccountEntry.COLUMN_SALT);
 
-                String picPath = getColumnStringOrEmpty(c, AccountEntry.COLUMN_PROFILE_PIC_PATH);
-                if (!picPath.isEmpty()) {
+                String picPath = ac.getString(ac.getColumnIndexOrThrow(AccountEntry.COLUMN_PROFILE_PIC_PATH));
+                if (picPath != null && !picPath.trim().isEmpty()) {
                     File picFile = new File(picPath);
-                    if (picFile.exists()) {
-                        byte[] bytes = readFileBytes(picFile);
-                        if (bytes != null) {
+                    if (picFile.exists() && picFile.isFile() && picFile.length() <= 5 * 1024 * 1024) {
+                        try (FileInputStream fis = new FileInputStream(picFile)) {
+                            byte[] bytes = readAllBytes(fis);
                             profile.put("profile_pic_base64", Base64.encodeToString(bytes, Base64.NO_WRAP));
-                        }
+                        } catch (Exception ignored) {}
                     }
                 }
                 root.put("profile", profile);
             }
         }
 
-        JSONObject tablesJson = new JSONObject();
+        JSONObject tables = new JSONObject();
         for (String table : SYNC_TABLE_ORDER) {
-            JSONArray arr = new JSONArray();
-            if (StudentSubjectEntry.TABLE_NAME.equals(table)) {
-                try (Cursor c = db.rawQuery(
-                        "SELECT ss.* FROM " + StudentSubjectEntry.TABLE_NAME + " ss " +
-                                "INNER JOIN " + StudentEntry.TABLE_NAME + " s " +
-                                "ON ss." + StudentSubjectEntry.COLUMN_STUDENT_ID + " = s." + StudentEntry.COLUMN_ID +
-                                " AND ss." + StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = s." + StudentEntry.COLUMN_ACCOUNT_ID +
-                                " WHERE s." + StudentEntry.COLUMN_ACCOUNT_ID + " = ?",
-                        new String[]{accountId})) {
-                    while (c.moveToNext()) {
-                        arr.put(cursorRowToJson(c));
-                    }
-                }
-            } else {
-                try (Cursor c = db.query(table, null, "account_id = ?", new String[]{accountId}, null, null, null)) {
-                    while (c.moveToNext()) {
-                        arr.put(cursorRowToJson(c));
-                    }
+            JSONArray rows = new JSONArray();
+            try (Cursor c = db.query(table, null, "account_id = ?", new String[]{accountId}, null, null, null)) {
+                while (c.moveToNext()) {
+                    rows.put(cursorRowToJson(c));
                 }
             }
-            tablesJson.put(table, arr);
+            tables.put(table, rows);
         }
-
-        root.put("tables", tablesJson);
+        root.put("tables", tables);
         return root;
     }
 
@@ -171,14 +155,15 @@ public final class BackupRestoreManager {
             @Nullable Context context,
             @NonNull SQLiteDatabase db,
             @NonNull String accountId,
-            @NonNull OutputStream out) throws Exception {
-        JSONObject root = exportAccountBackup(context, db, accountId);
-        out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
-        out.flush();
+            @NonNull OutputStream outputStream) throws Exception {
+        JSONObject backup = exportAccountBackup(context, db, accountId);
+        byte[] bytes = backup.toString(2).getBytes(StandardCharsets.UTF_8);
+        outputStream.write(bytes);
+        outputStream.flush();
     }
 
     // =========================================================================
-    // IMPORT WITH PRE-COMMIT VALIDATION & CONFLICT RESOLUTION
+    // IMPORT
     // =========================================================================
 
     @NonNull
@@ -186,15 +171,10 @@ public final class BackupRestoreManager {
             @Nullable Context context,
             @NonNull SQLiteDatabase db,
             @NonNull String targetAccountId,
-            @NonNull InputStream in) throws Exception {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-            bos.write(buf, 0, n);
-        }
-        String jsonStr = new String(bos.toByteArray(), StandardCharsets.UTF_8);
-        return importAccountBackupFromJson(context, db, targetAccountId, jsonStr);
+            @NonNull InputStream inputStream) throws Exception {
+        byte[] bytes = readAllBytes(inputStream);
+        String jsonString = new String(bytes, StandardCharsets.UTF_8);
+        return importAccountBackupFromJson(context, db, targetAccountId, jsonString);
     }
 
     @NonNull
@@ -335,7 +315,9 @@ public final class BackupRestoreManager {
         Set<String> knownOccurrences = queryExistingIdsForAccount(db, OccurrenceEntry.TABLE_NAME, targetAccountId);
         Set<String> knownInvoices = queryExistingIdsForAccount(db, InvoiceEntry.TABLE_NAME, targetAccountId);
         Set<String> knownInvoiceItems = queryExistingIdsForAccount(db, InvoiceItemEntry.TABLE_NAME, targetAccountId);
-        Set<String> knownTransactions = queryExistingIdsForAccount(db, TransactionEntry.TABLE_NAME, targetAccountId);
+        Set<String> existingFinancialTransactions = queryExistingIdsForAccount(db, TransactionEntry.TABLE_NAME, targetAccountId);
+        Set<String> knownFinancialTransactions = new HashSet<>(existingFinancialTransactions);
+        Set<String> knownTransactions = new HashSet<>(existingFinancialTransactions);
         knownTransactions.addAll(queryExistingIdsForAccount(db, PaymentEntry.TABLE_NAME, targetAccountId));
 
         for (String table : SYNC_TABLE_ORDER) {
@@ -358,8 +340,8 @@ public final class BackupRestoreManager {
                     if (StudentSubjectEntry.TABLE_NAME.equals(table)) {
                         String stuId = cv.getAsString(StudentSubjectEntry.COLUMN_STUDENT_ID);
                         String subId = cv.getAsString(StudentSubjectEntry.COLUMN_SUBJECT_ID);
-                        if (stuId != null && subId != null && !stuId.isEmpty() && !subId.isEmpty()) {
-                            id = UUID.nameUUIDFromBytes(("ENR:" + stuId + ":" + subId).getBytes(StandardCharsets.UTF_8)).toString();
+                        if (stuId != null && subId != null && !stuId.trim().isEmpty() && !subId.trim().isEmpty()) {
+                            id = UUID.nameUUIDFromBytes(("ENR:" + stuId.trim() + ":" + subId.trim()).getBytes(StandardCharsets.UTF_8)).toString();
                             cv.put("id", id);
                         } else {
                             throw new IllegalArgumentException("Missing student_id or subject_id in student_subjects.");
@@ -383,20 +365,26 @@ public final class BackupRestoreManager {
                 validateRowAndRegisterId(
                         table, cv, id,
                         knownStudents, knownSubjects, knownSchedules,
-                        knownOccurrences, knownInvoices, knownInvoiceItems, knownTransactions
+                        knownOccurrences, knownInvoices, knownInvoiceItems,
+                        knownFinancialTransactions, knownTransactions
                 );
 
                 tableList.add(cv);
             }
         }
 
-        List<ContentValues> txns = prepared.get(TransactionEntry.TABLE_NAME);
-        if (txns != null) {
-            for (ContentValues cv : txns) {
-                String parentId = cv.getAsString(TransactionEntry.COLUMN_PARENT_TXN_ID);
-                if (parentId != null && !parentId.trim().isEmpty() && !knownTransactions.contains(parentId.trim())) {
-                    throw new IllegalArgumentException("Transaction " + cv.getAsString("id")
-                            + " references missing parent_txn_id " + parentId);
+        // Sanitize optional self-referential and cross-table references to NULL when target is missing
+        List<ContentValues> occurrences = prepared.get(OccurrenceEntry.TABLE_NAME);
+        if (occurrences != null) {
+            for (ContentValues cv : occurrences) {
+                String occId = cv.getAsString("id");
+                String reschedId = cv.getAsString(OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID);
+                if (reschedId == null || reschedId.trim().isEmpty()
+                        || reschedId.trim().equals(occId)
+                        || !knownOccurrences.contains(reschedId.trim())) {
+                    cv.putNull(OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID);
+                } else {
+                    cv.put(OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID, reschedId.trim());
                 }
             }
         }
@@ -404,28 +392,33 @@ public final class BackupRestoreManager {
         List<ContentValues> attendances = prepared.get(AttendanceEntry.TABLE_NAME);
         if (attendances != null) {
             for (ContentValues cv : attendances) {
+                String occId = cv.getAsString(AttendanceEntry.COLUMN_OCCURRENCE_ID);
                 String makeupId = cv.getAsString(AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID);
-                if (makeupId != null && !makeupId.trim().isEmpty() && !knownOccurrences.contains(makeupId.trim())) {
-                    throw new IllegalArgumentException("Attendance " + cv.getAsString("id")
-                            + " references missing makeup_occurrence_id " + makeupId);
+                if (makeupId == null || makeupId.trim().isEmpty()
+                        || makeupId.trim().equals(occId)
+                        || !knownOccurrences.contains(makeupId.trim())) {
+                    cv.putNull(AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID);
+                } else {
+                    cv.put(AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID, makeupId.trim());
                 }
-                String billedItemId = cv.getAsString(AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID);
-                if (billedItemId != null && !billedItemId.trim().isEmpty() && !knownInvoiceItems.contains(billedItemId.trim())) {
-                    throw new IllegalArgumentException("Attendance " + cv.getAsString("id")
-                            + " references missing billed_invoice_item_id " + billedItemId);
-                }
+                sanitizeOptionalFk(cv, AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID, knownInvoiceItems);
             }
         }
 
-        List<ContentValues> occurrences = prepared.get(OccurrenceEntry.TABLE_NAME);
-        if (occurrences != null) {
-            for (ContentValues cv : occurrences) {
-                String reschedId = cv.getAsString(OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID);
-                if (reschedId != null && !reschedId.trim().isEmpty() && !knownOccurrences.contains(reschedId.trim())) {
-                    throw new IllegalArgumentException("Occurrence " + cv.getAsString("id")
-                            + " references missing rescheduled_from_id " + reschedId);
+        List<ContentValues> txns = prepared.get(TransactionEntry.TABLE_NAME);
+        if (txns != null && !txns.isEmpty()) {
+            for (ContentValues cv : txns) {
+                String txnId = cv.getAsString("id");
+                String parentId = cv.getAsString(TransactionEntry.COLUMN_PARENT_TXN_ID);
+                if (parentId == null || parentId.trim().isEmpty()
+                        || parentId.trim().equals(txnId)
+                        || !knownFinancialTransactions.contains(parentId.trim())) {
+                    cv.putNull(TransactionEntry.COLUMN_PARENT_TXN_ID);
+                } else {
+                    cv.put(TransactionEntry.COLUMN_PARENT_TXN_ID, parentId.trim());
                 }
             }
+            orderTransactionsParentsFirst(txns, existingFinancialTransactions);
         }
 
         return prepared;
@@ -441,6 +434,7 @@ public final class BackupRestoreManager {
             @NonNull Set<String> knownOccurrences,
             @NonNull Set<String> knownInvoices,
             @NonNull Set<String> knownInvoiceItems,
+            @NonNull Set<String> knownFinancialTransactions,
             @NonNull Set<String> knownTransactions) {
 
         switch (table) {
@@ -461,77 +455,69 @@ public final class BackupRestoreManager {
                 break;
             }
             case StudentSubjectEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(StudentSubjectEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
-                requireKnownFk(table, id, cv.getAsString(StudentSubjectEntry.COLUMN_SUBJECT_ID), "subject_id", knownSubjects);
+                requireKnownFk(table, id, cv, StudentSubjectEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
+                requireKnownFk(table, id, cv, StudentSubjectEntry.COLUMN_SUBJECT_ID, "subject_id", knownSubjects);
                 break;
             }
             case ScheduleFeeHistoryEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(ScheduleFeeHistoryEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv, ScheduleFeeHistoryEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
                 break;
             }
             case ScheduleEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(ScheduleEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
-                requireKnownFk(table, id, cv.getAsString(ScheduleEntry.COLUMN_SUBJECT_ID), "subject_id", knownSubjects);
+                requireKnownFk(table, id, cv, ScheduleEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
+                requireKnownFk(table, id, cv, ScheduleEntry.COLUMN_SUBJECT_ID, "subject_id", knownSubjects);
                 knownSchedules.add(id);
                 break;
             }
             case OccurrenceEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(OccurrenceEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
-                requireKnownFk(table, id, cv.getAsString(OccurrenceEntry.COLUMN_SUBJECT_ID), "subject_id", knownSubjects);
-                String schedId = cv.getAsString(OccurrenceEntry.COLUMN_SCHEDULE_ID);
-                if (schedId != null && !schedId.trim().isEmpty() && !knownSchedules.contains(schedId.trim())) {
-                    throw new IllegalArgumentException("Occurrence " + id + " references missing schedule_id " + schedId);
-                }
+                requireKnownFk(table, id, cv, OccurrenceEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
+                sanitizeOptionalFk(cv, OccurrenceEntry.COLUMN_SUBJECT_ID, knownSubjects);
+                sanitizeOptionalFk(cv, OccurrenceEntry.COLUMN_SCHEDULE_ID, knownSchedules);
                 knownOccurrences.add(id);
                 break;
             }
             case AttendanceEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(AttendanceEntry.COLUMN_OCCURRENCE_ID), "occurrence_id", knownOccurrences);
+                requireKnownFk(table, id, cv, AttendanceEntry.COLUMN_OCCURRENCE_ID, "occurrence_id", knownOccurrences);
                 break;
             }
             case LessonEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(LessonEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
-                requireKnownFk(table, id, cv.getAsString(LessonEntry.COLUMN_OCCURRENCE_ID), "occurrence_id", knownOccurrences);
+                requireKnownFk(table, id, cv, LessonEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
+                requireKnownFk(table, id, cv, LessonEntry.COLUMN_OCCURRENCE_ID, "occurrence_id", knownOccurrences);
                 break;
             }
             case FeeAgreementEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(FeeAgreementEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv, FeeAgreementEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
                 break;
             }
             case InvoiceEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(InvoiceEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv, InvoiceEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
                 knownInvoices.add(id);
                 break;
             }
             case InvoiceItemEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(InvoiceItemEntry.COLUMN_INVOICE_ID), "invoice_id", knownInvoices);
-                String occId = cv.getAsString(InvoiceItemEntry.COLUMN_OCCURRENCE_ID);
-                if (occId != null && !occId.trim().isEmpty() && !knownOccurrences.contains(occId.trim())) {
-                    throw new IllegalArgumentException("InvoiceItem " + id + " references missing occurrence_id " + occId);
-                }
+                requireKnownFk(table, id, cv, InvoiceItemEntry.COLUMN_INVOICE_ID, "invoice_id", knownInvoices);
+                sanitizeOptionalFk(cv, InvoiceItemEntry.COLUMN_OCCURRENCE_ID, knownOccurrences);
                 knownInvoiceItems.add(id);
                 break;
             }
             case PaymentEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(PaymentEntry.COLUMN_INVOICE_ID), "invoice_id", knownInvoices);
+                requireKnownFk(table, id, cv, PaymentEntry.COLUMN_INVOICE_ID, "invoice_id", knownInvoices);
                 knownTransactions.add(id);
                 break;
             }
             case TransactionEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(TransactionEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv, TransactionEntry.COLUMN_STUDENT_ID, "student_id", knownStudents);
+                knownFinancialTransactions.add(id);
                 knownTransactions.add(id);
                 break;
             }
             case PaymentAllocationEntry.TABLE_NAME: {
-                requireKnownFk(table, id, cv.getAsString(PaymentAllocationEntry.COLUMN_TRANSACTION_ID), "transaction_id", knownTransactions);
-                requireKnownFk(table, id, cv.getAsString(PaymentAllocationEntry.COLUMN_INVOICE_ID), "invoice_id", knownInvoices);
+                requireKnownFk(table, id, cv, PaymentAllocationEntry.COLUMN_TRANSACTION_ID, "transaction_id", knownTransactions);
+                requireKnownFk(table, id, cv, PaymentAllocationEntry.COLUMN_INVOICE_ID, "invoice_id", knownInvoices);
                 break;
             }
             case AuditLogEntry.TABLE_NAME: {
-                String stuId = cv.getAsString(AuditLogEntry.COLUMN_STUDENT_ID);
-                if (stuId != null && !stuId.trim().isEmpty() && !knownStudents.contains(stuId.trim())) {
-                    throw new IllegalArgumentException("AuditLog " + id + " references missing student_id " + stuId);
-                }
+                sanitizeOptionalFk(cv, AuditLogEntry.COLUMN_STUDENT_ID, knownStudents);
                 break;
             }
             default:
@@ -542,13 +528,71 @@ public final class BackupRestoreManager {
     private static void requireKnownFk(
             @NonNull String table,
             @NonNull String rowId,
-            @Nullable String fkValue,
+            @NonNull ContentValues cv,
             @NonNull String fkColumn,
+            @NonNull String fkLabel,
             @NonNull Set<String> knownIds) {
+        String fkValue = cv.getAsString(fkColumn);
         if (fkValue == null || fkValue.trim().isEmpty() || !knownIds.contains(fkValue.trim())) {
             throw new IllegalArgumentException("Record " + rowId + " in " + table
-                    + " references missing " + fkColumn + ": " + fkValue);
+                    + " references missing " + fkLabel + ": " + fkValue);
         }
+        cv.put(fkColumn, fkValue.trim());
+    }
+
+    private static void sanitizeOptionalFk(
+            @NonNull ContentValues cv,
+            @NonNull String fkColumn,
+            @NonNull Set<String> knownIds) {
+        String fkValue = cv.getAsString(fkColumn);
+        if (fkValue == null) {
+            cv.putNull(fkColumn);
+            return;
+        }
+        String trimmed = fkValue.trim();
+        if (trimmed.isEmpty() || !knownIds.contains(trimmed)) {
+            cv.putNull(fkColumn);
+        } else {
+            cv.put(fkColumn, trimmed);
+        }
+    }
+
+    private static void orderTransactionsParentsFirst(
+            @NonNull List<ContentValues> txns,
+            @NonNull Set<String> existingDbTransactionIds) {
+        if (txns.size() <= 1) return;
+
+        Set<String> resolvedIds = new HashSet<>(existingDbTransactionIds);
+        List<ContentValues> remaining = new ArrayList<>(txns);
+        List<ContentValues> ordered = new ArrayList<>(txns.size());
+
+        boolean progressed = true;
+        while (!remaining.isEmpty() && progressed) {
+            progressed = false;
+            Iterator<ContentValues> it = remaining.iterator();
+            while (it.hasNext()) {
+                ContentValues cv = it.next();
+                String id = cv.getAsString("id");
+                String parentId = cv.getAsString(TransactionEntry.COLUMN_PARENT_TXN_ID);
+                if (parentId == null || parentId.trim().isEmpty() || resolvedIds.contains(parentId.trim())) {
+                    ordered.add(cv);
+                    if (id != null) {
+                        resolvedIds.add(id);
+                    }
+                    it.remove();
+                    progressed = true;
+                }
+            }
+        }
+
+        // Any remaining rows have cyclic parent_txn_id references; break cycle safely by nulling parent_txn_id
+        for (ContentValues cyclicCv : remaining) {
+            cyclicCv.putNull(TransactionEntry.COLUMN_PARENT_TXN_ID);
+            ordered.add(cyclicCv);
+        }
+
+        txns.clear();
+        txns.addAll(ordered);
     }
 
     // =========================================================================
@@ -683,9 +727,6 @@ public final class BackupRestoreManager {
             }
         }
 
-        // ---------------------------------------------------------------------
-        // 3. Standard lookup by composite primary key (account_id, id)
-        // ---------------------------------------------------------------------
         try (Cursor c = db.query(table,
                 new String[]{"last_modified", "updated_at"},
                 "account_id = ? AND id = ?",
@@ -693,29 +734,11 @@ public final class BackupRestoreManager {
             if (c.moveToFirst()) {
                 long existingLastMod = resolveExistingTimestamp(c, 0, 1);
                 if (importedLastModified > existingLastMod) {
-                    if (StudentEntry.TABLE_NAME.equals(table)
-                            && cv.getAsString(StudentEntry.COLUMN_STUDENT_ID_DISPLAY) == null) {
-                        cv.remove(StudentEntry.COLUMN_STUDENT_ID_DISPLAY);
-                    }
-                    if (InvoiceEntry.TABLE_NAME.equals(table)) {
-                        if (cv.getAsString(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY) == null) {
-                            cv.remove(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY);
-                        }
-                        // Never allow imported invoice fields to overwrite derived paid_amount/status directly
-                        cv.remove(InvoiceEntry.COLUMN_PAID_AMOUNT);
-                        cv.remove(InvoiceEntry.COLUMN_STATUS);
-                    }
                     db.update(table, cv, "account_id = ? AND id = ?", new String[]{accountId, id});
                     return OUTCOME_UPDATED;
                 }
                 return OUTCOME_SKIPPED;
             }
-        }
-
-        if (InvoiceEntry.TABLE_NAME.equals(table)) {
-            // Initialize paid_amount to 0 on insert; actual paid_amount and status are derived from allocations
-            cv.put(InvoiceEntry.COLUMN_PAID_AMOUNT, 0);
-            cv.put(InvoiceEntry.COLUMN_STATUS, Invoice.STATUS_UNPAID);
         }
 
         db.insertOrThrow(table, null, cv);
@@ -1069,12 +1092,6 @@ public final class BackupRestoreManager {
     // FINANCIAL RECONCILIATION & DISPLAY ID INTEGRITY
     // =========================================================================
 
-    /**
-     * Bridges genuine legacy rows from the `payments` table into `financial_transactions`
-     * and `payment_allocations` (insert-only, without duplicating or overwriting) and
-     * synchronizes invoice `paid_amount` and `status` strictly from actual financial allocations.
-     * Never fabricates synthetic payments when an invoice has `paid_amount > 0` without allocations.
-     */
     public static void reconcileAccountFinancialData(@NonNull SQLiteDatabase db, @NonNull String accountId) {
         if (accountId.trim().isEmpty()) return;
 
@@ -1215,6 +1232,17 @@ public final class BackupRestoreManager {
     }
 
     private static void relinkBilledAttendanceRecords(@NonNull SQLiteDatabase db, @NonNull String accountId) {
+        // Clear any dangling billed_invoice_item_id values that do not match an existing invoice_item
+        db.execSQL("UPDATE " + AttendanceEntry.TABLE_NAME +
+                " SET " + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " = NULL" +
+                " WHERE " + AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?" +
+                " AND " + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " IS NOT NULL" +
+                " AND NOT EXISTS (" +
+                "   SELECT 1 FROM " + InvoiceItemEntry.TABLE_NAME + " ii" +
+                "   WHERE ii." + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = " + AttendanceEntry.TABLE_NAME + "." + AttendanceEntry.COLUMN_ACCOUNT_ID +
+                "   AND ii." + InvoiceItemEntry.COLUMN_ID + " = " + AttendanceEntry.TABLE_NAME + "." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID +
+                ")", new Object[]{accountId});
+
         db.execSQL("UPDATE " + AttendanceEntry.TABLE_NAME +
                 " SET " + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " = (" +
                 "   SELECT ii." + InvoiceItemEntry.COLUMN_ID +
@@ -1343,7 +1371,7 @@ public final class BackupRestoreManager {
     }
 
     // =========================================================================
-    // LOW-LEVEL CURSOR / JSON HELPERS
+    // LOW-LEVEL HELPERS
     // =========================================================================
 
     @NonNull
@@ -1382,37 +1410,45 @@ public final class BackupRestoreManager {
     private static ContentValues filterToValidColumns(
             @NonNull ContentValues raw,
             @NonNull Set<String> validColumns) {
-        ContentValues out = new ContentValues();
+        ContentValues filtered = new ContentValues();
         for (String key : raw.keySet()) {
             if (validColumns.contains(key)) {
                 Object val = raw.get(key);
-                if (val == null) out.putNull(key);
-                else if (val instanceof Integer) out.put(key, (Integer) val);
-                else if (val instanceof Long) out.put(key, (Long) val);
-                else if (val instanceof Double) out.put(key, (Double) val);
-                else if (val instanceof Float) out.put(key, (Float) val);
-                else if (val instanceof Boolean) out.put(key, ((Boolean) val) ? 1 : 0);
-                else out.put(key, String.valueOf(val));
+                if (val == null) {
+                    filtered.putNull(key);
+                } else if (val instanceof Integer) {
+                    filtered.put(key, (Integer) val);
+                } else if (val instanceof Long) {
+                    filtered.put(key, (Long) val);
+                } else if (val instanceof Double) {
+                    filtered.put(key, (Double) val);
+                } else if (val instanceof Float) {
+                    filtered.put(key, (Float) val);
+                } else if (val instanceof Boolean) {
+                    filtered.put(key, ((Boolean) val) ? 1 : 0);
+                } else {
+                    filtered.put(key, String.valueOf(val));
+                }
             }
         }
-        return out;
+        return filtered;
     }
 
     @NonNull
     private static JSONObject cursorRowToJson(@NonNull Cursor c) throws JSONException {
         JSONObject obj = new JSONObject();
-        int colCount = c.getColumnCount();
-        for (int i = 0; i < colCount; i++) {
-            String colName = c.getColumnName(i);
+        int count = c.getColumnCount();
+        for (int i = 0; i < count; i++) {
+            String col = c.getColumnName(i);
             int type = c.getType(i);
             if (type == Cursor.FIELD_TYPE_NULL) {
-                obj.put(colName, JSONObject.NULL);
+                obj.put(col, JSONObject.NULL);
             } else if (type == Cursor.FIELD_TYPE_INTEGER) {
-                obj.put(colName, c.getLong(i));
+                obj.put(col, c.getLong(i));
             } else if (type == Cursor.FIELD_TYPE_FLOAT) {
-                obj.put(colName, c.getDouble(i));
-            } else if (type == Cursor.FIELD_TYPE_STRING) {
-                obj.put(colName, c.getString(i));
+                obj.put(col, c.getDouble(i));
+            } else {
+                obj.put(col, c.getString(i));
             }
         }
         return obj;
@@ -1428,14 +1464,14 @@ public final class BackupRestoreManager {
                 cv.putNull(key);
             } else {
                 Object val = obj.get(key);
-                if (val instanceof Integer) {
+                if (val instanceof Boolean) {
+                    cv.put(key, ((Boolean) val) ? 1 : 0);
+                } else if (val instanceof Integer) {
                     cv.put(key, (Integer) val);
                 } else if (val instanceof Long) {
                     cv.put(key, (Long) val);
                 } else if (val instanceof Double) {
                     cv.put(key, (Double) val);
-                } else if (val instanceof Boolean) {
-                    cv.put(key, ((Boolean) val) ? 1 : 0);
                 } else {
                     cv.put(key, String.valueOf(val));
                 }
@@ -1445,72 +1481,67 @@ public final class BackupRestoreManager {
     }
 
     private static long extractRecordLastModified(@NonNull String table, @NonNull ContentValues cv) {
-        long ts = getLongOrDefault(cv, "last_modified", 0L);
-        if (ts > 0) return ts;
-        ts = getLongOrDefault(cv, "updated_at", 0L);
-        if (ts > 0) return ts;
-        ts = getLongOrDefault(cv, "created_at", 0L);
-        if (ts > 0) return ts;
+        long lastMod = getLongOrDefault(cv, "last_modified", 0L);
+        if (lastMod > 0L) return lastMod;
 
-        if (OccurrenceEntry.TABLE_NAME.equals(table)) {
-            ts = getLongOrDefault(cv, OccurrenceEntry.COLUMN_DATE, 0L);
-        } else if (PaymentEntry.TABLE_NAME.equals(table)) {
-            ts = getLongOrDefault(cv, PaymentEntry.COLUMN_PAYMENT_DATE, 0L);
+        long updated = getLongOrDefault(cv, "updated_at", 0L);
+        if (updated > 0L) return updated;
+
+        long created = getLongOrDefault(cv, "created_at", 0L);
+        if (created > 0L) return created;
+
+        if (PaymentEntry.TABLE_NAME.equals(table)) {
+            long pDate = getLongOrDefault(cv, PaymentEntry.COLUMN_PAYMENT_DATE, 0L);
+            if (pDate > 0L) return pDate;
         } else if (TransactionEntry.TABLE_NAME.equals(table)) {
-            ts = getLongOrDefault(cv, TransactionEntry.COLUMN_TIMESTAMP, 0L);
+            long ts = getLongOrDefault(cv, TransactionEntry.COLUMN_TIMESTAMP, 0L);
+            if (ts > 0L) return ts;
         } else if (AuditLogEntry.TABLE_NAME.equals(table)) {
-            ts = getLongOrDefault(cv, AuditLogEntry.COLUMN_TIMESTAMP, 0L);
-        } else if (ScheduleFeeHistoryEntry.TABLE_NAME.equals(table)) {
-            ts = getLongOrDefault(cv, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, 0L);
-        } else if (ScheduleEntry.TABLE_NAME.equals(table)) {
-            ts = getLongOrDefault(cv, ScheduleEntry.COLUMN_START_DATE, 0L);
-        } else if (InvoiceEntry.TABLE_NAME.equals(table)) {
-            ts = getLongOrDefault(cv, InvoiceEntry.COLUMN_ISSUE_DATE, 0L);
+            long ts = getLongOrDefault(cv, AuditLogEntry.COLUMN_TIMESTAMP, 0L);
+            if (ts > 0L) return ts;
+        } else if (OccurrenceEntry.TABLE_NAME.equals(table)) {
+            long d = getLongOrDefault(cv, OccurrenceEntry.COLUMN_DATE, 0L);
+            if (d > 0L) return d;
         }
-        return ts > 0 ? ts : 1L;
+
+        return System.currentTimeMillis();
     }
 
     private static long resolveExistingTimestamp(@NonNull Cursor c, int lastModIdx, int updatedAtIdx) {
-        long lastMod = (lastModIdx >= 0 && !c.isNull(lastModIdx)) ? c.getLong(lastModIdx) : 0L;
-        if (lastMod > 0L) return lastMod;
-        return (updatedAtIdx >= 0 && !c.isNull(updatedAtIdx)) ? c.getLong(updatedAtIdx) : 0L;
+        if (!c.isNull(lastModIdx)) {
+            long lm = c.getLong(lastModIdx);
+            if (lm > 0L) return lm;
+        }
+        if (!c.isNull(updatedAtIdx)) {
+            long up = c.getLong(updatedAtIdx);
+            if (up > 0L) return up;
+        }
+        return 0L;
     }
 
-    private static long getLongOrDefault(@NonNull ContentValues cv, @NonNull String key, long defaultVal) {
+    private static long getLongOrDefault(@NonNull ContentValues cv, @NonNull String key, long def) {
         Long val = cv.getAsLong(key);
-        return val != null ? val : defaultVal;
+        return val != null ? val : def;
     }
 
-    private static int getIntOrDefault(@NonNull ContentValues cv, @NonNull String key, int defaultVal) {
+    private static int getIntOrDefault(@NonNull ContentValues cv, @NonNull String key, int def) {
         Integer val = cv.getAsInteger(key);
-        return val != null ? val : defaultVal;
+        return val != null ? val : def;
     }
 
     @NonNull
     private static String normalizeStr(@Nullable String s) {
-        return s != null ? s.trim() : "";
+        return s == null ? "" : s.trim();
     }
 
     @NonNull
-    private static String getColumnStringOrEmpty(@NonNull Cursor c, @NonNull String col) {
-        int idx = c.getColumnIndex(col);
-        if (idx == -1 || c.isNull(idx)) return "";
-        String v = c.getString(idx);
-        return v != null ? v : "";
-    }
-
-    @Nullable
-    private static byte[] readFileBytes(@NonNull File file) {
-        try (FileInputStream fis = new FileInputStream(file);
-             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-            byte[] buf = new byte[4096];
-            int n;
-            while ((n = fis.read(buf)) != -1) {
-                bos.write(buf, 0, n);
-            }
-            return bos.toByteArray();
-        } catch (Exception e) {
-            return null;
+    private static byte[] readAllBytes(@NonNull InputStream in) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+            bos.write(buf, 0, n);
         }
+        return bos.toByteArray();
     }
 }

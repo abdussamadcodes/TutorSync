@@ -514,4 +514,191 @@ public class ExampleInstrumentedTest {
             DatabaseManager.getInstance().closeDatabase();
         }
     }
+    @Test
+    public void backupRestore_handlesOrphanOptionalReferencesSafely_withoutAbortingOrLosingFinancialAndAttendanceData() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        LocalAccountStore accountStore = new LocalAccountStore(context);
+        StudentRepository studentRepo = new StudentRepository();
+        SubjectRepository subjectRepo = new SubjectRepository();
+        EnrollmentRepository enrollmentRepo = new EnrollmentRepository();
+        ScheduleRepository scheduleRepo = new ScheduleRepository();
+        OccurrenceRepository occurrenceRepo = new OccurrenceRepository();
+        AttendanceRepository attendanceRepo = new AttendanceRepository();
+        InvoiceRepository invoiceRepo = new InvoiceRepository();
+        TransactionRepository txnRepo = new TransactionRepository();
+
+        String accountA = UUID.randomUUID().toString();
+        String accountB = UUID.randomUUID().toString();
+        String studentUuid = UUID.randomUUID().toString();
+        String subjectUuid = UUID.randomUUID().toString();
+        String scheduleUuid = UUID.randomUUID().toString();
+        String groupUuid = UUID.randomUUID().toString();
+        String occurrenceUuid = UUID.randomUUID().toString();
+        String attendanceUuid = UUID.randomUUID().toString();
+        String orphanItemUuid = UUID.randomUUID().toString();
+        String orphanRefundTxnUuid = UUID.randomUUID().toString();
+        String orphanAllocUuid = UUID.randomUUID().toString();
+        String orphanAuditUuid = UUID.randomUUID().toString();
+
+        try {
+            assertTrue(accountStore.saveAccount(new Account(accountA, "Orphan Source", "orphsrc" + System.currentTimeMillis(), "h1", "s1")));
+            assertTrue(accountStore.saveAccount(new Account(accountB, "Orphan Target", "orphtgt" + System.currentTimeMillis(), "h2", "s2")));
+
+            long now = System.currentTimeMillis();
+            assertEquals(1, studentRepo.insertStudent(new Student(studentUuid, accountA, "STU-0001", "Sakib", "10", null, null, null, null, true, now)));
+            assertTrue(subjectRepo.insertSubject(new Subject(subjectUuid, accountA, "Chemistry", "SSC", true, now)));
+            assertTrue(enrollmentRepo.enrollStudentInSubject(accountA, studentUuid, subjectUuid));
+
+            RecurringSchedule schedule = new RecurringSchedule(
+                    scheduleUuid, accountA, studentUuid, subjectUuid, groupUuid,
+                    3, 900, 60, now - 86400000L, now + 864000000L,
+                    RecurringSchedule.MODEL_PER_CLASS, 60000, 1, now
+            );
+            assertTrue(scheduleRepo.insertScheduleWithFee(schedule, groupUuid, RecurringSchedule.MODEL_PER_CLASS, 60000, 1));
+
+            ClassOccurrence occ = new ClassOccurrence(occurrenceUuid, accountA, studentUuid, subjectUuid, scheduleUuid, now, 900, 60, now);
+            assertTrue(occurrenceRepo.insertOccurrenceWithGroup(occ, groupUuid));
+
+            AttendanceRecord att = new AttendanceRecord(attendanceUuid, accountA, occurrenceUuid, AttendanceRecord.STATUS_PRESENT,
+                    AttendanceRecord.DECISION_CHARGE, 60000, false, null, null, now);
+            assertEquals(1, attendanceRepo.recordAttendanceWithBilling(att, false, -1L, 0));
+
+            assertEquals(1, invoiceRepo.generateDueInvoicesForStudent(accountA, studentUuid));
+            List<Invoice> invoicesA = invoiceRepo.getInvoicesForAccount(accountA);
+            assertEquals(1, invoicesA.size());
+            String invoiceUuid = invoicesA.get(0).getId();
+
+            FinancialTransaction payA = txnRepo.recordPaymentWithAllocations(
+                    accountA, studentUuid, 50000, "Cash", "REF-OK", "Initial payment",
+                    Collections.singletonMap(invoiceUuid, 50000)
+            );
+            assertNotNull(payA);
+
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            try {
+                JSONObject backup = BackupRestoreManager.exportAccountBackup(context, db, accountA);
+                JSONObject tables = backup.getJSONObject("tables");
+
+                // 1. Inject orphan schedule_id and rescheduled_from_id on the occurrence
+                JSONObject occJson = tables.getJSONArray(
+                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry.TABLE_NAME).getJSONObject(0);
+                occJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry.COLUMN_SCHEDULE_ID, UUID.randomUUID().toString());
+                occJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID, UUID.randomUUID().toString());
+
+                // 2. Inject orphan makeup_occurrence_id and orphan billed_invoice_item_id on the attendance record
+                JSONObject attJson = tables.getJSONArray(
+                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.TABLE_NAME).getJSONObject(0);
+                attJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID, UUID.randomUUID().toString());
+                attJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID, UUID.randomUUID().toString());
+
+                // 3. Add a second invoice_item with an orphan occurrence_id
+                JSONObject orphanItem = new JSONObject();
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_ID, orphanItemUuid);
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_INVOICE_ID, invoiceUuid);
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_OCCURRENCE_ID, UUID.randomUUID().toString());
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_DESCRIPTION, "Historical class with deleted occurrence");
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_BILLING_MODEL, "PER_CLASS");
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_QUANTITY, 1);
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_UNIT_PRICE_MINOR, 40000);
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_AMOUNT_MINOR, 40000);
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_CREATED_AT, now);
+                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_LAST_MODIFIED, now);
+                tables.getJSONArray(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.TABLE_NAME).put(orphanItem);
+
+                // Update invoice total to 100,000 minor units (60,000 + 40,000)
+                JSONObject invJson = tables.getJSONArray(InvoiceEntry.TABLE_NAME).getJSONObject(0);
+                invJson.put(InvoiceEntry.COLUMN_SUBTOTAL_MINOR, 100000);
+                invJson.put(InvoiceEntry.COLUMN_TOTAL_AMOUNT, 100000);
+
+                // 4. Add a refund transaction referencing a missing parent_txn_id
+                JSONObject orphanRefundTxn = new JSONObject();
+                orphanRefundTxn.put(TransactionEntry.COLUMN_ID, orphanRefundTxnUuid);
+                orphanRefundTxn.put(TransactionEntry.COLUMN_STUDENT_ID, studentUuid);
+                orphanRefundTxn.put(TransactionEntry.COLUMN_TXN_ID_DISPLAY, "TXN-2026-000777");
+                orphanRefundTxn.put(TransactionEntry.COLUMN_TYPE, FinancialTransaction.TYPE_REFUND);
+                orphanRefundTxn.put(TransactionEntry.COLUMN_AMOUNT_MINOR, 10000);
+                orphanRefundTxn.put(TransactionEntry.COLUMN_TIMESTAMP, now + 2000L);
+                orphanRefundTxn.put(TransactionEntry.COLUMN_METHOD, "Cash");
+                orphanRefundTxn.put(TransactionEntry.COLUMN_PARENT_TXN_ID, UUID.randomUUID().toString());
+                orphanRefundTxn.put(TransactionEntry.COLUMN_IS_REVERSED, 0);
+                orphanRefundTxn.put(TransactionEntry.COLUMN_CREATED_AT, now + 2000L);
+                orphanRefundTxn.put(TransactionEntry.COLUMN_LAST_MODIFIED, now + 2000L);
+                tables.getJSONArray(TransactionEntry.TABLE_NAME).put(orphanRefundTxn);
+
+                JSONObject refundAlloc = new JSONObject();
+                refundAlloc.put(PaymentAllocationEntry.COLUMN_ID, orphanAllocUuid);
+                refundAlloc.put(PaymentAllocationEntry.COLUMN_TRANSACTION_ID, orphanRefundTxnUuid);
+                refundAlloc.put(PaymentAllocationEntry.COLUMN_INVOICE_ID, invoiceUuid);
+                refundAlloc.put(PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, -10000);
+                refundAlloc.put(PaymentAllocationEntry.COLUMN_CREATED_AT, now + 2000L);
+                refundAlloc.put(PaymentAllocationEntry.COLUMN_LAST_MODIFIED, now + 2000L);
+                tables.getJSONArray(PaymentAllocationEntry.TABLE_NAME).put(refundAlloc);
+
+                // 5. Add an audit log with a missing student_id
+                JSONObject orphanAudit = new JSONObject();
+                orphanAudit.put(AuditLogEntry.COLUMN_ID, orphanAuditUuid);
+                orphanAudit.put(AuditLogEntry.COLUMN_STUDENT_ID, UUID.randomUUID().toString());
+                orphanAudit.put(AuditLogEntry.COLUMN_ENTITY_TYPE, "INVOICE");
+                orphanAudit.put(AuditLogEntry.COLUMN_ENTITY_ID, invoiceUuid);
+                orphanAudit.put(AuditLogEntry.COLUMN_ACTION, "INVOICE_GENERATED");
+                orphanAudit.put(AuditLogEntry.COLUMN_DETAILS, "Generated with historical student");
+                orphanAudit.put(AuditLogEntry.COLUMN_TIMESTAMP, now);
+                tables.getJSONArray(AuditLogEntry.TABLE_NAME).put(orphanAudit);
+
+                // Restore into Account B must succeed and preserve all financial & attendance data
+                BackupRestoreManager.ImportResult result =
+                        BackupRestoreManager.importAccountBackupFromJson(context, db, accountB, backup.toString());
+                assertTrue(result.insertedCount > 0);
+                assertEquals(0, result.conflictCount);
+
+                // Verify orphan optional columns were nulled out while records were preserved
+                try (Cursor c = db.query(
+                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.TABLE_NAME,
+                        new String[]{com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_OCCURRENCE_ID,
+                                com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_AMOUNT_MINOR},
+                        "account_id = ? AND id = ?", new String[]{accountB, orphanItemUuid}, null, null, null)) {
+                    assertTrue(c.moveToFirst());
+                    assertTrue(c.isNull(0));
+                    assertEquals(40000, c.getInt(1));
+                }
+
+                try (Cursor c = db.query(
+                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.TABLE_NAME,
+                        new String[]{com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID,
+                                com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID},
+                        "account_id = ? AND id = ?", new String[]{accountB, attendanceUuid}, null, null, null)) {
+                    assertTrue(c.moveToFirst());
+                    assertTrue(c.isNull(0)); // orphan makeup_occurrence_id set to NULL
+                    assertNotNull(c.getString(1)); // relinked to valid invoice item for occurrenceUuid
+                }
+
+                try (Cursor c = db.query(
+                        TransactionEntry.TABLE_NAME,
+                        new String[]{TransactionEntry.COLUMN_PARENT_TXN_ID, TransactionEntry.COLUMN_AMOUNT_MINOR},
+                        "account_id = ? AND id = ?", new String[]{accountB, orphanRefundTxnUuid}, null, null, null)) {
+                    assertTrue(c.moveToFirst());
+                    assertTrue(c.isNull(0)); // orphan parent_txn_id set to NULL
+                    assertEquals(10000, c.getInt(1));
+                }
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+            }
+
+            // Net paid = 50,000 payment - 10,000 refund = 40,000; outstanding = 100,000 - 40,000 = 60,000
+            Invoice restoredInv = invoiceRepo.getInvoiceById(accountB, invoiceUuid);
+            assertNotNull(restoredInv);
+            assertEquals(100000, restoredInv.getTotalAmount());
+            assertEquals(40000, restoredInv.getPaidAmount());
+            assertEquals(60000, restoredInv.getOutstandingBalance());
+            assertEquals(Invoice.STATUS_PARTIAL, restoredInv.getStatus());
+        } finally {
+            SQLiteDatabase cleanDb = DatabaseManager.getInstance().openDatabase();
+            try {
+                cleanDb.delete(AccountEntry.TABLE_NAME, AccountEntry.COLUMN_ID + " = ?", new String[]{accountA});
+                cleanDb.delete(AccountEntry.TABLE_NAME, AccountEntry.COLUMN_ID + " = ?", new String[]{accountB});
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+            }
+        }
+    }
 }
