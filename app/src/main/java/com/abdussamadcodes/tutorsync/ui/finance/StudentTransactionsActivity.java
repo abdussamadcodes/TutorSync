@@ -38,6 +38,7 @@ import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.repository.local.TransactionRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.FinancialPdfGenerator;
 import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -144,7 +145,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 return account.getFullName().trim();
             }
         }
-        return "Tutor";
+        return tr("Tutor", "টিউটর");
     }
 
     private String formatTimeMinutes(int startTimeMinutes) {
@@ -164,6 +165,85 @@ public class StudentTransactionsActivity extends BaseActivity {
         return String.format(Locale.getDefault(), "৳ %.2f", minorUnits / 100.0);
     }
 
+    private String formatCount(int count) {
+        return String.format(Locale.getDefault(), "%d", count);
+    }
+
+    private boolean isBangla() {
+        if (appPreferences != null && AppPreferences.LANG_BANGLA.equals(appPreferences.getLanguageCode())) {
+            return true;
+        }
+        return Locale.getDefault().getLanguage().startsWith("bn");
+    }
+
+    @NonNull
+    private String tr(@NonNull String en, @NonNull String bn) {
+        return isBangla() ? bn : en;
+    }
+
+    @NonNull
+    private String localizeInvoiceStatus(@Nullable String status) {
+        if (status == null) return "";
+        if (Invoice.STATUS_PAID.equalsIgnoreCase(status)) {
+            return tr("PAID", "পরিশোধিত");
+        }
+        if (Invoice.STATUS_PARTIAL.equalsIgnoreCase(status)) {
+            return tr("PARTIAL", "আংশিক");
+        }
+        if ("OVERDUE".equalsIgnoreCase(status)) {
+            return tr("OVERDUE", "মেয়াদোত্তীর্ণ");
+        }
+        if ("UNPAID".equalsIgnoreCase(status)) {
+            return tr("UNPAID", "অপরিশোধিত");
+        }
+        return status;
+    }
+
+    @NonNull
+    private String localizeTxnType(@Nullable String type) {
+        if (type == null) return "";
+        if (FinancialTransaction.TYPE_REFUND.equalsIgnoreCase(type)) {
+            return tr("REFUND", "রিফান্ড");
+        }
+        if (FinancialTransaction.TYPE_PAYMENT.equalsIgnoreCase(type)) {
+            return tr("PAYMENT", "পেমেন্ট");
+        }
+        return type;
+    }
+
+    @NonNull
+    private String localizePaymentMethod(@Nullable String method) {
+        if (method == null) return "";
+        String lower = method.toLowerCase(Locale.US);
+        if (lower.contains("bkash")) return tr("bKash", "বিকাশ");
+        if (lower.contains("nagad")) return tr("Nagad", "নগদ");
+        if (lower.contains("bank")) return tr("Bank Transfer", "ব্যাংক ট্রান্সফার");
+        if (lower.contains("cash")) return tr("Cash", "ক্যাশ");
+        return method;
+    }
+
+    @NonNull
+    private String localizeAttendanceStatus(@Nullable String status) {
+        if (status == null) return "";
+        switch (status.toUpperCase(Locale.US)) {
+            case "PRESENT":
+                return tr("PRESENT", "উপস্থিত");
+            case "ABSENT":
+            case "STUDENT_ABSENT":
+                return tr("STUDENT ABSENT", "শিক্ষার্থী অনুপস্থিত");
+            case "TUTOR_ABSENT":
+                return tr("TUTOR ABSENT", "টিউটর অনুপস্থিত");
+            case "CANCELLED_BY_STUDENT":
+                return tr("CANCELLED BY STUDENT", "শিক্ষার্থী কর্তৃক বাতিল");
+            case "CANCELLED_BY_TUTOR":
+                return tr("CANCELLED BY TUTOR", "টিউটর কর্তৃক বাতিল");
+            case "RESCHEDULED":
+                return tr("RESCHEDULED", "পুনঃনির্ধারিত");
+            default:
+                return status;
+        }
+    }
+
     private void refreshHistory() {
         contentContainer.removeAllViews();
         String accountId = sessionManager.getActiveAccountId();
@@ -179,7 +259,9 @@ public class StudentTransactionsActivity extends BaseActivity {
         }
         toolbar.setTitle(currentStudent.getFormattedDisplayName());
         if (currentStudent.getGrade() != null && !currentStudent.getGrade().trim().isEmpty()) {
-            toolbar.setSubtitle("Class / Grade: " + currentStudent.getGrade().trim());
+            toolbar.setSubtitle(tr("Class / Grade: ", "শ্রেণী / ক্লাস: ") + currentStudent.getGrade().trim());
+        } else {
+            toolbar.setSubtitle(null);
         }
 
         List<RecurringSchedule> allSchedules = scheduleRepo.getSchedulesForAccount(accountId);
@@ -269,7 +351,7 @@ public class StudentTransactionsActivity extends BaseActivity {
         topRow.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView tvLabel = new TextView(this);
-        tvLabel.setText("OUTSTANDING INVOICE DUE");
+        tvLabel.setText(tr("OUTSTANDING INVOICE DUE", "বকেয়া ইনভয়েস ডিউ"));
         tvLabel.setTextSize(11f);
         tvLabel.setTypeface(null, Typeface.BOLD);
         tvLabel.setLetterSpacing(0.06f);
@@ -281,15 +363,22 @@ public class StudentTransactionsActivity extends BaseActivity {
         int badgeBgColor;
         int badgeTextColor;
         if (totalInvoiceDueMinor > 0) {
-            statusText = studentOpenInvoices.size() + " OPEN INVOICE" + (studentOpenInvoices.size() > 1 ? "S" : "");
+            int openCount = studentOpenInvoices.size();
+            statusText = tr(
+                    openCount + " OPEN INVOICE" + (openCount > 1 ? "S" : ""),
+                    formatCount(openCount) + "টি বকেয়া ইনভয়েস"
+            );
             badgeBgColor = Color.parseColor("#33FF9800");
             badgeTextColor = Color.parseColor("#FFB74D");
         } else if (unbilledClassCount > 0) {
-            statusText = unbilledClassCount + " UNBILLED";
+            statusText = tr(
+                    unbilledClassCount + " UNBILLED",
+                    formatCount(unbilledClassCount) + "টি অবিলকৃত"
+            );
             badgeBgColor = Color.parseColor("#3329B6F6");
             badgeTextColor = Color.parseColor("#4FC3F7");
         } else {
-            statusText = "ALL SETTLED";
+            statusText = tr("ALL SETTLED", "সব পরিশোধিত");
             badgeBgColor = Color.parseColor("#334CAF50");
             badgeTextColor = Color.parseColor("#81C784");
         }
@@ -313,19 +402,19 @@ public class StudentTransactionsActivity extends BaseActivity {
         metricsRow.setWeightSum(3f);
 
         metricsRow.addView(createMetricTile(
-                "Unbilled (" + unbilledClassCount + ")",
+                tr("Unbilled (" + unbilledClassCount + ")", "অবিলকৃত (" + formatCount(unbilledClassCount) + ")"),
                 formatCurrency(unbilledClassTotalMinor),
                 unbilledClassCount > 0 ? Color.parseColor("#4FC3F7") : resolveAttrColor(com.google.android.material.R.attr.colorOnSurface)
         ));
         addHorizontalSpacer(metricsRow, dp(8));
         metricsRow.addView(createMetricTile(
-                "Total Billed",
+                tr("Total Billed", "মোট বিল"),
                 formatCurrency(totalInvoicedMinor),
                 resolveAttrColor(com.google.android.material.R.attr.colorOnSurface)
         ));
         addHorizontalSpacer(metricsRow, dp(8));
         metricsRow.addView(createMetricTile(
-                "Total Paid",
+                tr("Total Paid", "মোট পরিশোধিত"),
                 formatCurrency(totalPaidMinor),
                 Color.parseColor("#81C784")
         ));
@@ -341,7 +430,7 @@ public class StudentTransactionsActivity extends BaseActivity {
 
         if (totalInvoiceDueMinor > 0) {
             MaterialButton btnPay = new MaterialButton(this);
-            btnPay.setText("Record Payment");
+            btnPay.setText(tr("Record Payment", "পেমেন্ট রেকর্ড করুন"));
             btnPay.setAllCaps(false);
             btnPay.setCornerRadius(dp(10));
             LinearLayout.LayoutParams payLp = new LinearLayout.LayoutParams(
@@ -361,7 +450,9 @@ public class StudentTransactionsActivity extends BaseActivity {
         btnInvoice.setAllCaps(false);
         btnInvoice.setCornerRadius(dp(10));
         btnInvoice.setText(unbilledClassCount > 0
-                ? String.format(Locale.getDefault(), "Bill Unbilled (৳%.0f)", unbilledClassTotalMinor / 100.0)
+                ? tr(
+                String.format(Locale.getDefault(), "Bill Unbilled (৳%.0f)", unbilledClassTotalMinor / 100.0),
+                String.format(Locale.getDefault(), "অবিলকৃত বিল করুন (৳%.0f)", unbilledClassTotalMinor / 100.0))
                 : getString(R.string.ledger_btn_generate_due_invoice));
         LinearLayout.LayoutParams invLp = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -404,7 +495,7 @@ public class StudentTransactionsActivity extends BaseActivity {
         headerRow.addView(tvTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         MaterialButton btnEditFee = new MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle);
-        btnEditFee.setText("Edit Rate");
+        btnEditFee.setText(tr("Edit Rate", "রেট এডিট করুন"));
         btnEditFee.setAllCaps(false);
         btnEditFee.setTextSize(13f);
         btnEditFee.setMinimumHeight(0);
@@ -434,14 +525,16 @@ public class StudentTransactionsActivity extends BaseActivity {
                 leftCol.setOrientation(LinearLayout.VERTICAL);
 
                 TextView tvSchedule = new TextView(this);
-                tvSchedule.setText("Schedule · " + timeStr);
+                tvSchedule.setText(tr("Schedule · ", "রুটিন · ") + timeStr);
                 tvSchedule.setTextSize(14f);
                 tvSchedule.setTypeface(null, Typeface.BOLD);
                 tvSchedule.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
                 leftCol.addView(tvSchedule);
 
                 TextView tvModel = new TextView(this);
-                tvModel.setText("Billing Model: " + modelStr + " (Tap to edit)");
+                tvModel.setText(tr(
+                        "Billing Model: " + modelStr + " (Tap to edit)",
+                        "বিলিং মডেল: " + modelStr + " (এডিট করতে ট্যাপ করুন)"));
                 tvModel.setTextSize(12f);
                 tvModel.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
                 leftCol.addView(tvModel);
@@ -463,7 +556,7 @@ public class StudentTransactionsActivity extends BaseActivity {
             row.setOnClickListener(v -> showFeeRateBottomSheet(studentScheduleGroups, fallbackAgreement, null));
 
             TextView tvLeft = new TextView(this);
-            tvLeft.setText("Default Plan (" + modelStr + ")");
+            tvLeft.setText(tr("Default Plan (" + modelStr + ")", "ডিফল্ট প্ল্যান (" + modelStr + ")"));
             tvLeft.setTextSize(14f);
             tvLeft.setTypeface(null, Typeface.BOLD);
             tvLeft.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurface));
@@ -513,9 +606,15 @@ public class StudentTransactionsActivity extends BaseActivity {
         tabBarLp.bottomMargin = dp(12);
         tabBar.setLayoutParams(tabBarLp);
 
-        tabBar.addView(createTabButton("Invoices (" + studentInvoices.size() + ")", TAB_INVOICES));
-        tabBar.addView(createTabButton("Payments (" + txns.size() + ")", TAB_PAYMENTS));
-        tabBar.addView(createTabButton("Classes (" + classCharges.size() + ")", TAB_CLASSES));
+        tabBar.addView(createTabButton(
+                tr("Invoices (" + studentInvoices.size() + ")", "ইনভয়েস (" + formatCount(studentInvoices.size()) + ")"),
+                TAB_INVOICES));
+        tabBar.addView(createTabButton(
+                tr("Payments (" + txns.size() + ")", "পেমেন্ট (" + formatCount(txns.size()) + ")"),
+                TAB_PAYMENTS));
+        tabBar.addView(createTabButton(
+                tr("Classes (" + classCharges.size() + ")", "ক্লাস (" + formatCount(classCharges.size()) + ")"),
+                TAB_CLASSES));
         contentContainer.addView(tabBar);
 
         if (activeTab == TAB_INVOICES) {
@@ -599,7 +698,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 badgeBg = Color.parseColor("#33EF5350");
                 badgeFg = Color.parseColor("#E57373");
             }
-            topRow.addView(createPillBadge(inv.getStatus(), badgeBg, badgeFg));
+            topRow.addView(createPillBadge(localizeInvoiceStatus(inv.getStatus()), badgeBg, badgeFg));
             col.addView(topRow);
 
             // Row 2: Billing period + Tap cue
@@ -608,13 +707,13 @@ public class StudentTransactionsActivity extends BaseActivity {
             subRow.setPadding(0, dp(4), 0, dp(10));
 
             TextView tvPeriod = new TextView(this);
-            tvPeriod.setText("Billing Period: " + inv.getBillingPeriod());
+            tvPeriod.setText(tr("Billing Period: ", "বিলিং সময়কাল: ") + inv.getBillingPeriod());
             tvPeriod.setTextSize(12f);
             tvPeriod.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
             subRow.addView(tvPeriod, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView tvOpen = new TextView(this);
-            tvOpen.setText("View Invoice ›");
+            tvOpen.setText(tr("View Invoice ›", "ইনভয়েস দেখুন ›"));
             tvOpen.setTextSize(12f);
             tvOpen.setTypeface(null, Typeface.BOLD);
             tvOpen.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
@@ -627,19 +726,19 @@ public class StudentTransactionsActivity extends BaseActivity {
             amountsRow.setWeightSum(3f);
 
             amountsRow.addView(createMetricTile(
-                    "Total",
+                    tr("Total", "মোট"),
                     formatCurrency(inv.getTotalAmount()),
                     resolveAttrColor(com.google.android.material.R.attr.colorOnSurface)
             ));
             addHorizontalSpacer(amountsRow, dp(6));
             amountsRow.addView(createMetricTile(
-                    "Paid",
+                    tr("Paid", "পরিশোধিত"),
                     formatCurrency(inv.getPaidAmount()),
                     Color.parseColor("#81C784")
             ));
             addHorizontalSpacer(amountsRow, dp(6));
             amountsRow.addView(createMetricTile(
-                    "Balance Due",
+                    tr("Balance Due", "বকেয়া"),
                     formatCurrency(inv.getOutstandingBalance()),
                     inv.getOutstandingBalance() > 0
                             ? Color.parseColor("#FFB74D")
@@ -695,13 +794,13 @@ public class StudentTransactionsActivity extends BaseActivity {
             midRow.setPadding(0, dp(6), 0, dp(6));
 
             TextView tvDate = new TextView(this);
-            tvDate.setText(dtf.format(new Date(txn.getTimestamp())) + " · " + txn.getMethod());
+            tvDate.setText(dtf.format(new Date(txn.getTimestamp())) + " · " + localizePaymentMethod(txn.getMethod()));
             tvDate.setTextSize(12f);
             tvDate.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
             midRow.addView(tvDate, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             midRow.addView(createPillBadge(
-                    txn.getType(),
+                    localizeTxnType(txn.getType()),
                     isRefund ? Color.parseColor("#33EF5350") : Color.parseColor("#334CAF50"),
                     isRefund ? Color.parseColor("#E57373") : Color.parseColor("#81C784")
             ));
@@ -709,7 +808,7 @@ public class StudentTransactionsActivity extends BaseActivity {
 
             // Bottom row: Linked Invoices + Receipt / Refund action cue
             String invoicesStr = txn.getRelatedInvoiceDisplayIds().isEmpty()
-                    ? "Unallocated"
+                    ? tr("Unallocated", "অবন্টিত")
                     : String.join(", ", txn.getRelatedInvoiceDisplayIds());
 
             LinearLayout botRow = new LinearLayout(this);
@@ -717,7 +816,7 @@ public class StudentTransactionsActivity extends BaseActivity {
             botRow.setGravity(Gravity.CENTER_VERTICAL);
 
             TextView tvInv = new TextView(this);
-            tvInv.setText("Invoice: " + invoicesStr);
+            tvInv.setText(tr("Invoice: ", "ইনভয়েস: ") + invoicesStr);
             tvInv.setTextSize(12f);
             tvInv.setEllipsize(TextUtils.TruncateAt.END);
             tvInv.setSingleLine(true);
@@ -725,7 +824,7 @@ public class StudentTransactionsActivity extends BaseActivity {
             botRow.addView(tvInv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView tvAction = new TextView(this);
-            tvAction.setText("Receipt / Refund ›");
+            tvAction.setText(tr("Receipt / Refund ›", "রসিদ / রিফান্ড ›"));
             tvAction.setTextSize(12f);
             tvAction.setTypeface(null, Typeface.BOLD);
             tvAction.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
@@ -759,7 +858,9 @@ public class StudentTransactionsActivity extends BaseActivity {
 
         if (unbilledClassCount > 0) {
             headerRow.addView(createPillBadge(
-                    unbilledClassCount + " Unbilled (" + formatCurrency(unbilledClassTotalMinor) + ")",
+                    tr(
+                            unbilledClassCount + " Unbilled (" + formatCurrency(unbilledClassTotalMinor) + ")",
+                            formatCount(unbilledClassCount) + "টি অবিলকৃত (" + formatCurrency(unbilledClassTotalMinor) + ")"),
                     Color.parseColor("#3329B6F6"),
                     Color.parseColor("#4FC3F7")
             ));
@@ -789,7 +890,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 leftCol.addView(tvDate);
 
                 TextView tvStatus = new TextView(this);
-                tvStatus.setText("Attendance: " + cc.status);
+                tvStatus.setText(tr("Attendance: ", "উপস্থিতি: ") + localizeAttendanceStatus(cc.status));
                 tvStatus.setTextSize(12f);
                 tvStatus.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
                 leftCol.addView(tvStatus);
@@ -808,7 +909,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 rightCol.addView(tvFee);
 
                 View badge = createPillBadge(
-                        cc.isBilled ? "BILLED" : "UNBILLED",
+                        cc.isBilled ? tr("BILLED", "বিলকৃত") : tr("UNBILLED", "অবিলকৃত"),
                         cc.isBilled ? Color.parseColor("#334CAF50") : Color.parseColor("#33FF9800"),
                         cc.isBilled ? Color.parseColor("#81C784") : Color.parseColor("#FFB74D")
                 );
@@ -825,9 +926,13 @@ public class StudentTransactionsActivity extends BaseActivity {
         if (unbilledClassCount > 0) {
             MaterialButton btnGen = new MaterialButton(this);
             btnGen.setAllCaps(false);
-            btnGen.setText(String.format(Locale.getDefault(),
-                    "Generate Invoice for %d Unbilled Class(es) (%s)",
-                    unbilledClassCount, formatCurrency(unbilledClassTotalMinor)));
+            btnGen.setText(tr(
+                    String.format(Locale.getDefault(),
+                            "Generate Invoice for %d Unbilled Class(es) (%s)",
+                            unbilledClassCount, formatCurrency(unbilledClassTotalMinor)),
+                    String.format(Locale.getDefault(),
+                            "%dটি অবিলকৃত ক্লাসের ইনভয়েস তৈরি করুন (%s)",
+                            unbilledClassCount, formatCurrency(unbilledClassTotalMinor))));
             LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             btnLp.topMargin = dp(10);
@@ -975,9 +1080,13 @@ public class StudentTransactionsActivity extends BaseActivity {
         layout.setPadding(pad, dp(12), pad, dp(4));
 
         TextView tvSummary = new TextView(this);
-        tvSummary.setText(String.format(Locale.getDefault(),
-                "Open invoices: %d  ·  Total Due: %s",
-                openInvoicesChronological.size(), formatCurrency(totalDueMinor)));
+        tvSummary.setText(tr(
+                String.format(Locale.getDefault(),
+                        "Open invoices: %d  ·  Total Due: %s",
+                        openInvoicesChronological.size(), formatCurrency(totalDueMinor)),
+                String.format(Locale.getDefault(),
+                        "বকেয়া ইনভয়েস: %dটি  ·  মোট বকেয়া: %s",
+                        openInvoicesChronological.size(), formatCurrency(totalDueMinor))));
         tvSummary.setTextSize(13f);
         tvSummary.setTypeface(null, Typeface.BOLD);
         tvSummary.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorPrimary));
@@ -991,15 +1100,18 @@ public class StudentTransactionsActivity extends BaseActivity {
         layout.addView(etAmount);
 
         TextView tvMethodLabel = new TextView(this);
-        tvMethodLabel.setText("Payment Method");
+        tvMethodLabel.setText(tr("Payment Method", "পেমেন্টের মাধ্যম"));
         tvMethodLabel.setTextSize(12f);
         tvMethodLabel.setPadding(dp(4), dp(10), 0, dp(2));
         tvMethodLabel.setTextColor(resolveAttrColor(com.google.android.material.R.attr.colorOnSurfaceVariant));
         layout.addView(tvMethodLabel);
 
         Spinner spMethod = new Spinner(this);
-        String[] methods = {"Cash", "bKash", "Nagad", "Bank Transfer"};
-        spMethod.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, methods));
+        final String[] methodsCanonical = {"Cash", "bKash", "Nagad", "Bank Transfer"};
+        String[] methodsDisplay = isBangla()
+                ? new String[]{"ক্যাশ (Cash)", "বিকাশ (bKash)", "নগদ (Nagad)", "ব্যাংক ট্রান্সফার"}
+                : methodsCanonical;
+        spMethod.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, methodsDisplay));
         layout.addView(spMethod);
 
         EditText etRef = new EditText(this);
@@ -1011,7 +1123,7 @@ public class StudentTransactionsActivity extends BaseActivity {
         layout.addView(etNotes);
 
         new MaterialAlertDialogBuilder(this)
-                .setTitle("Record Payment")
+                .setTitle(tr("Record Payment", "পেমেন্ট রেকর্ড করুন"))
                 .setView(layout)
                 .setPositiveButton(getString(R.string.action_save), (d, w) -> {
                     try {
@@ -1021,11 +1133,15 @@ public class StudentTransactionsActivity extends BaseActivity {
                             showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
                             return;
                         }
+                        int methodIdx = spMethod.getSelectedItemPosition();
+                        String selectedMethod = (methodIdx >= 0 && methodIdx < methodsCanonical.length)
+                                ? methodsCanonical[methodIdx]
+                                : "Cash";
                         FinancialTransaction created = txnRepo.recordStudentLumpSumPaymentFIFO(
                                 sessionManager.getActiveAccountId(),
                                 studentId,
                                 amountMinor,
-                                spMethod.getSelectedItem().toString(),
+                                selectedMethod,
                                 etRef.getText().toString().trim(),
                                 etNotes.getText().toString().trim(),
                                 openInvoicesChronological
@@ -1074,14 +1190,14 @@ public class StudentTransactionsActivity extends BaseActivity {
         layout.setPadding(pad, dp(12), pad, dp(4));
 
         EditText etRefundAmt = new EditText(this);
-        etRefundAmt.setHint("Refund Amount (৳)");
+        etRefundAmt.setHint(tr("Refund Amount (৳)", "রিফান্ডের পরিমাণ (৳)"));
         etRefundAmt.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         etRefundAmt.setText(String.format(Locale.US, "%.2f", txn.getAmountMinor() / 100.0));
         layout.addView(etRefundAmt);
 
         EditText etReason = new EditText(this);
-        etReason.setHint("Reason for refund");
-        etReason.setText("Tutor refund");
+        etReason.setHint(tr("Reason for refund", "রিফান্ডের কারণ"));
+        etReason.setText(tr("Tutor refund", "টিউটর রিফান্ড"));
         layout.addView(etReason);
 
         new MaterialAlertDialogBuilder(this)
