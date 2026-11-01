@@ -46,11 +46,12 @@ public class StudentListActivity extends BaseActivity {
 
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        adapter = new StudentAdapter(this::showStudentOptionsDialog);
+        adapter = new StudentAdapter(this::showStudentOptionsBottomSheet);
         binding.rvStudents.setLayoutManager(new LinearLayoutManager(this));
         binding.rvStudents.setAdapter(adapter);
 
-        binding.fabAddStudent.setOnClickListener(v -> startActivity(new Intent(this, StudentFormActivity.class)));
+        binding.fabAddStudent.setOnClickListener(v ->
+                startActivity(new Intent(this, StudentFormActivity.class)));
     }
 
     @Override
@@ -62,9 +63,11 @@ public class StudentListActivity extends BaseActivity {
     private void loadStudents() {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
+
         studentRepo.migrateLegacyStudentIds(accountId);
         List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
         adapter.setStudents(students);
+
         if (students.isEmpty()) {
             binding.tvEmptyState.setVisibility(View.VISIBLE);
             binding.rvStudents.setVisibility(View.GONE);
@@ -74,7 +77,7 @@ public class StudentListActivity extends BaseActivity {
         }
     }
 
-    private void showStudentOptionsDialog(Student student) {
+    private void showStudentOptionsBottomSheet(Student student) {
         BottomSheetDialog bottomSheet = new BottomSheetDialog(this);
         View view = getLayoutInflater().inflate(R.layout.bottom_sheet_student_options, null);
         bottomSheet.setContentView(view);
@@ -104,12 +107,19 @@ public class StudentListActivity extends BaseActivity {
 
         view.findViewById(R.id.btnDeleteStudent).setOnClickListener(v -> {
             bottomSheet.dismiss();
+            String accountId = sessionManager.getActiveAccountId();
+            if (accountId.isEmpty()) return;
+
+            boolean hasFinancialData = studentRepo.hasFinancialRecords(accountId, student.getId());
+            int messageResId = hasFinancialData
+                    ? R.string.dialog_delete_student_financial_warning_msg
+                    : R.string.dialog_delete_student_msg;
+
             new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_delete_student_title)
-                    .setMessage(R.string.dialog_delete_student_msg)
+                    .setMessage(messageResId)
                     .setPositiveButton(R.string.dialog_delete, (d, w) -> {
-                        String accountId = sessionManager.getActiveAccountId();
-                        if (!accountId.isEmpty() && studentRepo.deleteStudent(accountId, student.getId())) {
+                        if (studentRepo.deleteStudent(accountId, student.getId())) {
                             loadStudents();
                         }
                     })

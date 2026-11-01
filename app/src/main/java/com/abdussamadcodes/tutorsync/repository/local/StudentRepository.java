@@ -8,10 +8,15 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.PaymentEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.ScheduleEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.TransactionEntry;
 import com.abdussamadcodes.tutorsync.model.Student;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
@@ -125,7 +130,9 @@ public class StudentRepository {
             values.put(StudentEntry.COLUMN_LAST_MODIFIED, now);
 
             return db.update(StudentEntry.TABLE_NAME, values,
-                    StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_ID + " = ?",
+                    StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            StudentEntry.COLUMN_ID + " = ? AND " +
+                            StudentEntry.COLUMN_IS_DELETED + " = 0",
                     new String[]{student.getAccountId(), student.getId()}) > 0;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
@@ -151,7 +158,8 @@ public class StudentRepository {
     public Student getStudentById(@NonNull String studentId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try (Cursor cursor = db.query(StudentEntry.TABLE_NAME, null,
-                StudentEntry.COLUMN_ID + " = ?", new String[]{studentId}, null, null, null)) {
+                StudentEntry.COLUMN_ID + " = ?", new String[]{studentId}, null, null,
+                StudentEntry.COLUMN_IS_DELETED + " ASC, " + StudentEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
             if (cursor.moveToFirst()) {
                 return mapCursorToStudent(cursor);
             }
@@ -161,100 +169,93 @@ public class StudentRepository {
         return null;
     }
 
-    private boolean hasStudentHistoricalRecords(@NonNull SQLiteDatabase db, @NonNull String accountId, @NonNull String studentId) {
-        try (Cursor c = db.query(OccurrenceEntry.TABLE_NAME, new String[]{OccurrenceEntry.COLUMN_ID},
-                OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_STUDENT_ID + " = ?",
-                new String[]{accountId, studentId}, null, null, null, "1")) {
-            if (c.moveToFirst()) return true;
+    public boolean hasFinancialRecords(@NonNull String accountId, @NonNull String studentId) {
+        if (accountId.trim().isEmpty() || studentId.trim().isEmpty()) {
+            return false;
         }
-        try (Cursor c = db.query(LessonEntry.TABLE_NAME, new String[]{LessonEntry.COLUMN_ID},
-                LessonEntry.COLUMN_ACCOUNT_ID + " = ? AND " + LessonEntry.COLUMN_STUDENT_ID + " = ?",
-                new String[]{accountId, studentId}, null, null, null, "1")) {
-            if (c.moveToFirst()) return true;
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            try (Cursor c = db.rawQuery(
+                    "SELECT 1 FROM " + InvoiceEntry.TABLE_NAME +
+                            " WHERE " + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            InvoiceEntry.COLUMN_STUDENT_ID + " = ? LIMIT 1",
+                    new String[]{accountId, studentId})) {
+                if (c.moveToFirst()) return true;
+            }
+
+            try (Cursor c = db.rawQuery(
+                    "SELECT 1 FROM " + TransactionEntry.TABLE_NAME +
+                            " WHERE " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            TransactionEntry.COLUMN_STUDENT_ID + " = ? LIMIT 1",
+                    new String[]{accountId, studentId})) {
+                if (c.moveToFirst()) return true;
+            }
+
+            try (Cursor c = db.rawQuery(
+                    "SELECT 1 FROM " + PaymentEntry.TABLE_NAME + " p " +
+                            "INNER JOIN " + InvoiceEntry.TABLE_NAME + " i " +
+                            "ON p." + PaymentEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID + " " +
+                            "AND p." + PaymentEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " " +
+                            "WHERE i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            "i." + InvoiceEntry.COLUMN_STUDENT_ID + " = ? LIMIT 1",
+                    new String[]{accountId, studentId})) {
+                if (c.moveToFirst()) return true;
+            }
+
+            try (Cursor c = db.rawQuery(
+                    "SELECT 1 FROM " + AttendanceEntry.TABLE_NAME + " a " +
+                            "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o " +
+                            "ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                            "AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " " +
+                            "WHERE o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            "o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                            "a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = 1 LIMIT 1",
+                    new String[]{accountId, studentId})) {
+                if (c.moveToFirst()) return true;
+            }
+
+            return false;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
         }
-        try (Cursor c = db.query(InvoiceEntry.TABLE_NAME, new String[]{InvoiceEntry.COLUMN_ID},
-                InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceEntry.COLUMN_STUDENT_ID + " = ?",
-                new String[]{accountId, studentId}, null, null, null, "1")) {
-            if (c.moveToFirst()) return true;
-        }
-        try (Cursor c = db.query(TransactionEntry.TABLE_NAME, new String[]{TransactionEntry.COLUMN_ID},
-                TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_STUDENT_ID + " = ?",
-                new String[]{accountId, studentId}, null, null, null, "1")) {
-            if (c.moveToFirst()) return true;
-        }
-        return false;
     }
 
     public boolean deleteStudent(@NonNull String accountId, @NonNull String studentId) {
-        if (accountId.trim().isEmpty() || studentId.trim().isEmpty()) return false;
+        if (accountId.trim().isEmpty() || studentId.trim().isEmpty()) {
+            return false;
+        }
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         db.beginTransaction();
         try {
-            Calendar cal = Calendar.getInstance();
-            cal.set(Calendar.HOUR_OF_DAY, 0);
-            cal.set(Calendar.MINUTE, 0);
-            cal.set(Calendar.SECOND, 0);
-            cal.set(Calendar.MILLISECOND, 0);
-            long startOfTodayMillis = cal.getTimeInMillis();
             long now = System.currentTimeMillis();
 
-            // 1. Remove active subject enrollments
-            db.delete(StudentSubjectEntry.TABLE_NAME,
-                    StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentSubjectEntry.COLUMN_STUDENT_ID + " = ?",
+            ContentValues studentValues = new ContentValues();
+            studentValues.put(StudentEntry.COLUMN_IS_DELETED, 1);
+            studentValues.put(StudentEntry.COLUMN_IS_ACTIVE, 0);
+            studentValues.put(StudentEntry.COLUMN_UPDATED_AT, now);
+            studentValues.put(StudentEntry.COLUMN_LAST_MODIFIED, now);
+
+            int updated = db.update(StudentEntry.TABLE_NAME, studentValues,
+                    StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            StudentEntry.COLUMN_ID + " = ? AND " +
+                            StudentEntry.COLUMN_IS_DELETED + " = 0",
                     new String[]{accountId, studentId});
 
-            // 2. Detach historical occurrences and delete active recurring schedules for this student
-            List<String> scheduleIds = new ArrayList<>();
-            try (Cursor c = db.query(ScheduleEntry.TABLE_NAME, new String[]{ScheduleEntry.COLUMN_ID},
-                    ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleEntry.COLUMN_STUDENT_ID + " = ?",
-                    new String[]{accountId, studentId}, null, null, null)) {
-                while (c.moveToNext()) {
-                    scheduleIds.add(c.getString(0));
-                }
-            }
-            for (String schedId : scheduleIds) {
-                ScheduleRepository.detachPastAndRecordedOccurrencesForSchedule(db, accountId, schedId, startOfTodayMillis, now);
-                ScheduleRepository.deleteUnrecordedFutureOccurrencesForSchedule(db, accountId, schedId, startOfTodayMillis);
-                db.delete(ScheduleEntry.TABLE_NAME,
-                        ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleEntry.COLUMN_ID + " = ?",
-                        new String[]{accountId, schedId});
-            }
+            if (updated > 0) {
+                ContentValues scheduleValues = new ContentValues();
+                scheduleValues.put(ScheduleEntry.COLUMN_IS_ACTIVE, 0);
+                scheduleValues.put(ScheduleEntry.COLUMN_UPDATED_AT, now);
+                scheduleValues.put(ScheduleEntry.COLUMN_LAST_MODIFIED, now);
 
-            // 3. Delete any remaining unrecorded occurrences (both past and future) that have no attendance, lesson, or invoice item
-            String unrecordedWhere = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                    OccurrenceEntry.COLUMN_STUDENT_ID + " = ? AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " + AttendanceEntry.COLUMN_OCCURRENCE_ID +
-                    " FROM " + AttendanceEntry.TABLE_NAME + " WHERE " + AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?) AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " + LessonEntry.COLUMN_OCCURRENCE_ID +
-                    " FROM " + LessonEntry.TABLE_NAME + " WHERE " + LessonEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                    LessonEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " + InvoiceItemEntry.COLUMN_OCCURRENCE_ID +
-                    " FROM " + InvoiceItemEntry.TABLE_NAME + " WHERE " + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                    InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL)";
-            db.delete(OccurrenceEntry.TABLE_NAME, unrecordedWhere,
-                    new String[]{accountId, studentId, accountId, accountId, accountId});
-
-            // 4. Preserve historical records: if student has any recorded occurrences, lessons, invoices, or transactions, soft-delete
-            boolean result;
-            if (hasStudentHistoricalRecords(db, accountId, studentId)) {
-                ContentValues softDelete = new ContentValues();
-                softDelete.put(StudentEntry.COLUMN_IS_ACTIVE, 0);
-                softDelete.put(StudentEntry.COLUMN_IS_DELETED, 1);
-                softDelete.put(StudentEntry.COLUMN_UPDATED_AT, now);
-                softDelete.put(StudentEntry.COLUMN_LAST_MODIFIED, now);
-                result = db.update(StudentEntry.TABLE_NAME, softDelete,
-                        StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_ID + " = ?",
-                        new String[]{accountId, studentId}) > 0;
-            } else {
-                result = db.delete(StudentEntry.TABLE_NAME,
-                        StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_ID + " = ?",
-                        new String[]{accountId, studentId}) > 0;
+                db.update(ScheduleEntry.TABLE_NAME, scheduleValues,
+                        ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                                ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                                ScheduleEntry.COLUMN_IS_ACTIVE + " = 1",
+                        new String[]{accountId, studentId});
             }
 
             db.setTransactionSuccessful();
-            return result;
-        } catch (Exception e) {
-            return false;
+            return updated > 0;
         } finally {
             db.endTransaction();
             DatabaseManager.getInstance().closeDatabase();
@@ -262,17 +263,25 @@ public class StudentRepository {
     }
 
     public boolean deleteStudent(@NonNull String studentId) {
+        if (studentId.trim().isEmpty()) {
+            return false;
+        }
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         String accountId = null;
-        try (Cursor c = db.query(StudentEntry.TABLE_NAME, new String[]{StudentEntry.COLUMN_ACCOUNT_ID},
-                StudentEntry.COLUMN_ID + " = ?", new String[]{studentId}, null, null, null)) {
+        try (Cursor c = db.query(StudentEntry.TABLE_NAME,
+                new String[]{StudentEntry.COLUMN_ACCOUNT_ID},
+                StudentEntry.COLUMN_ID + " = ? AND " + StudentEntry.COLUMN_IS_DELETED + " = 0",
+                new String[]{studentId}, null, null,
+                StudentEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
             if (c.moveToFirst()) {
                 accountId = c.getString(0);
             }
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
-        if (accountId == null || accountId.isEmpty()) return false;
+        if (accountId == null || accountId.trim().isEmpty()) {
+            return false;
+        }
         return deleteStudent(accountId, studentId);
     }
 

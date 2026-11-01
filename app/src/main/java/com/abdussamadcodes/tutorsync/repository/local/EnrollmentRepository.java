@@ -8,6 +8,7 @@ import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentSubjectEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.SubjectEntry;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +27,8 @@ public class EnrollmentRepository {
         try (Cursor c = db.query(StudentEntry.TABLE_NAME,
                 new String[]{StudentEntry.COLUMN_ACCOUNT_ID},
                 StudentEntry.COLUMN_ID + " = ?",
-                new String[]{studentId}, null, null, StudentEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
+                new String[]{studentId}, null, null,
+                StudentEntry.COLUMN_IS_DELETED + " ASC, " + StudentEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
             if (c.moveToFirst()) {
                 return c.getString(0);
             }
@@ -98,8 +100,12 @@ public class EnrollmentRepository {
         List<String> subjectIds = new ArrayList<>();
 
         String selection = StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                StudentSubjectEntry.COLUMN_STUDENT_ID + " = ?";
-        String[] selectionArgs = {accountId, studentId};
+                StudentSubjectEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                StudentSubjectEntry.COLUMN_SUBJECT_ID + " IN (SELECT " +
+                SubjectEntry.COLUMN_ID + " FROM " + SubjectEntry.TABLE_NAME + " WHERE " +
+                SubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                SubjectEntry.COLUMN_IS_DELETED + " = 0)";
+        String[] selectionArgs = {accountId, studentId, accountId};
 
         try (Cursor cursor = db.query(StudentSubjectEntry.TABLE_NAME,
                 new String[]{StudentSubjectEntry.COLUMN_SUBJECT_ID},

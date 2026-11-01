@@ -7,41 +7,15 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.SubjectEntry;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
 public class OccurrenceRepository {
-
-    public static boolean hasHistoricalRecords(@NonNull SQLiteDatabase db, @NonNull String accountId, @NonNull String occurrenceId) {
-        try (Cursor c = db.rawQuery(
-                "SELECT 1 FROM " + AttendanceEntry.TABLE_NAME +
-                        " WHERE " + AttendanceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                        AttendanceEntry.COLUMN_OCCURRENCE_ID + " = ? LIMIT 1",
-                new String[]{accountId, occurrenceId})) {
-            if (c.moveToFirst()) return true;
-        }
-
-        try (Cursor c = db.rawQuery(
-                "SELECT 1 FROM " + LessonEntry.TABLE_NAME +
-                        " WHERE " + LessonEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                        LessonEntry.COLUMN_OCCURRENCE_ID + " = ? LIMIT 1",
-                new String[]{accountId, occurrenceId})) {
-            if (c.moveToFirst()) return true;
-        }
-
-        try (Cursor c = db.rawQuery(
-                "SELECT 1 FROM " + InvoiceItemEntry.TABLE_NAME +
-                        " WHERE " + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                        InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " = ? LIMIT 1",
-                new String[]{accountId, occurrenceId})) {
-            if (c.moveToFirst()) return true;
-        }
-
-        return false;
-    }
 
     public boolean insertOccurrence(@NonNull ClassOccurrence occurrence) {
         return insertOccurrenceWithGroup(occurrence, null);
@@ -76,10 +50,6 @@ public class OccurrenceRepository {
     public boolean deleteOccurrence(@NonNull String accountId, @NonNull String occurrenceId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
-            if (hasHistoricalRecords(db, accountId, occurrenceId)) {
-                // Prevent deletion: preserve historical attendance, lesson, and billing data
-                return false;
-            }
             return db.delete(OccurrenceEntry.TABLE_NAME,
                     OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_ID + " = ?",
                     new String[]{accountId, occurrenceId}) > 0;
@@ -91,16 +61,6 @@ public class OccurrenceRepository {
     public boolean deleteOccurrence(@NonNull String occurrenceId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
-            String accountId = null;
-            try (Cursor c = db.query(OccurrenceEntry.TABLE_NAME, new String[]{OccurrenceEntry.COLUMN_ACCOUNT_ID},
-                    OccurrenceEntry.COLUMN_ID + " = ?", new String[]{occurrenceId}, null, null, null)) {
-                if (c.moveToFirst()) {
-                    accountId = c.getString(0);
-                }
-            }
-            if (accountId != null && hasHistoricalRecords(db, accountId, occurrenceId)) {
-                return false;
-            }
             return db.delete(OccurrenceEntry.TABLE_NAME,
                     OccurrenceEntry.COLUMN_ID + " = ?", new String[]{occurrenceId}) > 0;
         } finally {
@@ -121,22 +81,12 @@ public class OccurrenceRepository {
                     OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ? AND " +
                     OccurrenceEntry.COLUMN_DATE + " >= ? AND " +
                     OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +
-                    AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                    AttendanceEntry.TABLE_NAME + " WHERE " +
-                    AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?) AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +
-                    LessonEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                    LessonEntry.TABLE_NAME + " WHERE " +
-                    LessonEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                    LessonEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +
-                    InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                    InvoiceItemEntry.TABLE_NAME + " WHERE " +
-                    InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                    InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL)";
+                    TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
+                    TutorSyncContract.AttendanceEntry.TABLE_NAME + " WHERE " +
+                    TutorSyncContract.AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?)";
 
             db.delete(OccurrenceEntry.TABLE_NAME, where,
-                    new String[]{accountId, scheduleId, String.valueOf(cal.getTimeInMillis()), accountId, accountId, accountId});
+                    new String[]{accountId, scheduleId, String.valueOf(cal.getTimeInMillis()), accountId});
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
@@ -145,18 +95,6 @@ public class OccurrenceRepository {
     public void deleteFutureOccurrencesByScheduleId(@NonNull String scheduleId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
-            String accountId = null;
-            try (Cursor c = db.query(ScheduleEntry.TABLE_NAME, new String[]{ScheduleEntry.COLUMN_ACCOUNT_ID},
-                    ScheduleEntry.COLUMN_ID + " = ?", new String[]{scheduleId}, null, null, null)) {
-                if (c.moveToFirst()) {
-                    accountId = c.getString(0);
-                }
-            }
-            if (accountId != null && !accountId.isEmpty()) {
-                deleteFutureOccurrencesByScheduleId(accountId, scheduleId);
-                return;
-            }
-
             Calendar cal = Calendar.getInstance();
             cal.set(Calendar.HOUR_OF_DAY, 0);
             cal.set(Calendar.MINUTE, 0);
@@ -166,22 +104,10 @@ public class OccurrenceRepository {
             String where = OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ? AND " +
                     OccurrenceEntry.COLUMN_DATE + " >= ? AND " +
                     OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT a." +
-                    AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                    AttendanceEntry.TABLE_NAME + " a WHERE a." +
-                    AttendanceEntry.COLUMN_ACCOUNT_ID + " = " +
-                    OccurrenceEntry.TABLE_NAME + "." + OccurrenceEntry.COLUMN_ACCOUNT_ID + ") AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT l." +
-                    LessonEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                    LessonEntry.TABLE_NAME + " l WHERE l." +
-                    LessonEntry.COLUMN_ACCOUNT_ID + " = " +
-                    OccurrenceEntry.TABLE_NAME + "." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " AND l." +
-                    LessonEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT ii." +
-                    InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                    InvoiceItemEntry.TABLE_NAME + " ii WHERE ii." +
-                    InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = " +
-                    OccurrenceEntry.TABLE_NAME + "." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " AND ii." +
-                    InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL)";
+                    TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
+                    TutorSyncContract.AttendanceEntry.TABLE_NAME + " a WHERE a." +
+                    TutorSyncContract.AttendanceEntry.COLUMN_ACCOUNT_ID + " = " +
+                    OccurrenceEntry.TABLE_NAME + "." + OccurrenceEntry.COLUMN_ACCOUNT_ID + ")";
 
             db.delete(OccurrenceEntry.TABLE_NAME, where,
                     new String[]{scheduleId, String.valueOf(cal.getTimeInMillis())});
@@ -205,10 +131,18 @@ public class OccurrenceRepository {
         String selection = OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
                 OccurrenceEntry.COLUMN_DATE + " = ? AND " +
                 OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +
-                AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                AttendanceEntry.TABLE_NAME + " WHERE " +
-                AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?)";
-        String[] selectionArgs = {accountId, String.valueOf(todayMillis), accountId};
+                TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
+                TutorSyncContract.AttendanceEntry.TABLE_NAME + " WHERE " +
+                TutorSyncContract.AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?) AND " +
+                OccurrenceEntry.COLUMN_STUDENT_ID + " IN (SELECT " +
+                StudentEntry.COLUMN_ID + " FROM " + StudentEntry.TABLE_NAME + " WHERE " +
+                StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                StudentEntry.COLUMN_IS_DELETED + " = 0) AND " +
+                OccurrenceEntry.COLUMN_SUBJECT_ID + " IN (SELECT " +
+                SubjectEntry.COLUMN_ID + " FROM " + SubjectEntry.TABLE_NAME + " WHERE " +
+                SubjectEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                SubjectEntry.COLUMN_IS_DELETED + " = 0)";
+        String[] selectionArgs = {accountId, String.valueOf(todayMillis), accountId, accountId, accountId};
 
         try (Cursor cursor = db.query(OccurrenceEntry.TABLE_NAME, null, selection, selectionArgs,
                 null, null, OccurrenceEntry.COLUMN_START_TIME_MINUTES + " ASC")) {

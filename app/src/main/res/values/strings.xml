@@ -157,12 +157,6 @@
     <string name="student_no_details">No details added</string>
     <string name="subject_level_general">General</string>
     <string name="dialog_manage_enrollments">Manage Enrollments</string>
-    <string name="dialog_delete_student">Delete Student</string>
-    <string name="dialog_delete_student_title">Delete Student?</string>
-    <string name="dialog_delete_student_msg">Are you sure? This will delete all their schedules and data permanently.</string>
-    <string name="dialog_delete">Delete</string>
-    <string name="dialog_delete_subject_title">Delete Subject?</string>
-    <string name="dialog_delete_subject_msg">Are you sure you want to delete %s?</string>
     <string name="dialog_manage_schedule">Manage Schedule</string>
     <string name="dialog_edit_schedule_group">Edit Schedule Group</string>
     <string name="dialog_delete_entire_group">Delete Entire Group</string>
@@ -309,4 +303,12 @@
     <string name="msg_password_updated">Password updated successfully!</string>
     <string name="profile_username_readonly_helper">Username is permanent and cannot be changed</string>
     <string name="settings_backup_sub">Export or restore your offline database and profile</string>
+
+    <string name="dialog_delete_student">Delete Student</string>
+    <string name="dialog_delete_student_title">Delete Student?</string>
+    <string name="dialog_delete_student_msg">This student will be removed from active lists and their recurring schedules will be deactivated. Past class occurrences, attendance, lessons, invoices, payments, and transactions will be preserved.</string>
+    <string name="dialog_delete_student_financial_warning_msg">Warning: Financial records (invoices, payments, or transactions) exist for this student.\n\nDeleting will remove the student from active lists and deactivate recurring schedules, while preserving all invoices, payments, transactions, and class history.</string>
+    <string name="dialog_delete">Delete</string>
+    <string name="dialog_delete_subject_title">Delete Subject?</string>
+    <string name="dialog_delete_subject_msg">Are you sure you want to delete %s? It will be removed from active lists and recurring schedules for this subject will be deactivated, while past class occurrences, attendance, lessons, and billing history will be preserved.</string>
 </resources>
