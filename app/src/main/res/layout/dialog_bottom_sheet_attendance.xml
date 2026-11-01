@@ -3,167 +3,368 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/colorSurface">
+    android:background="?attr/colorSurface"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="24dp">
 
-        <TextView
+        <!-- Drag Handle Pill -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="?attr/colorOutlineVariant" />
+
+        <!-- Header Block -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/attendance_title"
-            android:textAppearance="?attr/textAppearanceTitleLarge"
-            android:textStyle="bold"
-            android:layout_marginBottom="12dp"/>
+            android:layout_marginBottom="18dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                app:cardBackgroundColor="?attr/colorPrimaryContainer"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_check_circle"
+                    app:tint="?attr/colorPrimary" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/attendance_title"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/attendance_subtitle"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Section Label: Attendance Status -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.06"
+            android:text="@string/attendance_section_status"
+            android:textAllCaps="true"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- 3-Way Segmented Status Toggle (Zero Truncation) -->
         <com.google.android.material.button.MaterialButtonToggleGroup
             android:id="@+id/toggleGroupStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            app:singleSelection="true"
-            app:selectionRequired="true">
+            android:layout_marginBottom="14dp"
+            app:selectionRequired="true"
+            app:singleSelection="true">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnStatusPresent"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="46dp"
                 android:layout_weight="1"
-                android:text="@string/attendance_status_present" />
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="1"
+                android:paddingHorizontal="6dp"
+                android:text="@string/attendance_status_present"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnStatusAbsent"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="46dp"
                 android:layout_weight="1"
-                android:text="@string/attendance_status_absent" />
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="1"
+                android:paddingHorizontal="6dp"
+                android:text="@string/attendance_status_absent"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnStatusCancelled"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="46dp"
                 android:layout_weight="1"
-                android:text="@string/attendance_status_cancelled" />
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="1"
+                android:paddingHorizontal="6dp"
+                android:text="@string/attendance_status_cancelled"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/chipGroupCancelActor"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:visibility="gone"
-            app:singleSelection="true"
-            app:selectionRequired="true"
-            android:layout_marginBottom="8dp">
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipByStudent"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/attendance_by_student" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipByTutor"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/attendance_by_tutor" />
-        </com.google.android.material.chip.ChipGroup>
-
+        <!-- Conditional Billing, Actor & Reschedule Card -->
         <LinearLayout
             android:id="@+id/layoutBillingAndReschedule"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
             android:orientation="vertical"
-            android:visibility="gone"
-            android:layout_marginBottom="12dp">
+            android:visibility="gone">
 
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/switchChargeClass"
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/attendance_charge_per_class" />
+                app:cardBackgroundColor="?attr/colorSurfaceVariant"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:strokeWidth="1dp">
 
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/switchRescheduleMakeup"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:checked="false"
-                android:text="@string/attendance_reschedule_makeup" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="14dp">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPickMakeupDateTime"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:visibility="gone"
-                android:text="@string/attendance_pick_makeup_datetime" />
+                    <!-- Actor Chip Selector -->
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/chipGroupCancelActor"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:visibility="gone"
+                        app:chipSpacingHorizontal="8dp"
+                        app:selectionRequired="true"
+                        app:singleSelection="true">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipByStudent"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true"
+                            android:text="@string/attendance_by_student"
+                            app:chipCornerRadius="10dp" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipByTutor"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/attendance_by_tutor"
+                            app:chipCornerRadius="10dp" />
+                    </com.google.android.material.chip.ChipGroup>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginBottom="6dp"
+                        android:background="?attr/colorOutlineVariant" />
+
+                    <!-- Per-Class Billing Switch -->
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchChargeClass"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:paddingVertical="4dp"
+                        android:text="@string/attendance_charge_per_class"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <!-- Makeup Class Switch -->
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchRescheduleMakeup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:checked="false"
+                        android:paddingVertical="4dp"
+                        android:text="@string/attendance_reschedule_makeup"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <!-- Makeup Date/Time Picker Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPickMakeupDateTime"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="8dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/attendance_pick_makeup_datetime"
+                        android:textAllCaps="false"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:visibility="gone"
+                        app:cornerRadius="10dp"
+                        app:icon="@android:drawable/ic_menu_my_calendar"
+                        app:iconGravity="textStart"
+                        app:iconPadding="8dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
+        <!-- Section Header: Lesson Log & Notes -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:letterSpacing="0.06"
+                android:text="@string/attendance_section_lesson_log"
+                android:textAllCaps="true"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/attendance_optional_badge"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Topic Covered -->
         <com.google.android.material.textfield.TextInputLayout
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
             android:hint="@string/attendance_topic_hint"
-            android:layout_marginBottom="12dp">
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp">
+
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etTopic"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textCapSentences"/>
+                android:inputType="textCapSentences"
+                android:maxLines="1"
+                android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Homework Assigned -->
         <com.google.android.material.textfield.TextInputLayout
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
             android:hint="@string/attendance_homework_hint"
-            android:layout_marginBottom="12dp">
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp">
+
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etHomework"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textCapSentences"/>
+                android:inputType="textCapSentences"
+                android:maxLines="1"
+                android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Private Tutor Notes -->
         <com.google.android.material.textfield.TextInputLayout
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
             android:hint="@string/attendance_notes_hint"
-            android:layout_marginBottom="16dp">
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp">
+
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etNotes"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textMultiLine"
-                android:minLines="2"/>
+                android:gravity="top|start"
+                android:inputType="textMultiLine|textCapSentences"
+                android:minLines="2"
+                android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Primary CTA first, subtle destructive action below -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveAttendance"
+            style="@style/Widget.TutorSync.Button.Primary"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/attendance_save"
+            app:cornerRadius="14dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRemoveClass"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginBottom="8dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/attendance_remove_class"
+            android:textAllCaps="false"
             android:textColor="?attr/colorError"
-            app:strokeColor="?attr/colorError"
-            android:text="@string/attendance_remove_class" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSaveAttendance"
-            style="@style/Widget.Material3.Button"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="@string/attendance_save" />
+            android:textSize="13sp"
+            android:textStyle="bold"
+            app:cornerRadius="12dp"
+            app:rippleColor="?attr/colorErrorContainer" />
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -132,25 +132,6 @@
     <string name="schedule_confirm_subjects">Confirm Subjects</string>
     <string name="schedule_students_selected_fmt">%d Students Selected</string>
     <string name="schedule_subjects_selected_fmt">%d Subjects Selected</string>
-
-    <string name="attendance_title">Record Attendance</string>
-    <string name="attendance_status_present">Present</string>
-    <string name="attendance_status_absent">Student Absent</string>
-    <string name="attendance_status_cancelled">Cancelled</string>
-    <string name="attendance_by_student">By Student</string>
-    <string name="attendance_by_tutor">By Tutor</string>
-    <string name="attendance_charge_per_class">Charge Per-Class Fee (if applicable)</string>
-    <string name="attendance_reschedule_makeup">Reschedule / Add Makeup Class</string>
-    <string name="attendance_pick_makeup_datetime">Select Makeup Date &amp; Time</string>
-    <string name="attendance_makeup_selected_fmt">Makeup: %1$s at %2$s</string>
-    <string name="attendance_err_select_makeup">Please select the makeup class date and time</string>
-    <string name="attendance_saved_msg">Attendance &amp; billing decision saved</string>
-    <string name="attendance_topic_hint">Topic Covered (Optional)</string>
-    <string name="attendance_homework_hint">Homework Assigned (Optional)</string>
-    <string name="attendance_notes_hint">Tutor Notes (Private)</string>
-    <string name="attendance_remove_class">Remove Class from Dashboard</string>
-    <string name="attendance_save">Save Record</string>
-
     <string name="cd_app_logo">App Logo</string>
     <string name="cd_selected_indicator">Selected</string>
 
@@ -311,4 +292,26 @@
     <string name="dialog_delete">Delete</string>
     <string name="dialog_delete_subject_title">Delete Subject?</string>
     <string name="dialog_delete_subject_msg">Are you sure you want to delete %s? It will be removed from active lists and recurring schedules for this subject will be deactivated, while past class occurrences, attendance, lessons, and billing history will be preserved.</string>
+
+    <string name="attendance_title">Record Attendance</string>
+    <string name="attendance_subtitle">Log session status, billing rules &amp; lesson notes</string>
+    <string name="attendance_section_status">Session Status</string>
+    <string name="attendance_section_lesson_log">Lesson Log &amp; Notes</string>
+    <string name="attendance_optional_badge">Optional</string>
+    <string name="attendance_status_present">Present</string>
+    <string name="attendance_status_absent">Absent</string>
+    <string name="attendance_status_cancelled">Cancelled</string>
+    <string name="attendance_by_student">By Student</string>
+    <string name="attendance_by_tutor">By Tutor</string>
+    <string name="attendance_charge_per_class">Charge Per-Class Fee (if applicable)</string>
+    <string name="attendance_reschedule_makeup">Reschedule / Add Makeup Class</string>
+    <string name="attendance_pick_makeup_datetime">Select Makeup Date &amp; Time</string>
+    <string name="attendance_makeup_selected_fmt">Makeup: %1$s at %2$s</string>
+    <string name="attendance_err_select_makeup">Please select the makeup class date and time</string>
+    <string name="attendance_saved_msg">Attendance &amp; billing decision saved</string>
+    <string name="attendance_topic_hint">Topic Covered</string>
+    <string name="attendance_homework_hint">Homework Assigned</string>
+    <string name="attendance_notes_hint">Private Tutor Notes</string>
+    <string name="attendance_remove_class">Remove Class from Dashboard</string>
+    <string name="attendance_save">Save Attendance</string>
 </resources>

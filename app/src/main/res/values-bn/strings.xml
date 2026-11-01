@@ -135,7 +135,6 @@
 
     <string name="attendance_title">এটেন্ডেন্স রেকর্ড করুন</string>
     <string name="attendance_status_present">উপস্থিত</string>
-    <string name="attendance_status_absent">শিক্ষার্থী অনুপস্থিত</string>
     <string name="attendance_status_cancelled">বাতিল</string>
     <string name="attendance_by_student">শিক্ষার্থী কর্তৃক</string>
     <string name="attendance_by_tutor">টিউটর কর্তৃক</string>
@@ -311,4 +310,10 @@
     <string name="dialog_delete">মুছুন</string>
     <string name="dialog_delete_subject_title">বিষয় মুছবেন?</string>
     <string name="dialog_delete_subject_msg">আপনি কি নিশ্চিত যে আপনি %s মুছতে চান? এটি সক্রিয় তালিকা থেকে সরানো হবে এবং এই বিষয়ের চলমান রুটিন নিষ্ক্রিয় করা হবে, তবে পূর্ববর্তী ক্লাস, এটেন্ডেন্স, লেসন এবং বিলিং ইতিহাস সংরক্ষিত থাকবে।</string>
+
+    <string name="attendance_subtitle">ক্লাসের উপস্থিতি, ফি এবং পাঠের নোট সংরক্ষণ করুন</string>
+    <string name="attendance_section_status">উপস্থিতির অবস্থা</string>
+    <string name="attendance_section_lesson_log">পাঠ বিবরণী ও নোট</string>
+    <string name="attendance_optional_badge">ঐচ্ছিক</string>
+    <string name="attendance_status_absent">অনুপস্থিত</string>
 </resources>
