@@ -9,7 +9,6 @@ import android.util.Base64;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
 import com.abdussamadcodes.tutorsync.model.FinancialTransaction;
 import com.abdussamadcodes.tutorsync.model.Invoice;
@@ -27,18 +26,25 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
 public final class BackupRestoreManager {
 
     public static final int CURRENT_BACKUP_VERSION = 2;
+
+    private static final int OUTCOME_SKIPPED = 0;
+    private static final int OUTCOME_INSERTED = 1;
+    private static final int OUTCOME_UPDATED = 2;
+    private static final int OUTCOME_CONFLICT = 3;
 
     private static final String[] SYNC_TABLE_ORDER = new String[]{
             StudentEntry.TABLE_NAME,
@@ -64,16 +70,35 @@ public final class BackupRestoreManager {
         public final int insertedCount;
         public final int updatedCount;
         public final int skippedCount;
+        public final int conflictCount;
+        @NonNull
+        public final List<String> conflicts;
 
         public ImportResult(int insertedCount, int updatedCount, int skippedCount) {
+            this(insertedCount, updatedCount, skippedCount, 0, Collections.emptyList());
+        }
+
+        public ImportResult(int insertedCount,
+                            int updatedCount,
+                            int skippedCount,
+                            int conflictCount,
+                            @Nullable List<String> conflicts) {
             this.insertedCount = insertedCount;
             this.updatedCount = updatedCount;
             this.skippedCount = skippedCount;
+            this.conflictCount = conflictCount;
+            this.conflicts = conflicts != null
+                    ? Collections.unmodifiableList(new ArrayList<>(conflicts))
+                    : Collections.emptyList();
+        }
+
+        public boolean hasConflicts() {
+            return conflictCount > 0;
         }
     }
 
     // =========================================================================
-    // EXPORT
+    // EXPORT (READ-ONLY)
     // =========================================================================
 
     @NonNull
@@ -85,8 +110,6 @@ public final class BackupRestoreManager {
         if (accountId.trim().isEmpty()) {
             throw new IllegalArgumentException("Account ID cannot be empty.");
         }
-
-        reconcileAccountFinancialData(db, accountId);
 
         JSONObject root = new JSONObject();
         root.put("backup_version", CURRENT_BACKUP_VERSION);
@@ -197,7 +220,6 @@ public final class BackupRestoreManager {
 
         JSONObject tablesJson = root.optJSONObject("tables");
         if (tablesJson == null) {
-            // Support older flat backup structures if tables were placed at root
             tablesJson = new JSONObject();
             boolean foundAnyTable = false;
             for (String table : SYNC_TABLE_ORDER) {
@@ -217,7 +239,6 @@ public final class BackupRestoreManager {
         }
 
         try {
-            // Verify target account exists
             try (Cursor ac = db.query(AccountEntry.TABLE_NAME, new String[]{AccountEntry.COLUMN_ID},
                     AccountEntry.COLUMN_ID + " = ?", new String[]{targetAccountId}, null, null, null)) {
                 if (!ac.moveToFirst()) {
@@ -230,7 +251,6 @@ public final class BackupRestoreManager {
                     validateAndPrepareImportData(db, targetAccountId, tablesJson);
 
             // 2. Conditionally update non-security profile info ONLY if same account & newer last_modified
-            // Never touch password_hash, salt, username_normalized, PIN, biometric, or app preferences.
             JSONObject profile = root.optJSONObject("profile");
             String backupSourceAccountId = root.optString("source_account_id", "");
             if (profile != null) {
@@ -242,10 +262,12 @@ public final class BackupRestoreManager {
                 }
             }
 
-            // 3. Upsert all validated rows in dependency order using last_modified conflict resolution
+            // 3. Upsert non-financial rows with last_modified conflict resolution,
+            //    and insert financial/audit records strictly as insert-only with conflict reporting.
             int inserted = 0;
             int updated = 0;
             int skipped = 0;
+            List<String> conflicts = new ArrayList<>();
 
             for (String table : SYNC_TABLE_ORDER) {
                 List<ContentValues> rows = validatedRowsByTable.get(table);
@@ -254,22 +276,40 @@ public final class BackupRestoreManager {
                 Set<String> validColumns = getTableColumns(db, table);
                 for (ContentValues rawCv : rows) {
                     ContentValues cv = filterToValidColumns(rawCv, validColumns);
-                    int outcome = upsertAccountScopedRowWithConflictResolution(db, table, cv, targetAccountId);
-                    if (outcome == 1) inserted++;
-                    else if (outcome == 2) updated++;
-                    else skipped++;
+                    int outcome = upsertAccountScopedRowWithConflictResolution(
+                            db, table, cv, targetAccountId, conflicts);
+                    if (outcome == OUTCOME_INSERTED) {
+                        inserted++;
+                    } else if (outcome == OUTCOME_UPDATED) {
+                        updated++;
+                    } else {
+                        skipped++;
+                    }
                 }
             }
 
-            // 4. Reconcile financial records, legacy payments, invoice balances, and display IDs
-            reconcileAccountFinancialData(db, targetAccountId);
+            // 4. Bridge legacy payments only if legacy payment rows were present,
+            //    and derive invoice paid_amount/status strictly from actual allocations.
+            List<ContentValues> importedLegacyPayments = validatedRowsByTable.get(PaymentEntry.TABLE_NAME);
+            if (importedLegacyPayments != null && !importedLegacyPayments.isEmpty()) {
+                bridgeLegacyPaymentsForAccount(db, targetAccountId);
+            }
+            syncAccountInvoiceMirrorColumns(db, targetAccountId);
+
+            List<ContentValues> importedItems = validatedRowsByTable.get(InvoiceItemEntry.TABLE_NAME);
+            List<ContentValues> importedAttendance = validatedRowsByTable.get(AttendanceEntry.TABLE_NAME);
+            if ((importedItems != null && !importedItems.isEmpty())
+                    || (importedAttendance != null && !importedAttendance.isEmpty())) {
+                relinkBilledAttendanceRecords(db, targetAccountId);
+            }
+
             ensureUniqueStudentDisplayIds(db, targetAccountId);
             ensureUniqueInvoiceDisplayIds(db, targetAccountId);
 
             if (ownTransaction) {
                 db.setTransactionSuccessful();
             }
-            return new ImportResult(inserted, updated, skipped);
+            return new ImportResult(inserted, updated, skipped, conflicts.size(), conflicts);
         } finally {
             if (ownTransaction) {
                 db.endTransaction();
@@ -289,7 +329,6 @@ public final class BackupRestoreManager {
 
         Map<String, List<ContentValues>> prepared = new HashMap<>();
 
-        // Track known entity IDs (existing in DB for targetAccountId + incoming in backup)
         Set<String> knownStudents = queryExistingIdsForAccount(db, StudentEntry.TABLE_NAME, targetAccountId);
         Set<String> knownSubjects = queryExistingIdsForAccount(db, SubjectEntry.TABLE_NAME, targetAccountId);
         Set<String> knownSchedules = queryExistingIdsForAccount(db, ScheduleEntry.TABLE_NAME, targetAccountId);
@@ -297,6 +336,7 @@ public final class BackupRestoreManager {
         Set<String> knownInvoices = queryExistingIdsForAccount(db, InvoiceEntry.TABLE_NAME, targetAccountId);
         Set<String> knownInvoiceItems = queryExistingIdsForAccount(db, InvoiceItemEntry.TABLE_NAME, targetAccountId);
         Set<String> knownTransactions = queryExistingIdsForAccount(db, TransactionEntry.TABLE_NAME, targetAccountId);
+        knownTransactions.addAll(queryExistingIdsForAccount(db, PaymentEntry.TABLE_NAME, targetAccountId));
 
         for (String table : SYNC_TABLE_ORDER) {
             JSONArray arr = tablesJson.optJSONArray(table);
@@ -340,7 +380,6 @@ public final class BackupRestoreManager {
                 cv.put("updated_at", resolvedTimestamp);
                 cv.put("last_modified", resolvedTimestamp);
 
-                // Table-specific field & relationship validation
                 validateRowAndRegisterId(
                         table, cv, id,
                         knownStudents, knownSubjects, knownSchedules,
@@ -351,7 +390,6 @@ public final class BackupRestoreManager {
             }
         }
 
-        // Second pass for self-referential or cross-ordered optional FKs (e.g. parent_txn_id, makeup_occurrence_id, billed_invoice_item_id)
         List<ContentValues> txns = prepared.get(TransactionEntry.TABLE_NAME);
         if (txns != null) {
             for (ContentValues cv : txns) {
@@ -373,7 +411,19 @@ public final class BackupRestoreManager {
                 }
                 String billedItemId = cv.getAsString(AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID);
                 if (billedItemId != null && !billedItemId.trim().isEmpty() && !knownInvoiceItems.contains(billedItemId.trim())) {
-                    cv.putNull(AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID);
+                    throw new IllegalArgumentException("Attendance " + cv.getAsString("id")
+                            + " references missing billed_invoice_item_id " + billedItemId);
+                }
+            }
+        }
+
+        List<ContentValues> occurrences = prepared.get(OccurrenceEntry.TABLE_NAME);
+        if (occurrences != null) {
+            for (ContentValues cv : occurrences) {
+                String reschedId = cv.getAsString(OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID);
+                if (reschedId != null && !reschedId.trim().isEmpty() && !knownOccurrences.contains(reschedId.trim())) {
+                    throw new IllegalArgumentException("Occurrence " + cv.getAsString("id")
+                            + " references missing rescheduled_from_id " + reschedId);
                 }
             }
         }
@@ -395,182 +445,145 @@ public final class BackupRestoreManager {
 
         switch (table) {
             case StudentEntry.TABLE_NAME: {
-                requireNonEmpty(cv, StudentEntry.COLUMN_NAME, table, id);
+                String name = cv.getAsString(StudentEntry.COLUMN_NAME);
+                if (name == null || name.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Student " + id + " is missing required name.");
+                }
                 knownStudents.add(id);
                 break;
             }
             case SubjectEntry.TABLE_NAME: {
-                requireNonEmpty(cv, SubjectEntry.COLUMN_TITLE, table, id);
+                String title = cv.getAsString(SubjectEntry.COLUMN_TITLE);
+                if (title == null || title.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Subject " + id + " is missing required title.");
+                }
                 knownSubjects.add(id);
                 break;
             }
             case StudentSubjectEntry.TABLE_NAME: {
-                String stuId = requireNonEmpty(cv, StudentSubjectEntry.COLUMN_STUDENT_ID, table, id);
-                String subId = requireNonEmpty(cv, StudentSubjectEntry.COLUMN_SUBJECT_ID, table, id);
-                requireParentExists(knownStudents, stuId, table, id, "student_id");
-                requireParentExists(knownSubjects, subId, table, id, "subject_id");
+                requireKnownFk(table, id, cv.getAsString(StudentSubjectEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv.getAsString(StudentSubjectEntry.COLUMN_SUBJECT_ID), "subject_id", knownSubjects);
                 break;
             }
             case ScheduleFeeHistoryEntry.TABLE_NAME: {
-                requireNonEmpty(cv, ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, table, id);
-                String stuId = cv.getAsString(ScheduleFeeHistoryEntry.COLUMN_STUDENT_ID);
-                if (stuId != null && !stuId.trim().isEmpty()) {
-                    requireParentExists(knownStudents, stuId, table, id, "student_id");
-                }
+                requireKnownFk(table, id, cv.getAsString(ScheduleFeeHistoryEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
                 break;
             }
             case ScheduleEntry.TABLE_NAME: {
-                String stuId = requireNonEmpty(cv, ScheduleEntry.COLUMN_STUDENT_ID, table, id);
-                String subId = requireNonEmpty(cv, ScheduleEntry.COLUMN_SUBJECT_ID, table, id);
-                requireParentExists(knownStudents, stuId, table, id, "student_id");
-                requireParentExists(knownSubjects, subId, table, id, "subject_id");
+                requireKnownFk(table, id, cv.getAsString(ScheduleEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv.getAsString(ScheduleEntry.COLUMN_SUBJECT_ID), "subject_id", knownSubjects);
                 knownSchedules.add(id);
                 break;
             }
             case OccurrenceEntry.TABLE_NAME: {
-                String stuId = requireNonEmpty(cv, OccurrenceEntry.COLUMN_STUDENT_ID, table, id);
-                requireParentExists(knownStudents, stuId, table, id, "student_id");
-                String subId = cv.getAsString(OccurrenceEntry.COLUMN_SUBJECT_ID);
-                if (subId != null && !subId.trim().isEmpty()) {
-                    requireParentExists(knownSubjects, subId, table, id, "subject_id");
-                }
+                requireKnownFk(table, id, cv.getAsString(OccurrenceEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv.getAsString(OccurrenceEntry.COLUMN_SUBJECT_ID), "subject_id", knownSubjects);
                 String schedId = cv.getAsString(OccurrenceEntry.COLUMN_SCHEDULE_ID);
-                if (schedId != null && !schedId.trim().isEmpty()) {
-                    requireParentExists(knownSchedules, schedId, table, id, "schedule_id");
+                if (schedId != null && !schedId.trim().isEmpty() && !knownSchedules.contains(schedId.trim())) {
+                    throw new IllegalArgumentException("Occurrence " + id + " references missing schedule_id " + schedId);
                 }
                 knownOccurrences.add(id);
                 break;
             }
             case AttendanceEntry.TABLE_NAME: {
-                String occId = requireNonEmpty(cv, AttendanceEntry.COLUMN_OCCURRENCE_ID, table, id);
-                requireNonEmpty(cv, AttendanceEntry.COLUMN_STATUS, table, id);
-                requireParentExists(knownOccurrences, occId, table, id, "occurrence_id");
+                requireKnownFk(table, id, cv.getAsString(AttendanceEntry.COLUMN_OCCURRENCE_ID), "occurrence_id", knownOccurrences);
                 break;
             }
             case LessonEntry.TABLE_NAME: {
-                String stuId = requireNonEmpty(cv, LessonEntry.COLUMN_STUDENT_ID, table, id);
-                requireParentExists(knownStudents, stuId, table, id, "student_id");
-                String occId = cv.getAsString(LessonEntry.COLUMN_OCCURRENCE_ID);
-                if (occId != null && !occId.trim().isEmpty()) {
-                    requireParentExists(knownOccurrences, occId, table, id, "occurrence_id");
-                }
+                requireKnownFk(table, id, cv.getAsString(LessonEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
+                requireKnownFk(table, id, cv.getAsString(LessonEntry.COLUMN_OCCURRENCE_ID), "occurrence_id", knownOccurrences);
                 break;
             }
             case FeeAgreementEntry.TABLE_NAME: {
-                String stuId = requireNonEmpty(cv, FeeAgreementEntry.COLUMN_STUDENT_ID, table, id);
-                requireNonEmpty(cv, FeeAgreementEntry.COLUMN_FEE_TYPE, table, id);
-                requireParentExists(knownStudents, stuId, table, id, "student_id");
+                requireKnownFk(table, id, cv.getAsString(FeeAgreementEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
                 break;
             }
             case InvoiceEntry.TABLE_NAME: {
-                String stuId = requireNonEmpty(cv, InvoiceEntry.COLUMN_STUDENT_ID, table, id);
-                requireParentExists(knownStudents, stuId, table, id, "student_id");
-                int total = getIntOrDefault(cv, InvoiceEntry.COLUMN_TOTAL_AMOUNT, -1);
-                int paid = getIntOrDefault(cv, InvoiceEntry.COLUMN_PAID_AMOUNT, 0);
-                if (total < 0 || paid < 0) {
-                    throw new IllegalArgumentException("Invalid negative invoice amount on invoice " + id);
-                }
+                requireKnownFk(table, id, cv.getAsString(InvoiceEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
                 knownInvoices.add(id);
                 break;
             }
             case InvoiceItemEntry.TABLE_NAME: {
-                String invId = requireNonEmpty(cv, InvoiceItemEntry.COLUMN_INVOICE_ID, table, id);
-                requireParentExists(knownInvoices, invId, table, id, "invoice_id");
+                requireKnownFk(table, id, cv.getAsString(InvoiceItemEntry.COLUMN_INVOICE_ID), "invoice_id", knownInvoices);
                 String occId = cv.getAsString(InvoiceItemEntry.COLUMN_OCCURRENCE_ID);
-                if (occId != null && !occId.trim().isEmpty()) {
-                    requireParentExists(knownOccurrences, occId, table, id, "occurrence_id");
+                if (occId != null && !occId.trim().isEmpty() && !knownOccurrences.contains(occId.trim())) {
+                    throw new IllegalArgumentException("InvoiceItem " + id + " references missing occurrence_id " + occId);
                 }
                 knownInvoiceItems.add(id);
                 break;
             }
             case PaymentEntry.TABLE_NAME: {
-                String invId = requireNonEmpty(cv, PaymentEntry.COLUMN_INVOICE_ID, table, id);
-                requireParentExists(knownInvoices, invId, table, id, "invoice_id");
-                int amount = getIntOrDefault(cv, PaymentEntry.COLUMN_AMOUNT, 0);
-                if (amount <= 0) {
-                    throw new IllegalArgumentException("Invalid payment amount on payment " + id);
-                }
+                requireKnownFk(table, id, cv.getAsString(PaymentEntry.COLUMN_INVOICE_ID), "invoice_id", knownInvoices);
+                knownTransactions.add(id);
                 break;
             }
             case TransactionEntry.TABLE_NAME: {
-                String stuId = requireNonEmpty(cv, TransactionEntry.COLUMN_STUDENT_ID, table, id);
-                String type = requireNonEmpty(cv, TransactionEntry.COLUMN_TYPE, table, id);
-                requireParentExists(knownStudents, stuId, table, id, "student_id");
-                int amountMinor = getIntOrDefault(cv, TransactionEntry.COLUMN_AMOUNT_MINOR, 0);
-                if (amountMinor <= 0) {
-                    throw new IllegalArgumentException("Invalid transaction amount_minor on transaction " + id);
-                }
-                if (!FinancialTransaction.TYPE_PAYMENT.equals(type) && !FinancialTransaction.TYPE_REFUND.equals(type)) {
-                    throw new IllegalArgumentException("Unsupported transaction type '" + type + "' on transaction " + id);
-                }
+                requireKnownFk(table, id, cv.getAsString(TransactionEntry.COLUMN_STUDENT_ID), "student_id", knownStudents);
                 knownTransactions.add(id);
                 break;
             }
             case PaymentAllocationEntry.TABLE_NAME: {
-                String txnId = requireNonEmpty(cv, PaymentAllocationEntry.COLUMN_TRANSACTION_ID, table, id);
-                String invId = requireNonEmpty(cv, PaymentAllocationEntry.COLUMN_INVOICE_ID, table, id);
-                requireParentExists(knownTransactions, txnId, table, id, "transaction_id");
-                requireParentExists(knownInvoices, invId, table, id, "invoice_id");
-                int alloc = getIntOrDefault(cv, PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, 0);
-                if (alloc == 0) {
-                    throw new IllegalArgumentException("Zero payment allocation on allocation " + id);
-                }
+                requireKnownFk(table, id, cv.getAsString(PaymentAllocationEntry.COLUMN_TRANSACTION_ID), "transaction_id", knownTransactions);
+                requireKnownFk(table, id, cv.getAsString(PaymentAllocationEntry.COLUMN_INVOICE_ID), "invoice_id", knownInvoices);
                 break;
             }
             case AuditLogEntry.TABLE_NAME: {
-                requireNonEmpty(cv, AuditLogEntry.COLUMN_ENTITY_TYPE, table, id);
-                requireNonEmpty(cv, AuditLogEntry.COLUMN_ENTITY_ID, table, id);
-                requireNonEmpty(cv, AuditLogEntry.COLUMN_ACTION, table, id);
+                String stuId = cv.getAsString(AuditLogEntry.COLUMN_STUDENT_ID);
+                if (stuId != null && !stuId.trim().isEmpty() && !knownStudents.contains(stuId.trim())) {
+                    throw new IllegalArgumentException("AuditLog " + id + " references missing student_id " + stuId);
+                }
                 break;
             }
+            default:
+                break;
         }
     }
 
-    @NonNull
-    private static String requireNonEmpty(
-            @NonNull ContentValues cv,
-            @NonNull String column,
+    private static void requireKnownFk(
             @NonNull String table,
-            @NonNull String rowId) {
-        String val = cv.getAsString(column);
-        if (val == null || val.trim().isEmpty()) {
-            throw new IllegalArgumentException("Missing required column '" + column + "' in table '" + table + "' for id " + rowId);
-        }
-        return val.trim();
-    }
-
-    private static void requireParentExists(
-            @NonNull Set<String> knownParentIds,
-            @NonNull String parentId,
-            @NonNull String childTable,
-            @NonNull String childId,
-            @NonNull String fkColumn) {
-        if (!knownParentIds.contains(parentId.trim())) {
-            throw new IllegalArgumentException("Broken foreign key in '" + childTable + "' (id=" + childId
-                    + "): " + fkColumn + "='" + parentId + "' does not exist.");
+            @NonNull String rowId,
+            @Nullable String fkValue,
+            @NonNull String fkColumn,
+            @NonNull Set<String> knownIds) {
+        if (fkValue == null || fkValue.trim().isEmpty() || !knownIds.contains(fkValue.trim())) {
+            throw new IllegalArgumentException("Record " + rowId + " in " + table
+                    + " references missing " + fkColumn + ": " + fkValue);
         }
     }
 
     // =========================================================================
-    // TIMESTAMP CONFLICT RESOLUTION & UPSERT
+    // UPSERT & INSERT-ONLY FINANCIAL CONFLICT HANDLING
     // =========================================================================
 
-    /**
-     * Returns:
-     * 1 = inserted new record
-     * 2 = updated existing record (imported last_modified > existing last_modified)
-     * 0 = kept existing record (imported last_modified <= existing last_modified)
-     */
     private static int upsertAccountScopedRowWithConflictResolution(
             @NonNull SQLiteDatabase db,
             @NonNull String table,
             @NonNull ContentValues cv,
-            @NonNull String accountId) {
+            @NonNull String accountId,
+            @NonNull List<String> conflicts) {
 
         String id = cv.getAsString("id");
         long importedLastModified = getLongOrDefault(cv, "last_modified", 0L);
 
-        // 1. Handle tables with secondary natural UNIQUE constraints per account
+        // ---------------------------------------------------------------------
+        // 1. Insert-only financial & audit tables: NEVER overwrite existing rows
+        // ---------------------------------------------------------------------
+        if (PaymentEntry.TABLE_NAME.equals(table)) {
+            return insertOrSkipPaymentRow(db, cv, accountId, id, importedLastModified, conflicts);
+        }
+        if (TransactionEntry.TABLE_NAME.equals(table)) {
+            return insertOrSkipTransactionRow(db, cv, accountId, id, importedLastModified, conflicts);
+        }
+        if (PaymentAllocationEntry.TABLE_NAME.equals(table)) {
+            return insertOrSkipPaymentAllocationRow(db, cv, accountId, id, importedLastModified, conflicts);
+        }
+        if (AuditLogEntry.TABLE_NAME.equals(table)) {
+            return insertOrSkipAuditLogRow(db, cv, accountId, id, importedLastModified, conflicts);
+        }
+
+        // ---------------------------------------------------------------------
+        // 2. Natural-key deduplication for non-financial tables
+        // ---------------------------------------------------------------------
         if (StudentSubjectEntry.TABLE_NAME.equals(table)) {
             String stuId = cv.getAsString(StudentSubjectEntry.COLUMN_STUDENT_ID);
             String subId = cv.getAsString(StudentSubjectEntry.COLUMN_SUBJECT_ID);
@@ -585,13 +598,13 @@ public final class BackupRestoreManager {
                     if (importedLastModified > existingLastMod) {
                         cv.put("id", existingId);
                         db.update(table, cv, "account_id = ? AND id = ?", new String[]{accountId, existingId});
-                        return 2;
+                        return OUTCOME_UPDATED;
                     }
-                    return 0;
+                    return OUTCOME_SKIPPED;
                 }
             }
             db.insertOrThrow(table, null, cv);
-            return 1;
+            return OUTCOME_INSERTED;
         }
 
         if (AttendanceEntry.TABLE_NAME.equals(table)) {
@@ -612,13 +625,13 @@ public final class BackupRestoreManager {
                             cv.put(AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID, existingBilledItem);
                         }
                         db.update(table, cv, "account_id = ? AND id = ?", new String[]{accountId, existingId});
-                        return 2;
+                        return OUTCOME_UPDATED;
                     }
-                    return 0;
+                    return OUTCOME_SKIPPED;
                 }
             }
             db.insertOrThrow(table, null, cv);
-            return 1;
+            return OUTCOME_INSERTED;
         }
 
         if (FeeAgreementEntry.TABLE_NAME.equals(table)) {
@@ -633,36 +646,13 @@ public final class BackupRestoreManager {
                     if (importedLastModified > existingLastMod) {
                         cv.put("id", existingId);
                         db.update(table, cv, "account_id = ? AND id = ?", new String[]{accountId, existingId});
-                        return 2;
+                        return OUTCOME_UPDATED;
                     }
-                    return 0;
+                    return OUTCOME_SKIPPED;
                 }
             }
             db.insertOrThrow(table, null, cv);
-            return 1;
-        }
-
-        if (PaymentAllocationEntry.TABLE_NAME.equals(table)) {
-            String txnId = cv.getAsString(PaymentAllocationEntry.COLUMN_TRANSACTION_ID);
-            String invId = cv.getAsString(PaymentAllocationEntry.COLUMN_INVOICE_ID);
-            try (Cursor c = db.query(table,
-                    new String[]{"id", "last_modified", "updated_at"},
-                    "account_id = ? AND (id = ? OR (" + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ? AND " +
-                            PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ?))",
-                    new String[]{accountId, id, txnId, invId}, null, null, null)) {
-                if (c.moveToFirst()) {
-                    String existingId = c.getString(0);
-                    long existingLastMod = resolveExistingTimestamp(c, 1, 2);
-                    if (importedLastModified > existingLastMod) {
-                        cv.put("id", existingId);
-                        db.update(table, cv, "account_id = ? AND id = ?", new String[]{accountId, existingId});
-                        return 2;
-                    }
-                    return 0;
-                }
-            }
-            db.insertOrThrow(table, null, cv);
-            return 1;
+            return OUTCOME_INSERTED;
         }
 
         // Prevent student_id_display collision across different student UUIDs within the same account
@@ -679,7 +669,23 @@ public final class BackupRestoreManager {
             }
         }
 
-        // 2. Standard lookup by composite primary key (account_id, id)
+        // Prevent invoice_id_display collision across different invoice UUIDs within the same account
+        if (InvoiceEntry.TABLE_NAME.equals(table)) {
+            String dispId = cv.getAsString(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY);
+            if (dispId != null && !dispId.trim().isEmpty()) {
+                try (Cursor c = db.query(table, new String[]{"id"},
+                        "account_id = ? AND " + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " = ? AND id != ?",
+                        new String[]{accountId, dispId.trim(), id}, null, null, null)) {
+                    if (c.moveToFirst()) {
+                        cv.putNull(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY);
+                    }
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // 3. Standard lookup by composite primary key (account_id, id)
+        // ---------------------------------------------------------------------
         try (Cursor c = db.query(table,
                 new String[]{"last_modified", "updated_at"},
                 "account_id = ? AND id = ?",
@@ -687,19 +693,307 @@ public final class BackupRestoreManager {
             if (c.moveToFirst()) {
                 long existingLastMod = resolveExistingTimestamp(c, 0, 1);
                 if (importedLastModified > existingLastMod) {
-                    if (StudentEntry.TABLE_NAME.equals(table) && cv.getAsString(StudentEntry.COLUMN_STUDENT_ID_DISPLAY) == null) {
-                        // Preserve existing student_id_display if the incoming one collided
+                    if (StudentEntry.TABLE_NAME.equals(table)
+                            && cv.getAsString(StudentEntry.COLUMN_STUDENT_ID_DISPLAY) == null) {
                         cv.remove(StudentEntry.COLUMN_STUDENT_ID_DISPLAY);
                     }
+                    if (InvoiceEntry.TABLE_NAME.equals(table)) {
+                        if (cv.getAsString(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY) == null) {
+                            cv.remove(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY);
+                        }
+                        // Never allow imported invoice fields to overwrite derived paid_amount/status directly
+                        cv.remove(InvoiceEntry.COLUMN_PAID_AMOUNT);
+                        cv.remove(InvoiceEntry.COLUMN_STATUS);
+                    }
                     db.update(table, cv, "account_id = ? AND id = ?", new String[]{accountId, id});
-                    return 2;
+                    return OUTCOME_UPDATED;
                 }
-                return 0;
+                return OUTCOME_SKIPPED;
             }
         }
 
+        if (InvoiceEntry.TABLE_NAME.equals(table)) {
+            // Initialize paid_amount to 0 on insert; actual paid_amount and status are derived from allocations
+            cv.put(InvoiceEntry.COLUMN_PAID_AMOUNT, 0);
+            cv.put(InvoiceEntry.COLUMN_STATUS, Invoice.STATUS_UNPAID);
+        }
+
         db.insertOrThrow(table, null, cv);
-        return 1;
+        return OUTCOME_INSERTED;
+    }
+
+    private static int insertOrSkipPaymentRow(
+            @NonNull SQLiteDatabase db,
+            @NonNull ContentValues cv,
+            @NonNull String accountId,
+            @NonNull String id,
+            long importedLastModified,
+            @NonNull List<String> conflicts) {
+
+        String importedInvoiceId = normalizeStr(cv.getAsString(PaymentEntry.COLUMN_INVOICE_ID));
+        int importedAmount = getIntOrDefault(cv, PaymentEntry.COLUMN_AMOUNT, 0);
+        long importedDate = getLongOrDefault(cv, PaymentEntry.COLUMN_PAYMENT_DATE, 0L);
+        String importedMethod = normalizeStr(cv.getAsString(PaymentEntry.COLUMN_METHOD));
+
+        try (Cursor c = db.query(PaymentEntry.TABLE_NAME,
+                new String[]{
+                        PaymentEntry.COLUMN_INVOICE_ID,
+                        PaymentEntry.COLUMN_AMOUNT,
+                        PaymentEntry.COLUMN_PAYMENT_DATE,
+                        PaymentEntry.COLUMN_METHOD,
+                        PaymentEntry.COLUMN_LAST_MODIFIED,
+                        PaymentEntry.COLUMN_UPDATED_AT
+                },
+                PaymentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + PaymentEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, id}, null, null, null)) {
+            if (c.moveToFirst()) {
+                String existingInvoiceId = normalizeStr(c.getString(0));
+                int existingAmount = c.getInt(1);
+                long existingDate = c.getLong(2);
+                String existingMethod = normalizeStr(c.getString(3));
+                long existingLastMod = resolveExistingTimestamp(c, 4, 5);
+
+                boolean dataDiffers = !Objects.equals(existingInvoiceId, importedInvoiceId)
+                        || existingAmount != importedAmount
+                        || existingDate != importedDate
+                        || !Objects.equals(existingMethod, importedMethod);
+
+                if (dataDiffers || importedLastModified > existingLastMod) {
+                    conflicts.add("Payment conflict for ID " + id + ": preserved existing record.");
+                    return OUTCOME_CONFLICT;
+                }
+                return OUTCOME_SKIPPED;
+            }
+        }
+
+        // Also check if this legacy payment ID already exists in financial_transactions
+        try (Cursor tc = db.query(TransactionEntry.TABLE_NAME,
+                new String[]{TransactionEntry.COLUMN_AMOUNT_MINOR, TransactionEntry.COLUMN_METHOD},
+                TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, id}, null, null, null)) {
+            if (tc.moveToFirst()) {
+                int existingTxnAmount = tc.getInt(0);
+                String existingTxnMethod = normalizeStr(tc.getString(1));
+                if (existingTxnAmount != importedAmount
+                        || (!importedMethod.isEmpty() && !Objects.equals(existingTxnMethod, importedMethod))) {
+                    conflicts.add("Payment conflict with existing transaction for ID " + id + ": preserved existing record.");
+                    return OUTCOME_CONFLICT;
+                }
+            }
+        }
+
+        db.insertOrThrow(PaymentEntry.TABLE_NAME, null, cv);
+        return OUTCOME_INSERTED;
+    }
+
+    private static int insertOrSkipTransactionRow(
+            @NonNull SQLiteDatabase db,
+            @NonNull ContentValues cv,
+            @NonNull String accountId,
+            @NonNull String id,
+            long importedLastModified,
+            @NonNull List<String> conflicts) {
+
+        String importedStuId = normalizeStr(cv.getAsString(TransactionEntry.COLUMN_STUDENT_ID));
+        String importedType = normalizeStr(cv.getAsString(TransactionEntry.COLUMN_TYPE));
+        int importedAmount = getIntOrDefault(cv, TransactionEntry.COLUMN_AMOUNT_MINOR, 0);
+        String importedMethod = normalizeStr(cv.getAsString(TransactionEntry.COLUMN_METHOD));
+        String importedRef = normalizeStr(cv.getAsString(TransactionEntry.COLUMN_REFERENCE_NO));
+        String importedNotes = normalizeStr(cv.getAsString(TransactionEntry.COLUMN_NOTES));
+        String importedParentId = normalizeStr(cv.getAsString(TransactionEntry.COLUMN_PARENT_TXN_ID));
+        int importedReversed = getIntOrDefault(cv, TransactionEntry.COLUMN_IS_REVERSED, 0);
+
+        try (Cursor c = db.query(TransactionEntry.TABLE_NAME,
+                new String[]{
+                        TransactionEntry.COLUMN_STUDENT_ID,
+                        TransactionEntry.COLUMN_TYPE,
+                        TransactionEntry.COLUMN_AMOUNT_MINOR,
+                        TransactionEntry.COLUMN_METHOD,
+                        TransactionEntry.COLUMN_REFERENCE_NO,
+                        TransactionEntry.COLUMN_NOTES,
+                        TransactionEntry.COLUMN_PARENT_TXN_ID,
+                        TransactionEntry.COLUMN_IS_REVERSED,
+                        TransactionEntry.COLUMN_LAST_MODIFIED,
+                        TransactionEntry.COLUMN_UPDATED_AT
+                },
+                TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, id}, null, null, null)) {
+            if (c.moveToFirst()) {
+                String existingStuId = normalizeStr(c.getString(0));
+                String existingType = normalizeStr(c.getString(1));
+                int existingAmount = c.getInt(2);
+                String existingMethod = normalizeStr(c.getString(3));
+                String existingRef = normalizeStr(c.getString(4));
+                String existingNotes = normalizeStr(c.getString(5));
+                String existingParentId = normalizeStr(c.getString(6));
+                int existingReversed = c.getInt(7);
+                long existingLastMod = resolveExistingTimestamp(c, 8, 9);
+
+                boolean dataDiffers = !Objects.equals(existingStuId, importedStuId)
+                        || !Objects.equals(existingType, importedType)
+                        || existingAmount != importedAmount
+                        || !Objects.equals(existingMethod, importedMethod)
+                        || !Objects.equals(existingRef, importedRef)
+                        || !Objects.equals(existingNotes, importedNotes)
+                        || !Objects.equals(existingParentId, importedParentId)
+                        || existingReversed != importedReversed;
+
+                if (dataDiffers || importedLastModified > existingLastMod) {
+                    conflicts.add("FinancialTransaction conflict for ID " + id + ": preserved existing record.");
+                    return OUTCOME_CONFLICT;
+                }
+                return OUTCOME_SKIPPED;
+            }
+        }
+
+        // Ensure txn_id_display does not collide with another transaction in the same account
+        String dispId = cv.getAsString(TransactionEntry.COLUMN_TXN_ID_DISPLAY);
+        if (dispId == null || dispId.trim().isEmpty()) {
+            cv.put(TransactionEntry.COLUMN_TXN_ID_DISPLAY, generateNextTxnDisplayId(db, accountId));
+        } else {
+            try (Cursor dc = db.query(TransactionEntry.TABLE_NAME, new String[]{TransactionEntry.COLUMN_ID},
+                    TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            TransactionEntry.COLUMN_TXN_ID_DISPLAY + " = ? AND " +
+                            TransactionEntry.COLUMN_ID + " != ?",
+                    new String[]{accountId, dispId.trim(), id}, null, null, null)) {
+                if (dc.moveToFirst()) {
+                    cv.put(TransactionEntry.COLUMN_TXN_ID_DISPLAY, generateNextTxnDisplayId(db, accountId));
+                }
+            }
+        }
+
+        db.insertOrThrow(TransactionEntry.TABLE_NAME, null, cv);
+        return OUTCOME_INSERTED;
+    }
+
+    private static int insertOrSkipPaymentAllocationRow(
+            @NonNull SQLiteDatabase db,
+            @NonNull ContentValues cv,
+            @NonNull String accountId,
+            @NonNull String id,
+            long importedLastModified,
+            @NonNull List<String> conflicts) {
+
+        String txnId = normalizeStr(cv.getAsString(PaymentAllocationEntry.COLUMN_TRANSACTION_ID));
+        String invId = normalizeStr(cv.getAsString(PaymentAllocationEntry.COLUMN_INVOICE_ID));
+        int importedAllocated = getIntOrDefault(cv, PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, 0);
+
+        try (Cursor c = db.query(PaymentAllocationEntry.TABLE_NAME,
+                new String[]{
+                        PaymentAllocationEntry.COLUMN_ID,
+                        PaymentAllocationEntry.COLUMN_TRANSACTION_ID,
+                        PaymentAllocationEntry.COLUMN_INVOICE_ID,
+                        PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR,
+                        PaymentAllocationEntry.COLUMN_LAST_MODIFIED,
+                        PaymentAllocationEntry.COLUMN_UPDATED_AT
+                },
+                PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? AND (" +
+                        PaymentAllocationEntry.COLUMN_ID + " = ? OR (" +
+                        PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ? AND " +
+                        PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ?))",
+                new String[]{accountId, id, txnId, invId}, null, null, null)) {
+            if (c.moveToFirst()) {
+                String existingId = normalizeStr(c.getString(0));
+                String existingTxnId = normalizeStr(c.getString(1));
+                String existingInvId = normalizeStr(c.getString(2));
+                int existingAllocated = c.getInt(3);
+                long existingLastMod = resolveExistingTimestamp(c, 4, 5);
+
+                boolean dataDiffers = !Objects.equals(existingId, id)
+                        || !Objects.equals(existingTxnId, txnId)
+                        || !Objects.equals(existingInvId, invId)
+                        || existingAllocated != importedAllocated;
+
+                if (dataDiffers || importedLastModified > existingLastMod) {
+                    conflicts.add("PaymentAllocation conflict for ID " + id
+                            + " (txn=" + txnId + ", invoice=" + invId + "): preserved existing allocation.");
+                    return OUTCOME_CONFLICT;
+                }
+                return OUTCOME_SKIPPED;
+            }
+        }
+
+        // Prevent over-allocating an existing transaction beyond its recorded amount_minor
+        try (Cursor tc = db.query(TransactionEntry.TABLE_NAME,
+                new String[]{TransactionEntry.COLUMN_TYPE, TransactionEntry.COLUMN_AMOUNT_MINOR},
+                TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, txnId}, null, null, null)) {
+            if (tc.moveToFirst()) {
+                String txnType = normalizeStr(tc.getString(0));
+                int txnAmountMinor = tc.getInt(1);
+
+                int currentAllocatedSum = 0;
+                try (Cursor sc = db.rawQuery(
+                        "SELECT COALESCE(SUM(" + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + "), 0) " +
+                                "FROM " + PaymentAllocationEntry.TABLE_NAME +
+                                " WHERE " + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                                PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ?",
+                        new String[]{accountId, txnId})) {
+                    if (sc.moveToFirst()) {
+                        currentAllocatedSum = sc.getInt(0);
+                    }
+                }
+
+                if (FinancialTransaction.TYPE_REFUND.equalsIgnoreCase(txnType)) {
+                    if (Math.abs(currentAllocatedSum + importedAllocated) > txnAmountMinor) {
+                        conflicts.add("PaymentAllocation over-allocation conflict for refund transaction " + txnId);
+                        return OUTCOME_CONFLICT;
+                    }
+                } else {
+                    if (currentAllocatedSum + importedAllocated > txnAmountMinor) {
+                        conflicts.add("PaymentAllocation over-allocation conflict for payment transaction " + txnId);
+                        return OUTCOME_CONFLICT;
+                    }
+                }
+            }
+        }
+
+        db.insertOrThrow(PaymentAllocationEntry.TABLE_NAME, null, cv);
+        return OUTCOME_INSERTED;
+    }
+
+    private static int insertOrSkipAuditLogRow(
+            @NonNull SQLiteDatabase db,
+            @NonNull ContentValues cv,
+            @NonNull String accountId,
+            @NonNull String id,
+            long importedLastModified,
+            @NonNull List<String> conflicts) {
+
+        String importedEntityId = normalizeStr(cv.getAsString(AuditLogEntry.COLUMN_ENTITY_ID));
+        String importedAction = normalizeStr(cv.getAsString(AuditLogEntry.COLUMN_ACTION));
+        String importedDetails = normalizeStr(cv.getAsString(AuditLogEntry.COLUMN_DETAILS));
+
+        try (Cursor c = db.query(AuditLogEntry.TABLE_NAME,
+                new String[]{
+                        AuditLogEntry.COLUMN_ENTITY_ID,
+                        AuditLogEntry.COLUMN_ACTION,
+                        AuditLogEntry.COLUMN_DETAILS,
+                        AuditLogEntry.COLUMN_LAST_MODIFIED,
+                        AuditLogEntry.COLUMN_UPDATED_AT
+                },
+                AuditLogEntry.COLUMN_ACCOUNT_ID + " = ? AND " + AuditLogEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, id}, null, null, null)) {
+            if (c.moveToFirst()) {
+                String existingEntityId = normalizeStr(c.getString(0));
+                String existingAction = normalizeStr(c.getString(1));
+                String existingDetails = normalizeStr(c.getString(2));
+                long existingLastMod = resolveExistingTimestamp(c, 3, 4);
+
+                boolean dataDiffers = !Objects.equals(existingEntityId, importedEntityId)
+                        || !Objects.equals(existingAction, importedAction)
+                        || !Objects.equals(existingDetails, importedDetails);
+
+                if (dataDiffers || importedLastModified > existingLastMod) {
+                    conflicts.add("AuditLog conflict for ID " + id + ": preserved existing audit log.");
+                    return OUTCOME_CONFLICT;
+                }
+                return OUTCOME_SKIPPED;
+            }
+        }
+
+        db.insertOrThrow(AuditLogEntry.TABLE_NAME, null, cv);
+        return OUTCOME_INSERTED;
     }
 
     private static void syncSameAccountProfileIfNewer(
@@ -776,13 +1070,22 @@ public final class BackupRestoreManager {
     // =========================================================================
 
     /**
-     * Reconciles legacy payments, unallocated invoice paid amounts, and invoice mirror balances/statuses
-     * for a specific account without duplicating payments or modifying other accounts' records.
+     * Bridges genuine legacy rows from the `payments` table into `financial_transactions`
+     * and `payment_allocations` (insert-only, without duplicating or overwriting) and
+     * synchronizes invoice `paid_amount` and `status` strictly from actual financial allocations.
+     * Never fabricates synthetic payments when an invoice has `paid_amount > 0` without allocations.
      */
     public static void reconcileAccountFinancialData(@NonNull SQLiteDatabase db, @NonNull String accountId) {
         if (accountId.trim().isEmpty()) return;
 
-        // 1. Bridge any legacy rows in `payments` table into `financial_transactions` and `payment_allocations`
+        bridgeLegacyPaymentsForAccount(db, accountId);
+        syncAccountInvoiceMirrorColumns(db, accountId);
+        relinkBilledAttendanceRecords(db, accountId);
+    }
+
+    public static void bridgeLegacyPaymentsForAccount(@NonNull SQLiteDatabase db, @NonNull String accountId) {
+        if (accountId.trim().isEmpty()) return;
+
         String legacyPaymentsSql = "SELECT p." + PaymentEntry.COLUMN_ID + ", p." + PaymentEntry.COLUMN_INVOICE_ID + ", " +
                 "p." + PaymentEntry.COLUMN_AMOUNT + ", p." + PaymentEntry.COLUMN_PAYMENT_DATE + ", p." + PaymentEntry.COLUMN_METHOD + ", " +
                 "p." + PaymentEntry.COLUMN_LAST_MODIFIED + ", i." + InvoiceEntry.COLUMN_STUDENT_ID + " " +
@@ -797,7 +1100,7 @@ public final class BackupRestoreManager {
                 String invId = pc.getString(1);
                 int amountMinor = pc.getInt(2);
                 long payDate = pc.getLong(3);
-                String method = pc.getString(4) != null ? pc.getString(4) : "Cash";
+                String method = pc.getString(4) != null && !pc.getString(4).trim().isEmpty() ? pc.getString(4) : "Cash";
                 long lastMod = pc.getLong(5) > 0 ? pc.getLong(5) : (payDate > 0 ? payDate : System.currentTimeMillis());
                 String stuId = pc.getString(6);
 
@@ -828,105 +1131,55 @@ public final class BackupRestoreManager {
                     db.insertWithOnConflict(TransactionEntry.TABLE_NAME, null, tv, SQLiteDatabase.CONFLICT_IGNORE);
                 }
 
-                String allocId = UUID.nameUUIDFromBytes(("ALLOC:" + payId + ":" + invId).getBytes(StandardCharsets.UTF_8)).toString();
-                ContentValues av = new ContentValues();
-                av.put(PaymentAllocationEntry.COLUMN_ID, allocId);
-                av.put(PaymentAllocationEntry.COLUMN_ACCOUNT_ID, accountId);
-                av.put(PaymentAllocationEntry.COLUMN_TRANSACTION_ID, payId);
-                av.put(PaymentAllocationEntry.COLUMN_INVOICE_ID, invId);
-                av.put(PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, amountMinor);
-                av.put(PaymentAllocationEntry.COLUMN_CREATED_AT, payDate > 0 ? payDate : lastMod);
-                av.put(PaymentAllocationEntry.COLUMN_UPDATED_AT, lastMod);
-                av.put(PaymentAllocationEntry.COLUMN_LAST_MODIFIED, lastMod);
-                db.insertWithOnConflict(PaymentAllocationEntry.TABLE_NAME, null, av, SQLiteDatabase.CONFLICT_IGNORE);
-            }
-        }
-
-        // 2. Bridge legacy invoices that have paid_amount > 0 but zero payment_allocations
-        try (Cursor ic = db.query(InvoiceEntry.TABLE_NAME,
-                new String[]{
-                        InvoiceEntry.COLUMN_ID,
-                        InvoiceEntry.COLUMN_STUDENT_ID,
-                        InvoiceEntry.COLUMN_PAID_AMOUNT,
-                        InvoiceEntry.COLUMN_CREATED_AT,
-                        InvoiceEntry.COLUMN_LAST_MODIFIED
-                },
-                InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceEntry.COLUMN_PAID_AMOUNT + " > 0",
-                new String[]{accountId}, null, null, null)) {
-
-            while (ic.moveToNext()) {
-                String invId = ic.getString(0);
-                String stuId = ic.getString(1);
-                int storedPaid = ic.getInt(2);
-                long created = ic.getLong(3) > 0 ? ic.getLong(3) : System.currentTimeMillis();
-                long lastMod = ic.getLong(4) > 0 ? ic.getLong(4) : created;
-
-                boolean hasAllocations = false;
+                boolean allocExists = false;
                 try (Cursor ac = db.query(PaymentAllocationEntry.TABLE_NAME,
                         new String[]{PaymentAllocationEntry.COLUMN_ID},
-                        PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? AND " + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ?",
-                        new String[]{accountId, invId}, null, null, null, "1")) {
-                    if (ac.moveToFirst()) hasAllocations = true;
+                        PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                                PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ? AND " +
+                                PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ?",
+                        new String[]{accountId, payId, invId}, null, null, null)) {
+                    if (ac.moveToFirst()) allocExists = true;
                 }
 
-                if (!hasAllocations && storedPaid > 0) {
-                    String synthTxnId = UUID.nameUUIDFromBytes(("LEGACY-INV-TXN:" + invId).getBytes(StandardCharsets.UTF_8)).toString();
-                    String synthAllocId = UUID.nameUUIDFromBytes(("LEGACY-INV-ALLOC:" + invId).getBytes(StandardCharsets.UTF_8)).toString();
-
-                    boolean txnExists = false;
-                    try (Cursor tc = db.query(TransactionEntry.TABLE_NAME, new String[]{TransactionEntry.COLUMN_ID},
-                            TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_ID + " = ?",
-                            new String[]{accountId, synthTxnId}, null, null, null)) {
-                        if (tc.moveToFirst()) txnExists = true;
-                    }
-
-                    if (!txnExists) {
-                        String dispId = generateNextTxnDisplayId(db, accountId);
-                        ContentValues tv = new ContentValues();
-                        tv.put(TransactionEntry.COLUMN_ID, synthTxnId);
-                        tv.put(TransactionEntry.COLUMN_ACCOUNT_ID, accountId);
-                        tv.put(TransactionEntry.COLUMN_STUDENT_ID, stuId);
-                        tv.put(TransactionEntry.COLUMN_TXN_ID_DISPLAY, dispId);
-                        tv.put(TransactionEntry.COLUMN_TYPE, FinancialTransaction.TYPE_PAYMENT);
-                        tv.put(TransactionEntry.COLUMN_AMOUNT_MINOR, storedPaid);
-                        tv.put(TransactionEntry.COLUMN_TIMESTAMP, created);
-                        tv.put(TransactionEntry.COLUMN_METHOD, "Cash");
-                        tv.put(TransactionEntry.COLUMN_NOTES, "Restored invoice payment");
-                        tv.put(TransactionEntry.COLUMN_IS_REVERSED, 0);
-                        tv.put(TransactionEntry.COLUMN_CREATED_AT, created);
-                        tv.put(TransactionEntry.COLUMN_UPDATED_AT, lastMod);
-                        tv.put(TransactionEntry.COLUMN_LAST_MODIFIED, lastMod);
-                        db.insertWithOnConflict(TransactionEntry.TABLE_NAME, null, tv, SQLiteDatabase.CONFLICT_IGNORE);
-                    }
-
+                if (!allocExists) {
+                    String allocId = UUID.nameUUIDFromBytes(("ALLOC:" + payId + ":" + invId).getBytes(StandardCharsets.UTF_8)).toString();
                     ContentValues av = new ContentValues();
-                    av.put(PaymentAllocationEntry.COLUMN_ID, synthAllocId);
+                    av.put(PaymentAllocationEntry.COLUMN_ID, allocId);
                     av.put(PaymentAllocationEntry.COLUMN_ACCOUNT_ID, accountId);
-                    av.put(PaymentAllocationEntry.COLUMN_TRANSACTION_ID, synthTxnId);
+                    av.put(PaymentAllocationEntry.COLUMN_TRANSACTION_ID, payId);
                     av.put(PaymentAllocationEntry.COLUMN_INVOICE_ID, invId);
-                    av.put(PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, storedPaid);
-                    av.put(PaymentAllocationEntry.COLUMN_CREATED_AT, created);
+                    av.put(PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR, amountMinor);
+                    av.put(PaymentAllocationEntry.COLUMN_CREATED_AT, payDate > 0 ? payDate : lastMod);
                     av.put(PaymentAllocationEntry.COLUMN_UPDATED_AT, lastMod);
                     av.put(PaymentAllocationEntry.COLUMN_LAST_MODIFIED, lastMod);
                     db.insertWithOnConflict(PaymentAllocationEntry.TABLE_NAME, null, av, SQLiteDatabase.CONFLICT_IGNORE);
                 }
             }
         }
+    }
 
-        // 3. Synchronize paid_amount and status on all invoices for this account from payment_allocations
+    public static void syncAccountInvoiceMirrorColumns(@NonNull SQLiteDatabase db, @NonNull String accountId) {
+        if (accountId.trim().isEmpty()) return;
+
         String invSyncSql = "SELECT i." + InvoiceEntry.COLUMN_ID + ", i." + InvoiceEntry.COLUMN_TOTAL_AMOUNT + ", " +
                 "i." + InvoiceEntry.COLUMN_PAID_AMOUNT + ", i." + InvoiceEntry.COLUMN_STATUS + ", i." + InvoiceEntry.COLUMN_DUE_DATE + ", " +
-                "COALESCE((SELECT SUM(pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + ") " +
-                "          FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
-                "          INNER JOIN " + TransactionEntry.TABLE_NAME + " t " +
-                "          ON pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = t." + TransactionEntry.COLUMN_ID + " " +
-                "          AND pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = t." + TransactionEntry.COLUMN_ACCOUNT_ID + " " +
-                "          WHERE pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " " +
-                "          AND pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID + " " +
-                "          AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0), 0) AS derived_paid, " +
-                "EXISTS(SELECT 1 FROM " + PaymentAllocationEntry.TABLE_NAME + " pa2 " +
-                "       WHERE pa2." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " " +
-                "       AND pa2." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID + ") AS has_alloc " +
+                "(COALESCE((SELECT SUM(pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR + ") " +
+                "           FROM " + PaymentAllocationEntry.TABLE_NAME + " pa " +
+                "           INNER JOIN " + TransactionEntry.TABLE_NAME + " t " +
+                "           ON pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = t." + TransactionEntry.COLUMN_ID + " " +
+                "           AND pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = t." + TransactionEntry.COLUMN_ACCOUNT_ID + " " +
+                "           WHERE pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " " +
+                "           AND pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID + " " +
+                "           AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0), 0) + " +
+                " COALESCE((SELECT SUM(p." + PaymentEntry.COLUMN_AMOUNT + ") " +
+                "           FROM " + PaymentEntry.TABLE_NAME + " p " +
+                "           WHERE p." + PaymentEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " " +
+                "           AND p." + PaymentEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID + " " +
+                "           AND NOT EXISTS (SELECT 1 FROM " + PaymentAllocationEntry.TABLE_NAME + " pa2 " +
+                "                           WHERE pa2." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = p." + PaymentEntry.COLUMN_ACCOUNT_ID + " " +
+                "                           AND (pa2." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = p." + PaymentEntry.COLUMN_ID + " " +
+                "                                OR pa2." + PaymentAllocationEntry.COLUMN_ID + " = p." + PaymentEntry.COLUMN_ID + "))), 0)" +
+                ") AS derived_paid " +
                 "FROM " + InvoiceEntry.TABLE_NAME + " i " +
                 "WHERE i." + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ?";
 
@@ -938,10 +1191,8 @@ public final class BackupRestoreManager {
                 int currentPaid = c.getInt(2);
                 String currentStatus = c.getString(3);
                 long dueDate = c.getLong(4);
-                int derivedPaid = Math.max(0, c.getInt(5));
-                boolean hasAlloc = c.getInt(6) == 1;
+                int effectivePaid = Math.max(0, c.getInt(5));
 
-                int effectivePaid = hasAlloc ? derivedPaid : Math.max(0, currentPaid);
                 String newStatus = Invoice.STATUS_UNPAID;
                 if (effectivePaid >= totalAmount && totalAmount > 0) {
                     newStatus = Invoice.STATUS_PAID;
@@ -961,8 +1212,9 @@ public final class BackupRestoreManager {
                 }
             }
         }
+    }
 
-        // 4. Relink billed_invoice_item_id on attendance_records where an invoice_item bills that occurrence
+    private static void relinkBilledAttendanceRecords(@NonNull SQLiteDatabase db, @NonNull String accountId) {
         db.execSQL("UPDATE " + AttendanceEntry.TABLE_NAME +
                 " SET " + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " = (" +
                 "   SELECT ii." + InvoiceItemEntry.COLUMN_ID +
@@ -997,22 +1249,9 @@ public final class BackupRestoreManager {
         }
 
         for (String stuId : missingIds) {
-            int nextNumber = 1;
-            try (Cursor c = db.rawQuery(
-                    "SELECT " + StudentEntry.COLUMN_STUDENT_ID_DISPLAY +
-                            " FROM " + StudentEntry.TABLE_NAME +
-                            " WHERE " + StudentEntry.COLUMN_ACCOUNT_ID + " = ? " +
-                            " AND " + StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " LIKE 'STU-%'" +
-                            " ORDER BY CAST(SUBSTR(" + StudentEntry.COLUMN_STUDENT_ID_DISPLAY + ", 5) AS INTEGER) DESC LIMIT 1",
-                    new String[]{accountId})) {
-                if (c.moveToFirst()) {
-                    try {
-                        nextNumber = Integer.parseInt(c.getString(0).substring(4)) + 1;
-                    } catch (Exception ignored) {}
-                }
-            }
+            String nextDisp = generateNextStudentDisplayId(db, accountId);
             ContentValues cv = new ContentValues();
-            cv.put(StudentEntry.COLUMN_STUDENT_ID_DISPLAY, String.format(Locale.US, "STU-%04d", nextNumber));
+            cv.put(StudentEntry.COLUMN_STUDENT_ID_DISPLAY, nextDisp);
             db.update(StudentEntry.TABLE_NAME, cv,
                     StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_ID + " = ?",
                     new String[]{accountId, stuId});
@@ -1020,39 +1259,22 @@ public final class BackupRestoreManager {
     }
 
     private static void ensureUniqueInvoiceDisplayIds(@NonNull SQLiteDatabase db, @NonNull String accountId) {
-        List<String> needsDisplayId = new ArrayList<>();
+        List<String> missingIds = new ArrayList<>();
         try (Cursor c = db.query(InvoiceEntry.TABLE_NAME,
                 new String[]{InvoiceEntry.COLUMN_ID},
                 InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND (" +
                         InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " IS NULL OR " +
-                        InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " = '' OR " +
-                        InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " LIKE '#INV-%')",
+                        InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " = '')",
                 new String[]{accountId}, null, null, InvoiceEntry.COLUMN_CREATED_AT + " ASC")) {
             while (c.moveToNext()) {
-                needsDisplayId.add(c.getString(0));
+                missingIds.add(c.getString(0));
             }
         }
 
-        int year = Calendar.getInstance().get(Calendar.YEAR);
-        String prefix = String.format(Locale.US, "TS-%04d-", year);
-
-        for (String invId : needsDisplayId) {
-            int nextNumber = 1;
-            try (Cursor c = db.rawQuery(
-                    "SELECT " + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY +
-                            " FROM " + InvoiceEntry.TABLE_NAME +
-                            " WHERE " + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? " +
-                            " AND " + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " LIKE ?" +
-                            " ORDER BY CAST(SUBSTR(" + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + ", 9) AS INTEGER) DESC LIMIT 1",
-                    new String[]{accountId, prefix + "%"})) {
-                if (c.moveToFirst()) {
-                    try {
-                        nextNumber = Integer.parseInt(c.getString(0).substring(8)) + 1;
-                    } catch (Exception ignored) {}
-                }
-            }
+        for (String invId : missingIds) {
+            String nextDisp = generateNextInvoiceDisplayId(db, accountId);
             ContentValues cv = new ContentValues();
-            cv.put(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY, prefix + String.format(Locale.US, "%06d", nextNumber));
+            cv.put(InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY, nextDisp);
             db.update(InvoiceEntry.TABLE_NAME, cv,
                     InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceEntry.COLUMN_ID + " = ?",
                     new String[]{accountId, invId});
@@ -1060,10 +1282,50 @@ public final class BackupRestoreManager {
     }
 
     @NonNull
+    private static String generateNextStudentDisplayId(@NonNull SQLiteDatabase db, @NonNull String accountId) {
+        int nextNum = 1;
+        try (Cursor c = db.rawQuery(
+                "SELECT " + StudentEntry.COLUMN_STUDENT_ID_DISPLAY +
+                        " FROM " + StudentEntry.TABLE_NAME +
+                        " WHERE " + StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " LIKE 'STU-%' " +
+                        " ORDER BY CAST(SUBSTR(" + StudentEntry.COLUMN_STUDENT_ID_DISPLAY + ", 5) AS INTEGER) DESC LIMIT 1",
+                new String[]{accountId})) {
+            if (c.moveToFirst() && c.getString(0) != null) {
+                try {
+                    nextNum = Integer.parseInt(c.getString(0).substring(4)) + 1;
+                } catch (Exception ignored) {}
+            }
+        }
+        return String.format(Locale.US, "STU-%04d", nextNum);
+    }
+
+    @NonNull
+    private static String generateNextInvoiceDisplayId(@NonNull SQLiteDatabase db, @NonNull String accountId) {
+        int year = Calendar.getInstance().get(Calendar.YEAR);
+        String prefix = String.format(Locale.US, "TS-%04d-", year);
+        int nextNum = 1;
+        try (Cursor c = db.rawQuery(
+                "SELECT " + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY +
+                        " FROM " + InvoiceEntry.TABLE_NAME +
+                        " WHERE " + InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " LIKE ? " +
+                        " ORDER BY CAST(SUBSTR(" + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + ", 9) AS INTEGER) DESC LIMIT 1",
+                new String[]{accountId, prefix + "%"})) {
+            if (c.moveToFirst() && c.getString(0) != null) {
+                try {
+                    nextNum = Integer.parseInt(c.getString(0).substring(8)) + 1;
+                } catch (Exception ignored) {}
+            }
+        }
+        return prefix + String.format(Locale.US, "%06d", nextNum);
+    }
+
+    @NonNull
     private static String generateNextTxnDisplayId(@NonNull SQLiteDatabase db, @NonNull String accountId) {
         int year = Calendar.getInstance().get(Calendar.YEAR);
         String prefix = String.format(Locale.US, "TXN-%04d-", year);
-        int nextNumber = 1;
+        int nextNum = 1;
         try (Cursor c = db.rawQuery(
                 "SELECT " + TransactionEntry.COLUMN_TXN_ID_DISPLAY +
                         " FROM " + TransactionEntry.TABLE_NAME +
@@ -1071,53 +1333,18 @@ public final class BackupRestoreManager {
                         TransactionEntry.COLUMN_TXN_ID_DISPLAY + " LIKE ? " +
                         " ORDER BY CAST(SUBSTR(" + TransactionEntry.COLUMN_TXN_ID_DISPLAY + ", 10) AS INTEGER) DESC LIMIT 1",
                 new String[]{accountId, prefix + "%"})) {
-            if (c.moveToFirst()) {
+            if (c.moveToFirst() && c.getString(0) != null) {
                 try {
-                    nextNumber = Integer.parseInt(c.getString(0).substring(9)) + 1;
+                    nextNum = Integer.parseInt(c.getString(0).substring(9)) + 1;
                 } catch (Exception ignored) {}
             }
         }
-        return prefix + String.format(Locale.US, "%06d", nextNumber);
+        return prefix + String.format(Locale.US, "%06d", nextNum);
     }
 
     // =========================================================================
-    // LOW-LEVEL CURSOR & JSON UTILITIES
+    // LOW-LEVEL CURSOR / JSON HELPERS
     // =========================================================================
-
-    private static long extractRecordLastModified(@NonNull String table, @NonNull ContentValues cv) {
-        long lastMod = getLongOrDefault(cv, TutorSyncContract.COLUMN_SYNC_LAST_MODIFIED, 0L);
-        if (lastMod > 0L) return lastMod;
-
-        long updated = getLongOrDefault(cv, TutorSyncContract.COLUMN_SYNC_UPDATED_AT, 0L);
-        if (updated > 0L) return updated;
-
-        long created = getLongOrDefault(cv, TutorSyncContract.COLUMN_SYNC_CREATED_AT, 0L);
-        if (created > 0L) return created;
-
-        if (TransactionEntry.TABLE_NAME.equals(table) || AuditLogEntry.TABLE_NAME.equals(table)) {
-            long ts = getLongOrDefault(cv, "timestamp", 0L);
-            if (ts > 0L) return ts;
-        }
-        if (PaymentEntry.TABLE_NAME.equals(table)) {
-            long pd = getLongOrDefault(cv, PaymentEntry.COLUMN_PAYMENT_DATE, 0L);
-            if (pd > 0L) return pd;
-        }
-        if (ScheduleFeeHistoryEntry.TABLE_NAME.equals(table)) {
-            long ef = getLongOrDefault(cv, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, 0L);
-            if (ef > 0L) return ef;
-        }
-        if (OccurrenceEntry.TABLE_NAME.equals(table)) {
-            long dt = getLongOrDefault(cv, OccurrenceEntry.COLUMN_DATE, 0L);
-            if (dt > 0L) return dt;
-        }
-        return 1L;
-    }
-
-    private static long resolveExistingTimestamp(@NonNull Cursor c, int lastModIdx, int updatedIdx) {
-        long lastMod = (!c.isNull(lastModIdx)) ? c.getLong(lastModIdx) : 0L;
-        long updated = (!c.isNull(updatedIdx)) ? c.getLong(updatedIdx) : 0L;
-        return Math.max(lastMod, updated);
-    }
 
     @NonNull
     private static Set<String> queryExistingIdsForAccount(
@@ -1125,11 +1352,12 @@ public final class BackupRestoreManager {
             @NonNull String table,
             @NonNull String accountId) {
         Set<String> ids = new HashSet<>();
-        try (Cursor c = db.query(table, new String[]{"id"}, "account_id = ?", new String[]{accountId}, null, null, null)) {
+        try (Cursor c = db.query(table, new String[]{"id"},
+                "account_id = ?", new String[]{accountId}, null, null, null)) {
             while (c.moveToNext()) {
                 String id = c.getString(0);
-                if (id != null && !id.isEmpty()) {
-                    ids.add(id);
+                if (id != null && !id.trim().isEmpty()) {
+                    ids.add(id.trim());
                 }
             }
         }
@@ -1151,90 +1379,47 @@ public final class BackupRestoreManager {
     }
 
     @NonNull
-    private static ContentValues filterToValidColumns(@NonNull ContentValues source, @NonNull Set<String> validColumns) {
-        ContentValues filtered = new ContentValues();
-        for (String key : source.keySet()) {
+    private static ContentValues filterToValidColumns(
+            @NonNull ContentValues raw,
+            @NonNull Set<String> validColumns) {
+        ContentValues out = new ContentValues();
+        for (String key : raw.keySet()) {
             if (validColumns.contains(key)) {
-                Object val = source.get(key);
-                if (val == null) {
-                    filtered.putNull(key);
-                } else if (val instanceof Long) {
-                    filtered.put(key, (Long) val);
-                } else if (val instanceof Integer) {
-                    filtered.put(key, (Integer) val);
-                } else if (val instanceof Double) {
-                    filtered.put(key, (Double) val);
-                } else if (val instanceof Float) {
-                    filtered.put(key, (Float) val);
-                } else if (val instanceof Boolean) {
-                    filtered.put(key, ((Boolean) val) ? 1 : 0);
-                } else {
-                    filtered.put(key, String.valueOf(val));
-                }
+                Object val = raw.get(key);
+                if (val == null) out.putNull(key);
+                else if (val instanceof Integer) out.put(key, (Integer) val);
+                else if (val instanceof Long) out.put(key, (Long) val);
+                else if (val instanceof Double) out.put(key, (Double) val);
+                else if (val instanceof Float) out.put(key, (Float) val);
+                else if (val instanceof Boolean) out.put(key, ((Boolean) val) ? 1 : 0);
+                else out.put(key, String.valueOf(val));
             }
         }
-        return filtered;
-    }
-
-    private static long getLongOrDefault(@NonNull ContentValues cv, @NonNull String key, long def) {
-        if (!cv.containsKey(key) || cv.get(key) == null) return def;
-        try {
-            Long val = cv.getAsLong(key);
-            return val != null ? val : def;
-        } catch (Exception e) {
-            try {
-                return Long.parseLong(String.valueOf(cv.get(key)));
-            } catch (Exception ex) {
-                return def;
-            }
-        }
-    }
-
-    private static int getIntOrDefault(@NonNull ContentValues cv, @NonNull String key, int def) {
-        if (!cv.containsKey(key) || cv.get(key) == null) return def;
-        try {
-            Integer val = cv.getAsInteger(key);
-            return val != null ? val : def;
-        } catch (Exception e) {
-            try {
-                return Integer.parseInt(String.valueOf(cv.get(key)));
-            } catch (Exception ex) {
-                return def;
-            }
-        }
+        return out;
     }
 
     @NonNull
-    private static String getColumnStringOrEmpty(@NonNull Cursor cursor, @NonNull String columnName) {
-        int idx = cursor.getColumnIndex(columnName);
-        if (idx != -1 && !cursor.isNull(idx)) {
-            String val = cursor.getString(idx);
-            return val != null ? val : "";
-        }
-        return "";
-    }
-
-    @NonNull
-    public static JSONObject cursorRowToJson(@NonNull Cursor c) throws Exception {
+    private static JSONObject cursorRowToJson(@NonNull Cursor c) throws JSONException {
         JSONObject obj = new JSONObject();
-        for (int i = 0; i < c.getColumnCount(); i++) {
-            String col = c.getColumnName(i);
+        int colCount = c.getColumnCount();
+        for (int i = 0; i < colCount; i++) {
+            String colName = c.getColumnName(i);
             int type = c.getType(i);
             if (type == Cursor.FIELD_TYPE_NULL) {
-                obj.put(col, JSONObject.NULL);
+                obj.put(colName, JSONObject.NULL);
             } else if (type == Cursor.FIELD_TYPE_INTEGER) {
-                obj.put(col, c.getLong(i));
+                obj.put(colName, c.getLong(i));
             } else if (type == Cursor.FIELD_TYPE_FLOAT) {
-                obj.put(col, c.getDouble(i));
-            } else {
-                obj.put(col, c.getString(i));
+                obj.put(colName, c.getDouble(i));
+            } else if (type == Cursor.FIELD_TYPE_STRING) {
+                obj.put(colName, c.getString(i));
             }
         }
         return obj;
     }
 
     @NonNull
-    public static ContentValues jsonToContentValues(@NonNull JSONObject obj) throws Exception {
+    private static ContentValues jsonToContentValues(@NonNull JSONObject obj) throws JSONException {
         ContentValues cv = new ContentValues();
         Iterator<String> keys = obj.keys();
         while (keys.hasNext()) {
@@ -1243,10 +1428,10 @@ public final class BackupRestoreManager {
                 cv.putNull(key);
             } else {
                 Object val = obj.get(key);
-                if (val instanceof Long) {
-                    cv.put(key, (Long) val);
-                } else if (val instanceof Integer) {
+                if (val instanceof Integer) {
                     cv.put(key, (Integer) val);
+                } else if (val instanceof Long) {
+                    cv.put(key, (Long) val);
                 } else if (val instanceof Double) {
                     cv.put(key, (Double) val);
                 } else if (val instanceof Boolean) {
@@ -1257,6 +1442,61 @@ public final class BackupRestoreManager {
             }
         }
         return cv;
+    }
+
+    private static long extractRecordLastModified(@NonNull String table, @NonNull ContentValues cv) {
+        long ts = getLongOrDefault(cv, "last_modified", 0L);
+        if (ts > 0) return ts;
+        ts = getLongOrDefault(cv, "updated_at", 0L);
+        if (ts > 0) return ts;
+        ts = getLongOrDefault(cv, "created_at", 0L);
+        if (ts > 0) return ts;
+
+        if (OccurrenceEntry.TABLE_NAME.equals(table)) {
+            ts = getLongOrDefault(cv, OccurrenceEntry.COLUMN_DATE, 0L);
+        } else if (PaymentEntry.TABLE_NAME.equals(table)) {
+            ts = getLongOrDefault(cv, PaymentEntry.COLUMN_PAYMENT_DATE, 0L);
+        } else if (TransactionEntry.TABLE_NAME.equals(table)) {
+            ts = getLongOrDefault(cv, TransactionEntry.COLUMN_TIMESTAMP, 0L);
+        } else if (AuditLogEntry.TABLE_NAME.equals(table)) {
+            ts = getLongOrDefault(cv, AuditLogEntry.COLUMN_TIMESTAMP, 0L);
+        } else if (ScheduleFeeHistoryEntry.TABLE_NAME.equals(table)) {
+            ts = getLongOrDefault(cv, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, 0L);
+        } else if (ScheduleEntry.TABLE_NAME.equals(table)) {
+            ts = getLongOrDefault(cv, ScheduleEntry.COLUMN_START_DATE, 0L);
+        } else if (InvoiceEntry.TABLE_NAME.equals(table)) {
+            ts = getLongOrDefault(cv, InvoiceEntry.COLUMN_ISSUE_DATE, 0L);
+        }
+        return ts > 0 ? ts : 1L;
+    }
+
+    private static long resolveExistingTimestamp(@NonNull Cursor c, int lastModIdx, int updatedAtIdx) {
+        long lastMod = (lastModIdx >= 0 && !c.isNull(lastModIdx)) ? c.getLong(lastModIdx) : 0L;
+        if (lastMod > 0L) return lastMod;
+        return (updatedAtIdx >= 0 && !c.isNull(updatedAtIdx)) ? c.getLong(updatedAtIdx) : 0L;
+    }
+
+    private static long getLongOrDefault(@NonNull ContentValues cv, @NonNull String key, long defaultVal) {
+        Long val = cv.getAsLong(key);
+        return val != null ? val : defaultVal;
+    }
+
+    private static int getIntOrDefault(@NonNull ContentValues cv, @NonNull String key, int defaultVal) {
+        Integer val = cv.getAsInteger(key);
+        return val != null ? val : defaultVal;
+    }
+
+    @NonNull
+    private static String normalizeStr(@Nullable String s) {
+        return s != null ? s.trim() : "";
+    }
+
+    @NonNull
+    private static String getColumnStringOrEmpty(@NonNull Cursor c, @NonNull String col) {
+        int idx = c.getColumnIndex(col);
+        if (idx == -1 || c.isNull(idx)) return "";
+        String v = c.getString(idx);
+        return v != null ? v : "";
     }
 
     @Nullable

@@ -694,7 +694,7 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    private void importBackupFromUri(@NonNull Uri uri) {
+    private void importBackupFromUri(@NonNull android.net.Uri uri) {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
@@ -703,10 +703,17 @@ public class MainActivity extends BaseActivity {
             if (in == null) return;
             BackupRestoreManager.ImportResult result =
                     BackupRestoreManager.importAccountBackupFromStream(this, db, accountId, in);
-            Toast.makeText(this,
-                    String.format(Locale.US, "Backup restored (%d added, %d updated, %d unchanged)",
-                            result.insertedCount, result.updatedCount, result.skippedCount),
-                    Toast.LENGTH_SHORT).show();
+            String msg;
+            if (result.hasConflicts()) {
+                msg = String.format(Locale.US,
+                        "Backup restored (%d added, %d updated, %d unchanged, %d financial conflicts preserved)",
+                        result.insertedCount, result.updatedCount, result.skippedCount, result.conflictCount);
+            } else {
+                msg = String.format(Locale.US,
+                        "Backup restored (%d added, %d updated, %d unchanged)",
+                        result.insertedCount, result.updatedCount, result.skippedCount);
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             Toast.makeText(this, "Restore failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
         } finally {
