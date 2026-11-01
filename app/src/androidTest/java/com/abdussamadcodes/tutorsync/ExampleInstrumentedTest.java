@@ -2,6 +2,7 @@ package com.abdussamadcodes.tutorsync;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -10,19 +11,24 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.LessonEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
 import com.abdussamadcodes.tutorsync.model.Account;
 import com.abdussamadcodes.tutorsync.model.AttendanceRecord;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import com.abdussamadcodes.tutorsync.model.FinancialTransaction;
 import com.abdussamadcodes.tutorsync.model.Invoice;
+import com.abdussamadcodes.tutorsync.model.Lesson;
 import com.abdussamadcodes.tutorsync.model.RecurringSchedule;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import com.abdussamadcodes.tutorsync.repository.local.AttendanceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.EnrollmentRepository;
 import com.abdussamadcodes.tutorsync.repository.local.InvoiceRepository;
+import com.abdussamadcodes.tutorsync.repository.local.LessonRepository;
 import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.ScheduleRepository;
 import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
@@ -36,6 +42,7 @@ import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -121,7 +128,6 @@ public class ExampleInstrumentedTest {
                 DatabaseManager.getInstance().closeDatabase();
             }
 
-            // 1. Record full payment of 1000.00 BDT (100,000 minor units)
             FinancialTransaction payment = txnRepo.recordPaymentWithAllocations(
                     accountId, studentId, 100000, "Cash", null, null,
                     Collections.singletonMap(invoiceId, 100000)
@@ -134,7 +140,6 @@ public class ExampleInstrumentedTest {
             assertEquals(0, afterPay.getOutstandingBalance());
             assertEquals(Invoice.STATUS_PAID, afterPay.getStatus());
 
-            // 2. Issue partial refund of 400.00 BDT (40,000 minor units)
             assertTrue(txnRepo.recordRefundForTransaction(accountId, payment.getId(), 40000, "Partial refund"));
 
             Invoice afterPartialRefund = invoiceRepo.getInvoiceById(accountId, invoiceId);
@@ -143,10 +148,8 @@ public class ExampleInstrumentedTest {
             assertEquals(40000, afterPartialRefund.getOutstandingBalance());
             assertEquals(Invoice.STATUS_PARTIAL, afterPartialRefund.getStatus());
 
-            // 3. Attempting to refund 1000.00 BDT again must fail (only 600.00 BDT remains refundable)
             assertFalse(txnRepo.recordRefundForTransaction(accountId, payment.getId(), 100000, "Over-refund attempt"));
 
-            // 4. Refunding the remaining 600.00 BDT succeeds
             assertTrue(txnRepo.recordRefundForTransaction(accountId, payment.getId(), 60000, "Remaining refund"));
 
             Invoice afterFullRefund = invoiceRepo.getInvoiceById(accountId, invoiceId);
@@ -227,14 +230,12 @@ public class ExampleInstrumentedTest {
                 JSONObject backup = BackupRestoreManager.exportAccountBackup(context, db, accountA);
                 exportedJson = backup.toString();
 
-                // 1. Repeated import into Account A must be idempotent (0 inserted, 0 updated, all skipped)
                 BackupRestoreManager.ImportResult repeatResult =
                         BackupRestoreManager.importAccountBackupFromJson(context, db, accountA, exportedJson);
                 assertEquals(0, repeatResult.insertedCount);
                 assertEquals(0, repeatResult.updatedCount);
                 assertTrue(repeatResult.skippedCount > 0);
 
-                // 2. Cross-account import into Account B preserves exact UUIDs and relationships
                 BackupRestoreManager.ImportResult crossResult =
                         BackupRestoreManager.importAccountBackupFromJson(context, db, accountB, exportedJson);
                 assertTrue(crossResult.insertedCount > 0);
@@ -262,7 +263,6 @@ public class ExampleInstrumentedTest {
             assertEquals(30000, invB.getPaidAmount());
             assertEquals(20000, invB.getOutstandingBalance());
 
-            // 3. Strict account isolation: paying remaining 200.00 BDT in Account B must NOT affect Account A
             FinancialTransaction payB = txnRepo.recordPaymentWithAllocations(
                     accountB, studentUuid, 20000, "Cash", null, "Pay rest in B",
                     Collections.singletonMap(invoiceUuid, 20000)
@@ -314,7 +314,6 @@ public class ExampleInstrumentedTest {
                         .getJSONArray(StudentEntry.TABLE_NAME)
                         .getJSONObject(0);
 
-                // 1. Equal timestamp (tBase == tBase) -> keep existing record ("Initial Name")
                 studentJson.put(StudentEntry.COLUMN_NAME, "Equal Timestamp Name");
                 studentJson.put(StudentEntry.COLUMN_LAST_MODIFIED, tBase);
                 studentJson.put(StudentEntry.COLUMN_UPDATED_AT, tBase);
@@ -325,7 +324,6 @@ public class ExampleInstrumentedTest {
                 assertNotNull(afterEq);
                 assertEquals("Initial Name", afterEq.getName());
 
-                // 2. Older timestamp (tBase - 5000 < tBase) -> keep existing record ("Initial Name")
                 studentJson.put(StudentEntry.COLUMN_NAME, "Older Timestamp Name");
                 studentJson.put(StudentEntry.COLUMN_LAST_MODIFIED, tBase - 5000L);
                 studentJson.put(StudentEntry.COLUMN_UPDATED_AT, tBase - 5000L);
@@ -336,7 +334,6 @@ public class ExampleInstrumentedTest {
                 assertNotNull(afterOld);
                 assertEquals("Initial Name", afterOld.getName());
 
-                // 3. Newer timestamp (tBase + 5000 > tBase) -> update existing record ("Newer Timestamp Name")
                 studentJson.put(StudentEntry.COLUMN_NAME, "Newer Timestamp Name");
                 studentJson.put(StudentEntry.COLUMN_LAST_MODIFIED, tBase + 5000L);
                 studentJson.put(StudentEntry.COLUMN_UPDATED_AT, tBase + 5000L);
@@ -347,7 +344,6 @@ public class ExampleInstrumentedTest {
                 assertNotNull(afterNew);
                 assertEquals("Newer Timestamp Name", afterNew.getName());
 
-                // 4. Verify security settings (password_hash, salt, PIN, biometric) were never overwritten
                 Account reloadedAcc = accountStore.getAccountById(accountId);
                 assertNotNull(reloadedAcc);
                 assertEquals("origHash", reloadedAcc.getPasswordHash());
@@ -355,7 +351,6 @@ public class ExampleInstrumentedTest {
                 assertEquals("pinHashSecret", sessionManager.getSavedPinHash());
                 assertTrue(sessionManager.isBiometricEnabled());
 
-                // 5. Broken foreign key relationship must fail pre-commit validation and roll back atomically
                 studentJson.put(StudentEntry.COLUMN_NAME, "Should Rollback Name");
                 studentJson.put(StudentEntry.COLUMN_LAST_MODIFIED, tBase + 99999L);
 
@@ -399,4 +394,129 @@ public class ExampleInstrumentedTest {
         }
     }
 
+    @Test
+    public void scheduleEditAndDelete_preservesUuids_rollsBackOnValidationFailure_andProtectsHistoricalData() {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        LocalAccountStore accountStore = new LocalAccountStore(context);
+        StudentRepository studentRepo = new StudentRepository();
+        SubjectRepository subjectRepo = new SubjectRepository();
+        EnrollmentRepository enrollmentRepo = new EnrollmentRepository();
+        ScheduleRepository scheduleRepo = new ScheduleRepository();
+        OccurrenceRepository occurrenceRepo = new OccurrenceRepository();
+        AttendanceRepository attendanceRepo = new AttendanceRepository();
+        LessonRepository lessonRepo = new LessonRepository();
+
+        String accountId = UUID.randomUUID().toString();
+        String studentId = UUID.randomUUID().toString();
+        String subjectId = UUID.randomUUID().toString();
+        String scheduleId = UUID.randomUUID().toString();
+        String groupId = UUID.randomUUID().toString();
+        String recordedOccId = UUID.randomUUID().toString();
+        String attendanceId = UUID.randomUUID().toString();
+        String lessonId = UUID.randomUUID().toString();
+
+        try {
+            assertTrue(accountStore.saveAccount(new Account(accountId, "Schedule Tutor", "sched" + System.currentTimeMillis(), "h", "s")));
+            long now = System.currentTimeMillis();
+            assertEquals(1, studentRepo.insertStudent(new Student(studentId, accountId, "STU-0100", "Karim", "10", "Ideal School", null, null, null, true, now)));
+            assertTrue(subjectRepo.insertSubject(new Subject(subjectId, accountId, "Mathematics", "SSC", true, now)));
+            assertTrue(enrollmentRepo.enrollStudentInSubject(accountId, studentId, subjectId));
+
+            // 1. Insert initial recurring schedule on Monday (dayOfWeek = 2)
+            RecurringSchedule initial = new RecurringSchedule(
+                    scheduleId, accountId, studentId, subjectId, groupId,
+                    2, 960, 60, now - 86400000L, now + 31536000000L,
+                    RecurringSchedule.MODEL_PER_CLASS, 40000, 1, now
+            );
+            assertTrue(scheduleRepo.insertScheduleWithFee(initial, groupId, RecurringSchedule.MODEL_PER_CLASS, 40000, 1));
+
+            // 2. Insert a future occurrence with recorded attendance and lesson notes
+            long futureRecordedDate = now + (2L * 86400000L);
+            ClassOccurrence recOcc = new ClassOccurrence(recordedOccId, accountId, studentId, subjectId, scheduleId, futureRecordedDate, 960, 60, now);
+            assertTrue(occurrenceRepo.insertOccurrenceWithGroup(recOcc, groupId));
+
+            AttendanceRecord att = new AttendanceRecord(attendanceId, accountId, recordedOccId, AttendanceRecord.STATUS_PRESENT,
+                    AttendanceRecord.DECISION_CHARGE, 40000, false, null, null, now);
+            assertEquals(1, attendanceRepo.recordAttendanceWithBilling(att, false, -1L, 0));
+
+            Lesson lesson = new Lesson(lessonId, accountId, studentId, recordedOccId, "Calculus", "Ex 4.1", "Did well", now);
+            assertTrue(lessonRepo.saveLesson(lesson));
+
+            // 3. Invalid edit (empty days list) must fail validation BEFORE deleting existing schedule
+            boolean invalidEditResult = scheduleRepo.saveScheduleFormAtomically(
+                    accountId, true, groupId, Collections.singletonList(scheduleId),
+                    Collections.singletonList(studentId), Collections.singletonList(subjectId),
+                    true, Collections.emptyList(), -1L, 1020, 90,
+                    RecurringSchedule.MODEL_PER_CLASS, 50000, 1
+            );
+            assertFalse(invalidEditResult);
+
+            List<RecurringSchedule> afterInvalidEdit = scheduleRepo.getSchedulesForAccount(accountId);
+            assertEquals(1, afterInvalidEdit.size());
+            assertEquals(scheduleId, afterInvalidEdit.get(0).getId());
+            assertEquals(960, afterInvalidEdit.get(0).getStartTimeMinutes());
+
+            // 4. Valid edit (change time to 1020, duration to 90, add Wednesday=4) must preserve existing scheduleId for Monday=2
+            boolean validEditResult = scheduleRepo.saveScheduleFormAtomically(
+                    accountId, true, groupId, Collections.singletonList(scheduleId),
+                    Collections.singletonList(studentId), Collections.singletonList(subjectId),
+                    true, Arrays.asList(2, 4), -1L, 1020, 90,
+                    RecurringSchedule.MODEL_PER_CLASS, 50000, 1
+            );
+            assertTrue(validEditResult);
+
+            List<RecurringSchedule> afterValidEdit = scheduleRepo.getSchedulesForAccount(accountId);
+            assertEquals(2, afterValidEdit.size());
+            boolean foundOriginalUuid = false;
+            for (RecurringSchedule rs : afterValidEdit) {
+                if (rs.getDayOfWeek() == 2) {
+                    assertEquals(scheduleId, rs.getId());
+                    assertEquals(1020, rs.getStartTimeMinutes());
+                    assertEquals(90, rs.getDurationMinutes());
+                    assertEquals(50000, rs.getFeeAmountMinor());
+                    foundOriginalUuid = true;
+                }
+            }
+            assertTrue("Existing schedule UUID must be preserved on edit", foundOriginalUuid);
+
+            // 5. Verify recorded occurrence, attendance, and lesson were NOT destroyed by edit or delete
+            assertFalse("Recorded occurrence must not be deleted", occurrenceRepo.deleteOccurrence(accountId, recordedOccId));
+
+            List<String> currentSchedIds = Arrays.asList(afterValidEdit.get(0).getId(), afterValidEdit.get(1).getId());
+            assertTrue(scheduleRepo.deleteScheduleGroupSafely(accountId, currentSchedIds));
+            assertTrue(scheduleRepo.getSchedulesForAccount(accountId).isEmpty());
+
+            // 6. Deleting Subject & Student with historical records soft-deletes them and keeps attendance/lesson intact
+            assertTrue(subjectRepo.deleteSubject(accountId, subjectId));
+            assertTrue(studentRepo.deleteStudent(accountId, studentId));
+
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            try {
+                try (Cursor oc = db.query(OccurrenceEntry.TABLE_NAME, new String[]{OccurrenceEntry.COLUMN_ID},
+                        OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, recordedOccId}, null, null, null)) {
+                    assertTrue("Historical occurrence must survive schedule, subject, and student deletion", oc.moveToFirst());
+                }
+                try (Cursor ac = db.query(AttendanceEntry.TABLE_NAME, new String[]{AttendanceEntry.COLUMN_ID},
+                        AttendanceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + AttendanceEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, attendanceId}, null, null, null)) {
+                    assertTrue("Historical attendance must survive", ac.moveToFirst());
+                }
+                try (Cursor lc = db.query(LessonEntry.TABLE_NAME, new String[]{LessonEntry.COLUMN_ID},
+                        LessonEntry.COLUMN_ACCOUNT_ID + " = ? AND " + LessonEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, lessonId}, null, null, null)) {
+                    assertTrue("Historical lesson must survive", lc.moveToFirst());
+                }
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+            }
+        } finally {
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            try {
+                db.delete(AccountEntry.TABLE_NAME, AccountEntry.COLUMN_ID + " = ?", new String[]{accountId});
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+            }
+        }
+    }
 }

@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivitySubjectListBinding;
@@ -12,6 +11,7 @@ import com.abdussamadcodes.tutorsync.model.Subject;
 import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import java.util.List;
 
 public class SubjectListActivity extends BaseActivity {
@@ -34,11 +34,12 @@ public class SubjectListActivity extends BaseActivity {
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
         adapter = new SubjectAdapter(subject -> {
-            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_delete_subject_title)
                     .setMessage(getString(R.string.dialog_delete_subject_msg, subject.getTitle()))
                     .setPositiveButton(R.string.dialog_delete, (dialog, which) -> {
-                        if (repository.deleteSubject(subject.getId())) {
+                        String accountId = sessionManager.getActiveAccountId();
+                        if (!accountId.isEmpty() && repository.deleteSubject(accountId, subject.getId())) {
                             loadSubjects();
                         }
                     })

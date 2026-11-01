@@ -138,10 +138,9 @@ public class ScheduleListActivity extends BaseActivity {
                     .setPositiveButton(R.string.dialog_delete, (dialog, which) -> {
                         String accountId = sessionManager.getActiveAccountId();
                         if (accountId.isEmpty()) return;
-                        for (String id : group.getScheduleIds()) {
-                            scheduleRepo.deleteScheduleSafely(accountId, id);
+                        if (scheduleRepo.deleteScheduleGroupSafely(accountId, group.getScheduleIds())) {
+                            loadData();
                         }
-                        loadData();
                     })
                     .setNegativeButton(R.string.action_cancel, null)
                     .show();
