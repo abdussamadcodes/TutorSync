@@ -39,6 +39,7 @@ import java.util.UUID;
 
 public final class BackupRestoreManager {
 
+    public static final int MIN_SUPPORTED_BACKUP_VERSION = 1;
     public static final int CURRENT_BACKUP_VERSION = 2;
 
     private static final int OUTCOME_SKIPPED = 0;
@@ -116,38 +117,54 @@ public final class BackupRestoreManager {
         root.put("exported_at", System.currentTimeMillis());
         root.put("source_account_id", accountId);
 
-        try (Cursor ac = db.query(AccountEntry.TABLE_NAME, null,
+        // Export non-security profile metadata (never export password_hash or salt)
+        try (Cursor c = db.query(AccountEntry.TABLE_NAME, null,
                 AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}, null, null, null)) {
-            if (ac.moveToFirst()) {
-                JSONObject profile = cursorRowToJson(ac);
+            if (c.moveToFirst()) {
+                JSONObject profile = cursorRowToJson(c);
                 profile.remove(AccountEntry.COLUMN_PASSWORD_HASH);
                 profile.remove(AccountEntry.COLUMN_SALT);
 
-                String picPath = ac.getString(ac.getColumnIndexOrThrow(AccountEntry.COLUMN_PROFILE_PIC_PATH));
-                if (picPath != null && !picPath.trim().isEmpty()) {
+                String picPath = getColumnStringOrEmpty(c, AccountEntry.COLUMN_PROFILE_PIC_PATH);
+                if (!picPath.isEmpty()) {
                     File picFile = new File(picPath);
-                    if (picFile.exists() && picFile.isFile() && picFile.length() <= 5 * 1024 * 1024) {
-                        try (FileInputStream fis = new FileInputStream(picFile)) {
-                            byte[] bytes = readAllBytes(fis);
+                    if (picFile.exists()) {
+                        byte[] bytes = readFileBytes(picFile);
+                        if (bytes != null) {
                             profile.put("profile_pic_base64", Base64.encodeToString(bytes, Base64.NO_WRAP));
-                        } catch (Exception ignored) {}
+                        }
                     }
                 }
                 root.put("profile", profile);
             }
         }
 
-        JSONObject tables = new JSONObject();
+        JSONObject tablesJson = new JSONObject();
         for (String table : SYNC_TABLE_ORDER) {
-            JSONArray rows = new JSONArray();
-            try (Cursor c = db.query(table, null, "account_id = ?", new String[]{accountId}, null, null, null)) {
-                while (c.moveToNext()) {
-                    rows.put(cursorRowToJson(c));
+            JSONArray arr = new JSONArray();
+            if (StudentSubjectEntry.TABLE_NAME.equals(table)) {
+                try (Cursor c = db.rawQuery(
+                        "SELECT ss.* FROM " + StudentSubjectEntry.TABLE_NAME + " ss " +
+                                "INNER JOIN " + StudentEntry.TABLE_NAME + " s " +
+                                "ON ss." + StudentSubjectEntry.COLUMN_STUDENT_ID + " = s." + StudentEntry.COLUMN_ID +
+                                " AND ss." + StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = s." + StudentEntry.COLUMN_ACCOUNT_ID +
+                                " WHERE s." + StudentEntry.COLUMN_ACCOUNT_ID + " = ?",
+                        new String[]{accountId})) {
+                    while (c.moveToNext()) {
+                        arr.put(cursorRowToJson(c));
+                    }
+                }
+            } else {
+                try (Cursor c = db.query(table, null, "account_id = ?", new String[]{accountId}, null, null, null)) {
+                    while (c.moveToNext()) {
+                        arr.put(cursorRowToJson(c));
+                    }
                 }
             }
-            tables.put(table, rows);
+            tablesJson.put(table, arr);
         }
-        root.put("tables", tables);
+
+        root.put("tables", tablesJson);
         return root;
     }
 
@@ -155,15 +172,14 @@ public final class BackupRestoreManager {
             @Nullable Context context,
             @NonNull SQLiteDatabase db,
             @NonNull String accountId,
-            @NonNull OutputStream outputStream) throws Exception {
-        JSONObject backup = exportAccountBackup(context, db, accountId);
-        byte[] bytes = backup.toString(2).getBytes(StandardCharsets.UTF_8);
-        outputStream.write(bytes);
-        outputStream.flush();
+            @NonNull OutputStream out) throws Exception {
+        JSONObject root = exportAccountBackup(context, db, accountId);
+        out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
+        out.flush();
     }
 
     // =========================================================================
-    // IMPORT
+    // IMPORT WITH VERSION VALIDATION, PRE-COMMIT VALIDATION & CONFLICT RESOLUTION
     // =========================================================================
 
     @NonNull
@@ -171,10 +187,15 @@ public final class BackupRestoreManager {
             @Nullable Context context,
             @NonNull SQLiteDatabase db,
             @NonNull String targetAccountId,
-            @NonNull InputStream inputStream) throws Exception {
-        byte[] bytes = readAllBytes(inputStream);
-        String jsonString = new String(bytes, StandardCharsets.UTF_8);
-        return importAccountBackupFromJson(context, db, targetAccountId, jsonString);
+            @NonNull InputStream in) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+            bos.write(buf, 0, n);
+        }
+        String jsonStr = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+        return importAccountBackupFromJson(context, db, targetAccountId, jsonStr);
     }
 
     @NonNull
@@ -197,6 +218,9 @@ public final class BackupRestoreManager {
         } catch (JSONException e) {
             throw new IllegalArgumentException("Invalid JSON backup format: " + e.getMessage(), e);
         }
+
+        // Validate backup format version before reading tables or starting a transaction
+        validateBackupVersion(root);
 
         JSONObject tablesJson = root.optJSONObject("tables");
         if (tablesJson == null) {
@@ -294,6 +318,52 @@ public final class BackupRestoreManager {
             if (ownTransaction) {
                 db.endTransaction();
             }
+        }
+    }
+
+    private static void validateBackupVersion(@NonNull JSONObject root) throws JSONException {
+        String versionKey = null;
+        if (root.has("backup_version") && !root.isNull("backup_version")) {
+            versionKey = "backup_version";
+        } else if (root.has("format_version") && !root.isNull("format_version")) {
+            versionKey = "format_version";
+        } else if (root.has("version") && !root.isNull("version")) {
+            versionKey = "version";
+        }
+
+        // Legacy v1 backups without a version field remain supported
+        if (versionKey == null) {
+            return;
+        }
+
+        Object rawVersion = root.get(versionKey);
+        final int version;
+        if (rawVersion instanceof Integer || rawVersion instanceof Long || rawVersion instanceof Short) {
+            version = ((Number) rawVersion).intValue();
+        } else if (rawVersion instanceof Number) {
+            double d = ((Number) rawVersion).doubleValue();
+            if (d != Math.floor(d) || Double.isInfinite(d)) {
+                throw new IllegalArgumentException("Invalid backup format version: " + rawVersion);
+            }
+            version = (int) d;
+        } else if (rawVersion instanceof String) {
+            try {
+                version = Integer.parseInt(((String) rawVersion).trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid backup format version: " + rawVersion, e);
+            }
+        } else {
+            throw new IllegalArgumentException("Invalid backup format version.");
+        }
+
+        if (version < MIN_SUPPORTED_BACKUP_VERSION) {
+            throw new IllegalArgumentException("Invalid backup format version: " + version
+                    + ". Minimum supported version is " + MIN_SUPPORTED_BACKUP_VERSION + ".");
+        }
+        if (version > CURRENT_BACKUP_VERSION) {
+            throw new IllegalArgumentException("Unsupported newer backup format (version " + version
+                    + "). Please update TutorSync to restore this backup (max supported version is "
+                    + CURRENT_BACKUP_VERSION + ").");
         }
     }
 
@@ -585,7 +655,7 @@ public final class BackupRestoreManager {
             }
         }
 
-        // Any remaining rows have cyclic parent_txn_id references; break cycle safely by nulling parent_txn_id
+        // Break any cyclic parent_txn_id dependency safely by setting parent_txn_id to NULL
         for (ContentValues cyclicCv : remaining) {
             cyclicCv.putNull(TransactionEntry.COLUMN_PARENT_TXN_ID);
             ordered.add(cyclicCv);
@@ -1371,7 +1441,7 @@ public final class BackupRestoreManager {
     }
 
     // =========================================================================
-    // LOW-LEVEL HELPERS
+    // LOW-LEVEL CURSOR / JSON HELPERS
     // =========================================================================
 
     @NonNull
@@ -1410,28 +1480,20 @@ public final class BackupRestoreManager {
     private static ContentValues filterToValidColumns(
             @NonNull ContentValues raw,
             @NonNull Set<String> validColumns) {
-        ContentValues filtered = new ContentValues();
+        ContentValues out = new ContentValues();
         for (String key : raw.keySet()) {
             if (validColumns.contains(key)) {
                 Object val = raw.get(key);
-                if (val == null) {
-                    filtered.putNull(key);
-                } else if (val instanceof Integer) {
-                    filtered.put(key, (Integer) val);
-                } else if (val instanceof Long) {
-                    filtered.put(key, (Long) val);
-                } else if (val instanceof Double) {
-                    filtered.put(key, (Double) val);
-                } else if (val instanceof Float) {
-                    filtered.put(key, (Float) val);
-                } else if (val instanceof Boolean) {
-                    filtered.put(key, ((Boolean) val) ? 1 : 0);
-                } else {
-                    filtered.put(key, String.valueOf(val));
-                }
+                if (val == null) out.putNull(key);
+                else if (val instanceof Integer) out.put(key, (Integer) val);
+                else if (val instanceof Long) out.put(key, (Long) val);
+                else if (val instanceof Double) out.put(key, (Double) val);
+                else if (val instanceof Float) out.put(key, (Float) val);
+                else if (val instanceof Boolean) out.put(key, ((Boolean) val) ? 1 : 0);
+                else out.put(key, String.valueOf(val));
             }
         }
-        return filtered;
+        return out;
     }
 
     @NonNull
@@ -1530,18 +1592,31 @@ public final class BackupRestoreManager {
     }
 
     @NonNull
-    private static String normalizeStr(@Nullable String s) {
-        return s == null ? "" : s.trim();
+    private static String getColumnStringOrEmpty(@NonNull Cursor c, @NonNull String colName) {
+        int idx = c.getColumnIndex(colName);
+        if (idx < 0 || c.isNull(idx)) return "";
+        String val = c.getString(idx);
+        return val == null ? "" : val.trim();
+    }
+
+    @Nullable
+    private static byte[] readFileBytes(@NonNull File file) {
+        if (!file.isFile() || file.length() > 5 * 1024 * 1024) return null;
+        try (FileInputStream fis = new FileInputStream(file);
+             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = fis.read(buf)) != -1) {
+                bos.write(buf, 0, n);
+            }
+            return bos.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @NonNull
-    private static byte[] readAllBytes(@NonNull InputStream in) throws Exception {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-            bos.write(buf, 0, n);
-        }
-        return bos.toByteArray();
+    private static String normalizeStr(@Nullable String s) {
+        return s == null ? "" : s.trim();
     }
 }

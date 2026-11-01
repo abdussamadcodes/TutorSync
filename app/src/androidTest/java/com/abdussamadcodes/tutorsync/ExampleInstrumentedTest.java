@@ -11,10 +11,12 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AuditLogEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.PaymentAllocationEntry;
-import com.abdussamadcodes.tutorsync.database.TutorSyncContract.PaymentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.TransactionEntry;
 import com.abdussamadcodes.tutorsync.model.Account;
@@ -48,6 +50,7 @@ import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -499,21 +502,6 @@ public class ExampleInstrumentedTest {
         }
     }
 
-    private int countAllocationsForInvoice(String accountId, String invoiceId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try (Cursor c = db.rawQuery(
-                "SELECT COUNT(*) FROM " + PaymentAllocationEntry.TABLE_NAME +
-                        " WHERE " + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                        PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ?",
-                new String[]{accountId, invoiceId})) {
-            if (c.moveToFirst()) {
-                return c.getInt(0);
-            }
-            return 0;
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-    }
     @Test
     public void backupRestore_handlesOrphanOptionalReferencesSafely_withoutAbortingOrLosingFinancialAndAttendanceData() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -580,30 +568,28 @@ public class ExampleInstrumentedTest {
                 JSONObject tables = backup.getJSONObject("tables");
 
                 // 1. Inject orphan schedule_id and rescheduled_from_id on the occurrence
-                JSONObject occJson = tables.getJSONArray(
-                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry.TABLE_NAME).getJSONObject(0);
-                occJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry.COLUMN_SCHEDULE_ID, UUID.randomUUID().toString());
-                occJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID, UUID.randomUUID().toString());
+                JSONObject occJson = tables.getJSONArray(OccurrenceEntry.TABLE_NAME).getJSONObject(0);
+                occJson.put(OccurrenceEntry.COLUMN_SCHEDULE_ID, UUID.randomUUID().toString());
+                occJson.put(OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID, UUID.randomUUID().toString());
 
                 // 2. Inject orphan makeup_occurrence_id and orphan billed_invoice_item_id on the attendance record
-                JSONObject attJson = tables.getJSONArray(
-                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.TABLE_NAME).getJSONObject(0);
-                attJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID, UUID.randomUUID().toString());
-                attJson.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID, UUID.randomUUID().toString());
+                JSONObject attJson = tables.getJSONArray(AttendanceEntry.TABLE_NAME).getJSONObject(0);
+                attJson.put(AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID, UUID.randomUUID().toString());
+                attJson.put(AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID, UUID.randomUUID().toString());
 
                 // 3. Add a second invoice_item with an orphan occurrence_id
                 JSONObject orphanItem = new JSONObject();
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_ID, orphanItemUuid);
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_INVOICE_ID, invoiceUuid);
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_OCCURRENCE_ID, UUID.randomUUID().toString());
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_DESCRIPTION, "Historical class with deleted occurrence");
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_BILLING_MODEL, "PER_CLASS");
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_QUANTITY, 1);
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_UNIT_PRICE_MINOR, 40000);
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_AMOUNT_MINOR, 40000);
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_CREATED_AT, now);
-                orphanItem.put(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_LAST_MODIFIED, now);
-                tables.getJSONArray(com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.TABLE_NAME).put(orphanItem);
+                orphanItem.put(InvoiceItemEntry.COLUMN_ID, orphanItemUuid);
+                orphanItem.put(InvoiceItemEntry.COLUMN_INVOICE_ID, invoiceUuid);
+                orphanItem.put(InvoiceItemEntry.COLUMN_OCCURRENCE_ID, UUID.randomUUID().toString());
+                orphanItem.put(InvoiceItemEntry.COLUMN_DESCRIPTION, "Historical class with deleted occurrence");
+                orphanItem.put(InvoiceItemEntry.COLUMN_BILLING_MODEL, "PER_CLASS");
+                orphanItem.put(InvoiceItemEntry.COLUMN_QUANTITY, 1);
+                orphanItem.put(InvoiceItemEntry.COLUMN_UNIT_PRICE_MINOR, 40000);
+                orphanItem.put(InvoiceItemEntry.COLUMN_AMOUNT_MINOR, 40000);
+                orphanItem.put(InvoiceItemEntry.COLUMN_CREATED_AT, now);
+                orphanItem.put(InvoiceItemEntry.COLUMN_LAST_MODIFIED, now);
+                tables.getJSONArray(InvoiceItemEntry.TABLE_NAME).put(orphanItem);
 
                 // Update invoice total to 100,000 minor units (60,000 + 40,000)
                 JSONObject invJson = tables.getJSONArray(InvoiceEntry.TABLE_NAME).getJSONObject(0);
@@ -645,17 +631,14 @@ public class ExampleInstrumentedTest {
                 orphanAudit.put(AuditLogEntry.COLUMN_TIMESTAMP, now);
                 tables.getJSONArray(AuditLogEntry.TABLE_NAME).put(orphanAudit);
 
-                // Restore into Account B must succeed and preserve all financial & attendance data
                 BackupRestoreManager.ImportResult result =
                         BackupRestoreManager.importAccountBackupFromJson(context, db, accountB, backup.toString());
                 assertTrue(result.insertedCount > 0);
                 assertEquals(0, result.conflictCount);
 
-                // Verify orphan optional columns were nulled out while records were preserved
                 try (Cursor c = db.query(
-                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.TABLE_NAME,
-                        new String[]{com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_OCCURRENCE_ID,
-                                com.abdussamadcodes.tutorsync.database.TutorSyncContract.InvoiceItemEntry.COLUMN_AMOUNT_MINOR},
+                        InvoiceItemEntry.TABLE_NAME,
+                        new String[]{InvoiceItemEntry.COLUMN_OCCURRENCE_ID, InvoiceItemEntry.COLUMN_AMOUNT_MINOR},
                         "account_id = ? AND id = ?", new String[]{accountB, orphanItemUuid}, null, null, null)) {
                     assertTrue(c.moveToFirst());
                     assertTrue(c.isNull(0));
@@ -663,13 +646,12 @@ public class ExampleInstrumentedTest {
                 }
 
                 try (Cursor c = db.query(
-                        com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.TABLE_NAME,
-                        new String[]{com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID,
-                                com.abdussamadcodes.tutorsync.database.TutorSyncContract.AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID},
+                        AttendanceEntry.TABLE_NAME,
+                        new String[]{AttendanceEntry.COLUMN_MAKEUP_OCCURRENCE_ID, AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID},
                         "account_id = ? AND id = ?", new String[]{accountB, attendanceUuid}, null, null, null)) {
                     assertTrue(c.moveToFirst());
-                    assertTrue(c.isNull(0)); // orphan makeup_occurrence_id set to NULL
-                    assertNotNull(c.getString(1)); // relinked to valid invoice item for occurrenceUuid
+                    assertTrue(c.isNull(0));
+                    assertNotNull(c.getString(1));
                 }
 
                 try (Cursor c = db.query(
@@ -677,14 +659,13 @@ public class ExampleInstrumentedTest {
                         new String[]{TransactionEntry.COLUMN_PARENT_TXN_ID, TransactionEntry.COLUMN_AMOUNT_MINOR},
                         "account_id = ? AND id = ?", new String[]{accountB, orphanRefundTxnUuid}, null, null, null)) {
                     assertTrue(c.moveToFirst());
-                    assertTrue(c.isNull(0)); // orphan parent_txn_id set to NULL
+                    assertTrue(c.isNull(0));
                     assertEquals(10000, c.getInt(1));
                 }
             } finally {
                 DatabaseManager.getInstance().closeDatabase();
             }
 
-            // Net paid = 50,000 payment - 10,000 refund = 40,000; outstanding = 100,000 - 40,000 = 60,000
             Invoice restoredInv = invoiceRepo.getInvoiceById(accountB, invoiceUuid);
             assertNotNull(restoredInv);
             assertEquals(100000, restoredInv.getTotalAmount());
@@ -699,6 +680,103 @@ public class ExampleInstrumentedTest {
             } finally {
                 DatabaseManager.getInstance().closeDatabase();
             }
+        }
+    }
+
+    @Test
+    public void backupRestore_validatesBackupFormatVersion_rejectsNewerAndInvalidVersions_andAcceptsLegacyV1() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        LocalAccountStore accountStore = new LocalAccountStore(context);
+        StudentRepository studentRepo = new StudentRepository();
+
+        String sourceAcc = UUID.randomUUID().toString();
+        String targetAcc = UUID.randomUUID().toString();
+        String studentId = UUID.randomUUID().toString();
+
+        try {
+            assertTrue(accountStore.saveAccount(new Account(sourceAcc, "Version Source", "vsrc" + System.currentTimeMillis(), "h1", "s1")));
+            assertTrue(accountStore.saveAccount(new Account(targetAcc, "Version Target", "vtgt" + System.currentTimeMillis(), "h2", "s2")));
+
+            long now = System.currentTimeMillis();
+            assertEquals(1, studentRepo.insertStudent(new Student(studentId, sourceAcc, "STU-0001", "Version Student", "10", null, null, null, null, true, now)));
+
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            try {
+                JSONObject baseBackup = BackupRestoreManager.exportAccountBackup(context, db, sourceAcc);
+
+                // 1. Unsupported newer backup version (> CURRENT_BACKUP_VERSION) must be rejected before any write
+                JSONObject newerBackup = new JSONObject(baseBackup.toString());
+                newerBackup.put("backup_version", BackupRestoreManager.CURRENT_BACKUP_VERSION + 1);
+                try {
+                    BackupRestoreManager.importAccountBackupFromJson(context, db, targetAcc, newerBackup.toString());
+                    fail("Expected IllegalArgumentException for unsupported newer backup_version");
+                } catch (IllegalArgumentException expected) {
+                    assertTrue(expected.getMessage().contains("version"));
+                }
+                assertNull(studentRepo.getStudentById(targetAcc, studentId));
+
+                // 2. Invalid backup_version (0 or negative) must be rejected
+                JSONObject zeroVersionBackup = new JSONObject(baseBackup.toString());
+                zeroVersionBackup.put("backup_version", 0);
+                try {
+                    BackupRestoreManager.importAccountBackupFromJson(context, db, targetAcc, zeroVersionBackup.toString());
+                    fail("Expected IllegalArgumentException for backup_version = 0");
+                } catch (IllegalArgumentException expected) {
+                    assertTrue(expected.getMessage().contains("version"));
+                }
+                assertNull(studentRepo.getStudentById(targetAcc, studentId));
+
+                // 3. Explicit older version 1 must succeed
+                JSONObject v1ExplicitBackup = new JSONObject(baseBackup.toString());
+                v1ExplicitBackup.put("backup_version", 1);
+                BackupRestoreManager.ImportResult v1Res =
+                        BackupRestoreManager.importAccountBackupFromJson(context, db, targetAcc, v1ExplicitBackup.toString());
+                assertEquals(1, v1Res.insertedCount);
+                assertNotNull(studentRepo.getStudentById(targetAcc, studentId));
+
+                // 4. Legacy v1 backup without backup_version key must also succeed
+                JSONObject legacyNoVersionBackup = new JSONObject(baseBackup.toString());
+                legacyNoVersionBackup.remove("backup_version");
+                legacyNoVersionBackup.getJSONObject("tables")
+                        .getJSONArray(StudentEntry.TABLE_NAME)
+                        .getJSONObject(0)
+                        .put(StudentEntry.COLUMN_NAME, "Updated From Legacy V1")
+                        .put(StudentEntry.COLUMN_LAST_MODIFIED, now + 5000L)
+                        .put(StudentEntry.COLUMN_UPDATED_AT, now + 5000L);
+
+                BackupRestoreManager.ImportResult legacyRes =
+                        BackupRestoreManager.importAccountBackupFromJson(context, db, targetAcc, legacyNoVersionBackup.toString());
+                assertEquals(1, legacyRes.updatedCount);
+                Student updatedStu = studentRepo.getStudentById(targetAcc, studentId);
+                assertNotNull(updatedStu);
+                assertEquals("Updated From Legacy V1", updatedStu.getName());
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+            }
+        } finally {
+            SQLiteDatabase cleanDb = DatabaseManager.getInstance().openDatabase();
+            try {
+                cleanDb.delete(AccountEntry.TABLE_NAME, AccountEntry.COLUMN_ID + " = ?", new String[]{sourceAcc});
+                cleanDb.delete(AccountEntry.TABLE_NAME, AccountEntry.COLUMN_ID + " = ?", new String[]{targetAcc});
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+            }
+        }
+    }
+
+    private int countAllocationsForInvoice(String accountId, String invoiceId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try (Cursor c = db.rawQuery(
+                "SELECT COUNT(*) FROM " + PaymentAllocationEntry.TABLE_NAME +
+                        " WHERE " + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ?",
+                new String[]{accountId, invoiceId})) {
+            if (c.moveToFirst()) {
+                return c.getInt(0);
+            }
+            return 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
         }
     }
 }

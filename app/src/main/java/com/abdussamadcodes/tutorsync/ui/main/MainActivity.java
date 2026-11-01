@@ -1,6 +1,7 @@
 package com.abdussamadcodes.tutorsync.ui.main;
 
 import android.app.DatePickerDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -48,6 +49,7 @@ import com.abdussamadcodes.tutorsync.ui.student.StudentFormActivity;
 import com.abdussamadcodes.tutorsync.ui.student.StudentListActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectFormActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectListActivity;
+import com.abdussamadcodes.tutorsync.util.AppExecutors;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.BackupRestoreManager;
 import com.abdussamadcodes.tutorsync.util.ImageUtils;
@@ -63,6 +65,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends BaseActivity {
     private ActivityMainBinding binding;
@@ -73,11 +76,13 @@ public class MainActivity extends BaseActivity {
     private OccurrenceRepository occurrenceRepo;
     private InvoiceRepository invoiceRepo;
     private OccurrenceAdapter occurrenceAdapter;
-
+    private final AtomicBoolean isBackupTaskRunning = new AtomicBoolean(false);
     private static final String STATE_ACTIVE_TAB = "state_active_tab";
 
     // Remembers the active tab across theme/language recreations
     private static int lastActiveTabId = R.id.nav_home;
+    @Nullable
+    private static volatile String lastReconciledAccountId = null;
 
     @Nullable
     private ImageView activeDialogProfileImageView;
@@ -214,91 +219,109 @@ public class MainActivity extends BaseActivity {
     }
 
     private void loadDashboardData() {
-        String accountId = sessionManager.getActiveAccountId();
+        final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
-        Account account = accountStore.getAccountById(accountId);
-        String accountName = (account != null && !account.getFullName().trim().isEmpty())
-                ? account.getFullName() : "Tutor";
-        String username = (account != null) ? account.getUsername() : "";
-        String phone = (account != null && account.getPhone() != null) ? account.getPhone() : "";
-        String email = (account != null && account.getEmail() != null) ? account.getEmail() : "";
-        String profilePicPath = (account != null && account.getProfilePicPath() != null) ? account.getProfilePicPath() : "";
+        final String currentLang = appPreferences.getLanguageCode();
 
-        String currentLang = appPreferences.getLanguageCode();
-        if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
-            binding.tvGreeting.setText("হ্যালো, " + accountName + "!");
-        } else {
-            binding.tvGreeting.setText("Hello, " + accountName + "!");
-        }
-
-        // Populate Settings Profile Card
-        binding.tvSettingsProfileName.setText(accountName);
-        if (!username.isEmpty()) {
-            binding.tvSettingsUsername.setText("@" + username);
-            binding.tvSettingsUsername.setVisibility(View.VISIBLE);
-        } else {
-            binding.tvSettingsUsername.setVisibility(View.GONE);
-        }
-
-        if (!phone.isEmpty() && !email.isEmpty()) {
-            binding.tvSettingsProfileSubtitle.setText(phone + " • " + email);
-        } else if (!phone.isEmpty()) {
-            binding.tvSettingsProfileSubtitle.setText(phone);
-        } else if (!email.isEmpty()) {
-            binding.tvSettingsProfileSubtitle.setText(email);
-        } else {
-            binding.tvSettingsProfileSubtitle.setText(R.string.profile_tap_to_edit);
-        }
-
-        loadProfileImageIntoView(profilePicPath, binding.ivSettingsProfilePic);
-
-        List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
-        List<Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
-
-        binding.tvStudentCount.setText(String.valueOf(students.size()));
-        binding.tvSubjectCount.setText(String.valueOf(subjects.size()));
-
-        int totalRevenueMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
-        binding.tvRevenue.setText(String.format(Locale.US, "৳ %.2f", totalRevenueMinor / 100.0));
-
-        List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
-
-        List<OccurrenceGroup> groups = new ArrayList<>();
-        for (ClassOccurrence occ : occurrences) {
-            boolean found = false;
-            for (OccurrenceGroup g : groups) {
-                if (g.getStudentId().equals(occ.getStudentId()) &&
-                        g.getStartTimeMinutes() == occ.getStartTimeMinutes() &&
-                        g.getDurationMinutes() == occ.getDurationMinutes()) {
-
-                    if (occ.getSubjectId() != null && !g.getSubjectIds().contains(occ.getSubjectId())) {
-                        g.getSubjectIds().add(occ.getSubjectId());
-                    }
-                    if (!g.getOccurrenceIds().contains(occ.getId())) {
-                        g.getOccurrenceIds().add(occ.getId());
-                    }
-                    found = true;
-                    break;
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                if (!accountId.equals(lastReconciledAccountId)) {
+                    studentRepo.migrateLegacyStudentIds(accountId);
+                    invoiceRepo.migrateLegacyInvoiceIds(accountId);
+                    invoiceRepo.reconcileAccountFinancialData(accountId);
+                    lastReconciledAccountId = accountId;
                 }
-            }
-            if (!found) {
-                OccurrenceGroup newGroup = new OccurrenceGroup(occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
-                if (occ.getSubjectId() != null) newGroup.getSubjectIds().add(occ.getSubjectId());
-                newGroup.getOccurrenceIds().add(occ.getId());
-                groups.add(newGroup);
-            }
-        }
 
-        occurrenceAdapter.setData(groups, students, subjects);
+                final Account account = accountStore.getAccountById(accountId);
+                final List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
+                final List<Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
+                final int totalRevenueMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
+                final List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
 
-        if (groups.isEmpty()) {
-            binding.tvEmptyUpcoming.setVisibility(View.VISIBLE);
-            binding.rvOccurrences.setVisibility(View.GONE);
-        } else {
-            binding.tvEmptyUpcoming.setVisibility(View.GONE);
-            binding.rvOccurrences.setVisibility(View.VISIBLE);
-        }
+                final List<OccurrenceGroup> groups = new ArrayList<>();
+                for (ClassOccurrence occ : occurrences) {
+                    boolean found = false;
+                    for (OccurrenceGroup g : groups) {
+                        if (g.getStudentId().equals(occ.getStudentId()) &&
+                                g.getStartTimeMinutes() == occ.getStartTimeMinutes() &&
+                                g.getDurationMinutes() == occ.getDurationMinutes()) {
+
+                            if (occ.getSubjectId() != null && !g.getSubjectIds().contains(occ.getSubjectId())) {
+                                g.getSubjectIds().add(occ.getSubjectId());
+                            }
+                            if (!g.getOccurrenceIds().contains(occ.getId())) {
+                                g.getOccurrenceIds().add(occ.getId());
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        OccurrenceGroup newGroup = new OccurrenceGroup(
+                                occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
+                        if (occ.getSubjectId() != null) newGroup.getSubjectIds().add(occ.getSubjectId());
+                        newGroup.getOccurrenceIds().add(occ.getId());
+                        groups.add(newGroup);
+                    }
+                }
+
+                AppExecutors.getInstance().mainThread().execute(() -> {
+                    if (isFinishing() || isDestroyed() || binding == null) return;
+                    if (!accountId.equals(sessionManager.getActiveAccountId())) return;
+
+                    String accountName = (account != null && !account.getFullName().trim().isEmpty())
+                            ? account.getFullName() : "Tutor";
+                    String username = (account != null) ? account.getUsername() : "";
+                    String phone = (account != null && account.getPhone() != null) ? account.getPhone() : "";
+                    String email = (account != null && account.getEmail() != null) ? account.getEmail() : "";
+                    String profilePicPath = (account != null && account.getProfilePicPath() != null)
+                            ? account.getProfilePicPath() : "";
+
+                    if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
+                        binding.tvGreeting.setText("হ্যালো, " + accountName + "!");
+                    } else {
+                        binding.tvGreeting.setText("Hello, " + accountName + "!");
+                    }
+
+                    // Populate Settings Profile Card
+                    binding.tvSettingsProfileName.setText(accountName);
+                    if (!username.isEmpty()) {
+                        binding.tvSettingsUsername.setText("@" + username);
+                        binding.tvSettingsUsername.setVisibility(View.VISIBLE);
+                    } else {
+                        binding.tvSettingsUsername.setVisibility(View.GONE);
+                    }
+
+                    if (!phone.isEmpty() && !email.isEmpty()) {
+                        binding.tvSettingsProfileSubtitle.setText(phone + " • " + email);
+                    } else if (!phone.isEmpty()) {
+                        binding.tvSettingsProfileSubtitle.setText(phone);
+                    } else if (!email.isEmpty()) {
+                        binding.tvSettingsProfileSubtitle.setText(email);
+                    } else {
+                        binding.tvSettingsProfileSubtitle.setText(R.string.profile_tap_to_edit);
+                    }
+
+                    loadProfileImageIntoView(profilePicPath, binding.ivSettingsProfilePic);
+
+                    binding.tvStudentCount.setText(String.valueOf(students.size()));
+                    binding.tvSubjectCount.setText(String.valueOf(subjects.size()));
+                    binding.tvRevenue.setText(String.format(Locale.US, "৳ %.2f", totalRevenueMinor / 100.0));
+
+                    occurrenceAdapter.setData(groups, students, subjects);
+
+                    if (groups.isEmpty()) {
+                        binding.tvEmptyUpcoming.setVisibility(View.VISIBLE);
+                        binding.rvOccurrences.setVisibility(View.GONE);
+                    } else {
+                        binding.tvEmptyUpcoming.setVisibility(View.GONE);
+                        binding.rvOccurrences.setVisibility(View.VISIBLE);
+                    }
+                });
+            } catch (Exception ignored) {
+            }
+        });
     }
 
     private void refreshStatusLabels() {
@@ -403,6 +426,7 @@ public class MainActivity extends BaseActivity {
         // 5. Sign Out
         binding.btnSignOut.setOnClickListener(v -> {
             lastActiveTabId = R.id.nav_home;
+            lastReconciledAccountId = null;
             sessionManager.logout();
             AppLockManager.getInstance().resetLockState();
             startActivity(new Intent(this, SignInActivity.class));
@@ -678,51 +702,99 @@ public class MainActivity extends BaseActivity {
     }
 
     private void exportBackupToUri(@NonNull Uri uri) {
-        String accountId = sessionManager.getActiveAccountId();
+        final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try (OutputStream out = getContentResolver().openOutputStream(uri)) {
-            if (out != null) {
-                BackupRestoreManager.exportAccountBackupToStream(this, db, accountId, out);
-                Toast.makeText(this, "Backup exported successfully!", Toast.LENGTH_SHORT).show();
-            }
-        } catch (Exception e) {
-            Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
+        if (!isBackupTaskRunning.compareAndSet(false, true)) {
+            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
+            return;
         }
+
+        final Context appContext = getApplicationContext();
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            String errorMsg = null;
+            boolean exported = false;
+            try (OutputStream out = appContext.getContentResolver().openOutputStream(uri)) {
+                if (out != null) {
+                    BackupRestoreManager.exportAccountBackupToStream(appContext, db, accountId, out);
+                    exported = true;
+                } else {
+                    errorMsg = "Unable to open destination file.";
+                }
+            } catch (Exception e) {
+                errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+                isBackupTaskRunning.set(false);
+            }
+
+            final boolean success = exported;
+            final String finalError = errorMsg;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (success) {
+                    Toast.makeText(MainActivity.this, "Backup exported successfully!", Toast.LENGTH_SHORT).show();
+                } else if (finalError != null) {
+                    Toast.makeText(MainActivity.this, "Export failed: " + finalError, Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
     }
 
-    private void importBackupFromUri(@NonNull android.net.Uri uri) {
-        String accountId = sessionManager.getActiveAccountId();
+    private void importBackupFromUri(@NonNull Uri uri) {
+        final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
 
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try (InputStream in = getContentResolver().openInputStream(uri)) {
-            if (in == null) return;
-            BackupRestoreManager.ImportResult result =
-                    BackupRestoreManager.importAccountBackupFromStream(this, db, accountId, in);
-            String msg;
-            if (result.hasConflicts()) {
-                msg = String.format(Locale.US,
-                        "Backup restored (%d added, %d updated, %d unchanged, %d financial conflicts preserved)",
-                        result.insertedCount, result.updatedCount, result.skippedCount, result.conflictCount);
-            } else {
-                msg = String.format(Locale.US,
-                        "Backup restored (%d added, %d updated, %d unchanged)",
-                        result.insertedCount, result.updatedCount, result.skippedCount);
-            }
-            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Restore failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
+        if (!isBackupTaskRunning.compareAndSet(false, true)) {
+            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
+            return;
         }
 
-        studentRepo.migrateLegacyStudentIds(accountId);
-        invoiceRepo.migrateLegacyInvoiceIds(accountId);
-        refreshStatusLabels();
-        loadDashboardData();
+        final Context appContext = getApplicationContext();
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            String toastMessage = null;
+            boolean restoreSucceeded = false;
+            try (InputStream in = appContext.getContentResolver().openInputStream(uri)) {
+                if (in == null) {
+                    toastMessage = "Restore failed: Unable to open backup file.";
+                } else {
+                    BackupRestoreManager.ImportResult result =
+                            BackupRestoreManager.importAccountBackupFromStream(appContext, db, accountId, in);
+                    studentRepo.migrateLegacyStudentIds(accountId);
+                    invoiceRepo.migrateLegacyInvoiceIds(accountId);
+                    lastReconciledAccountId = accountId;
+                    restoreSucceeded = true;
+                    if (result.hasConflicts()) {
+                        toastMessage = String.format(Locale.US,
+                                "Backup restored (%d added, %d updated, %d unchanged, %d financial conflicts preserved)",
+                                result.insertedCount, result.updatedCount, result.skippedCount, result.conflictCount);
+                    } else {
+                        toastMessage = String.format(Locale.US,
+                                "Backup restored (%d added, %d updated, %d unchanged)",
+                                result.insertedCount, result.updatedCount, result.skippedCount);
+                    }
+                }
+            } catch (Exception e) {
+                toastMessage = "Restore failed: " + (e.getMessage() != null ? e.getMessage() : "Invalid backup");
+            } finally {
+                DatabaseManager.getInstance().closeDatabase();
+                isBackupTaskRunning.set(false);
+            }
+
+            final String finalMsg = toastMessage;
+            final boolean finalSuccess = restoreSucceeded;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (finalMsg != null) {
+                    Toast.makeText(MainActivity.this, finalMsg, Toast.LENGTH_LONG).show();
+                }
+                if (finalSuccess) {
+                    refreshStatusLabels();
+                    loadDashboardData();
+                }
+            });
+        });
     }
 }
