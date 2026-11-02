@@ -15,6 +15,7 @@ import com.abdussamadcodes.tutorsync.database.TutorSyncContract.PaymentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.ScheduleEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.TransactionEntry;
+import com.abdussamadcodes.tutorsync.model.AttendanceRecord;
 import com.abdussamadcodes.tutorsync.model.Student;
 import java.util.ArrayList;
 import java.util.List;
@@ -209,8 +210,8 @@ public class StudentRepository {
                             "AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " " +
                             "WHERE o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
                             "o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ? AND " +
-                            "a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = 1 LIMIT 1",
-                    new String[]{accountId, studentId})) {
+                            "a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = ? LIMIT 1",
+                    new String[]{accountId, studentId, AttendanceRecord.DECISION_CHARGE})) {
                 if (c.moveToFirst()) return true;
             }
 
@@ -220,10 +221,42 @@ public class StudentRepository {
         }
     }
 
+    /**
+     * True when the student has chargeable classes that are not on any invoice yet.
+     */
+    public boolean hasOutstandingPerClassCharges(@NonNull String accountId, @NonNull String studentId) {
+        if (accountId.trim().isEmpty() || studentId.trim().isEmpty()) {
+            return false;
+        }
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try (Cursor c = db.rawQuery(
+                "SELECT 1 FROM " + AttendanceEntry.TABLE_NAME + " a " +
+                        "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o " +
+                        "ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
+                        "AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " " +
+                        "WHERE o." + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        "o." + OccurrenceEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                        "a." + AttendanceEntry.COLUMN_CHARGE_DECISION + " = ? AND " +
+                        "a." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " IS NULL LIMIT 1",
+                new String[]{accountId, studentId, AttendanceRecord.DECISION_CHARGE})) {
+            return c.moveToFirst();
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
     public boolean deleteStudent(@NonNull String accountId, @NonNull String studentId) {
         if (accountId.trim().isEmpty() || studentId.trim().isEmpty()) {
             return false;
         }
+
+        // H4: move any unbilled per-class charges onto an invoice BEFORE the student disappears
+        // from the active lists (billing only runs for active students). If that fails, the
+        // billing is rolled back and the student is NOT deleted, so no charge can be lost.
+        if (!new InvoiceRepository().billOutstandingPerClassChargesForStudent(accountId, studentId)) {
+            return false;
+        }
+
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         db.beginTransaction();
         try {

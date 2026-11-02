@@ -131,14 +131,31 @@ public class InvoiceRepository {
     }
 
     public int generateDueInvoicesForAccount(@NonNull String accountId) {
-        return generateDueInvoicesInternal(accountId, null);
+        return generateDueInvoicesInternal(accountId, null, true);
     }
 
     public int generateDueInvoicesForStudent(@NonNull String accountId, @NonNull String studentId) {
-        return generateDueInvoicesInternal(accountId, studentId);
+        return generateDueInvoicesInternal(accountId, studentId, true);
     }
 
-    private int generateDueInvoicesInternal(@NonNull String accountId, @Nullable String onlyStudentId) {
+    /**
+     * Invoices ONLY the outstanding per-class charges of one student (no monthly fee is billed).
+     * Used before a student is deleted so unbilled classes are never lost.
+     *
+     * @return true if everything was billed (or nothing needed billing); false if billing failed
+     *         and was rolled back.
+     */
+    public boolean billOutstandingPerClassChargesForStudent(@NonNull String accountId, @NonNull String studentId) {
+        try {
+            generateDueInvoicesInternal(accountId, studentId, false);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private int generateDueInvoicesInternal(@NonNull String accountId, @Nullable String onlyStudentId,
+                                            boolean includeMonthly) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         int generatedInvoicesCount = 0;
         long now = System.currentTimeMillis();
@@ -206,7 +223,7 @@ public class InvoiceRepository {
                         if (feeMinor <= 0) continue;
                         if (groupId == null) groupId = "GRP-" + studentId + "-" + startMin;
 
-                        if ("MONTHLY".equals(model)) {
+                        if (includeMonthly && "MONTHLY".equals(model)) {
                             long[] window = computeAnniversaryBillingWindow(anchorDay, currentYm);
                             long pStart = window[0];
                             long pEnd = window[1];

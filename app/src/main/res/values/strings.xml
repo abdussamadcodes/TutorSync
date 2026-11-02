@@ -289,6 +289,8 @@
     <string name="dialog_delete_student_title">Delete Student?</string>
     <string name="dialog_delete_student_msg">This student will be removed from active lists and their recurring schedules will be deactivated. Past class occurrences, attendance, lessons, invoices, payments, and transactions will be preserved.</string>
     <string name="dialog_delete_student_financial_warning_msg">Warning: Financial records (invoices, payments, or transactions) exist for this student.\n\nDeleting will remove the student from active lists and deactivate recurring schedules, while preserving all invoices, payments, transactions, and class history.</string>
+    <string name="dialog_delete_student_outstanding_charges_msg">Warning: This student has class charges that have not been invoiced yet.\n\nBefore deleting, those charges will be added to a new invoice so no money is lost. The student will then be removed from active lists and recurring schedules will be deactivated. All invoices, payments, transactions, and class history are preserved.</string>
+    <string name="student_delete_failed">Could not delete the student. Their unbilled class charges could not be invoiced, so nothing was changed. Please try again.</string>
     <string name="dialog_delete">Delete</string>
     <string name="dialog_delete_subject_title">Delete Subject?</string>
     <string name="dialog_delete_subject_msg">Are you sure you want to delete %s? It will be removed from active lists and recurring schedules for this subject will be deactivated, while past class occurrences, attendance, lessons, and billing history will be preserved.</string>

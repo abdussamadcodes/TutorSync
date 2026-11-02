@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -111,9 +112,15 @@ public class StudentListActivity extends BaseActivity {
             if (accountId.isEmpty()) return;
 
             boolean hasFinancialData = studentRepo.hasFinancialRecords(accountId, student.getId());
-            int messageResId = hasFinancialData
-                    ? R.string.dialog_delete_student_financial_warning_msg
-                    : R.string.dialog_delete_student_msg;
+            boolean hasOutstandingCharges = studentRepo.hasOutstandingPerClassCharges(accountId, student.getId());
+            int messageResId;
+            if (hasOutstandingCharges) {
+                messageResId = R.string.dialog_delete_student_outstanding_charges_msg;
+            } else if (hasFinancialData) {
+                messageResId = R.string.dialog_delete_student_financial_warning_msg;
+            } else {
+                messageResId = R.string.dialog_delete_student_msg;
+            }
 
             new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_delete_student_title)
@@ -121,6 +128,8 @@ public class StudentListActivity extends BaseActivity {
                     .setPositiveButton(R.string.dialog_delete, (d, w) -> {
                         if (studentRepo.deleteStudent(accountId, student.getId())) {
                             loadStudents();
+                        } else {
+                            Toast.makeText(this, R.string.student_delete_failed, Toast.LENGTH_LONG).show();
                         }
                     })
                     .setNegativeButton(R.string.action_cancel, null)
