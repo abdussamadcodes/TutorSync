@@ -4,12 +4,55 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
 
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
 public class TutorSyncDbHelper extends SQLiteOpenHelper {
 
+    private static final String TAG = "TutorSyncDbHelper";
+
     private static volatile boolean sSchemaVerifiedThisProcess = false;
+
+    /** Suffix of the staging tables used while rebuilding tables with composite primary keys. */
+    private static final String MIGRATION_SUFFIX = "_v7";
+
+    /** Tables rebuilt by the composite-key migration, PARENTS FIRST (dropped in reverse order). */
+    private static final String[] MIGRATION_TABLE_ORDER = new String[]{
+            StudentEntry.TABLE_NAME,
+            SubjectEntry.TABLE_NAME,
+            StudentSubjectEntry.TABLE_NAME,
+            ScheduleFeeHistoryEntry.TABLE_NAME,
+            ScheduleEntry.TABLE_NAME,
+            OccurrenceEntry.TABLE_NAME,
+            AttendanceEntry.TABLE_NAME,
+            LessonEntry.TABLE_NAME,
+            FeeAgreementEntry.TABLE_NAME,
+            InvoiceEntry.TABLE_NAME,
+            InvoiceItemEntry.TABLE_NAME,
+            PaymentEntry.TABLE_NAME,
+            TransactionEntry.TABLE_NAME,
+            PaymentAllocationEntry.TABLE_NAME,
+            AuditLogEntry.TABLE_NAME
+    };
+
+    /**
+     * Tables whose new schema has an extra UNIQUE constraint beyond the primary key and where a
+     * legacy duplicate is a redundant row (not money). Collapsing such duplicates is logged, never fatal.
+     * Every other table must copy every valid legacy row or the whole migration is rolled back.
+     */
+    private static final Set<String> DEDUPE_TOLERANT_TABLES = new HashSet<>(Arrays.asList(
+            StudentSubjectEntry.TABLE_NAME,
+            FeeAgreementEntry.TABLE_NAME,
+            AttendanceEntry.TABLE_NAME
+    ));
 
     private static final String SQL_CREATE_ACCOUNTS =
             "CREATE TABLE IF NOT EXISTS " + AccountEntry.TABLE_NAME + " (" +
@@ -260,6 +303,7 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                 InvoiceItemEntry.COLUMN_QUANTITY + " INTEGER NOT NULL, " +
                 InvoiceItemEntry.COLUMN_UNIT_PRICE_MINOR + " INTEGER NOT NULL, " +
                 InvoiceItemEntry.COLUMN_AMOUNT_MINOR + " INTEGER NOT NULL, " +
+                InvoiceItemEntry.COLUMN_PERIOD_START + " INTEGER NOT NULL DEFAULT 0, " +
                 InvoiceItemEntry.COLUMN_CREATED_AT + " INTEGER NOT NULL DEFAULT 0, " +
                 InvoiceItemEntry.COLUMN_UPDATED_AT + " INTEGER NOT NULL DEFAULT 0, " +
                 InvoiceItemEntry.COLUMN_LAST_MODIFIED + " INTEGER NOT NULL DEFAULT 0, " +
@@ -358,7 +402,13 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
     public void onConfigure(SQLiteDatabase db) {
         super.onConfigure(db);
         db.enableWriteAheadLogging();
-        db.setForeignKeyConstraintsEnabled(true);
+        // Foreign keys are deliberately OFF here. SQLiteOpenHelper runs onCreate/onUpgrade inside a
+        // transaction, where "PRAGMA foreign_keys" is silently ignored, and the composite-key
+        // migration drops and renames tables: with enforcement ON every DROP TABLE performs an
+        // implicit DELETE that fires ON DELETE CASCADE into the already-copied rows (data loss) or
+        // fails with "foreign key mismatch". Enforcement is switched on in onOpen() once the schema
+        // has been verified, so normal app operation still runs with foreign keys enforced.
+        db.setForeignKeyConstraintsEnabled(false);
     }
 
     @Override
@@ -388,6 +438,9 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
             ensureSchemaIntegrity(db);
             sSchemaVerifiedThisProcess = true;
         }
+        // Runs on EVERY open (not guarded by the per-process flag): each connection starts with
+        // enforcement OFF (see onConfigure) and must be switched on after create/upgrade/migration.
+        db.setForeignKeyConstraintsEnabled(true);
     }
 
     private void createAllTables(SQLiteDatabase db) {
@@ -535,6 +588,7 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         addColumnIfNotExists(db, InvoiceEntry.TABLE_NAME, InvoiceEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceEntry.TABLE_NAME, InvoiceEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
 
+        addColumnIfNotExists(db, InvoiceItemEntry.TABLE_NAME, InvoiceItemEntry.COLUMN_PERIOD_START, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceItemEntry.TABLE_NAME, InvoiceItemEntry.COLUMN_CREATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceItemEntry.TABLE_NAME, InvoiceItemEntry.COLUMN_UPDATED_AT, "INTEGER NOT NULL DEFAULT 0");
         addColumnIfNotExists(db, InvoiceItemEntry.TABLE_NAME, InvoiceItemEntry.COLUMN_LAST_MODIFIED, "INTEGER NOT NULL DEFAULT 0");
@@ -625,144 +679,239 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
     }
 
     private void migrateToCompositePrimaryKeys(SQLiteDatabase db) {
-        boolean wasInTransaction = db.inTransaction();
-        if (!wasInTransaction) {
+        final boolean ownTransaction = !db.inTransaction();
+
+        // DROP TABLE performs an implicit DELETE which, with foreign keys enforced, fires
+        // ON DELETE CASCADE into the rows already copied to the staging tables (silent data loss)
+        // or fails with "foreign key mismatch" while parents still have a single-column key.
+        // PRAGMA foreign_keys is a no-op inside a transaction, so it can only be changed here
+        // when we are the ones opening the transaction. Normal callers (onUpgrade/onOpen) always
+        // arrive with enforcement already OFF - see onConfigure().
+        if (isForeignKeyEnforcementOn(db)) {
+            if (!ownTransaction) {
+                throw new IllegalStateException(
+                        "Composite-key migration requires foreign keys to be disabled before the transaction starts.");
+            }
             db.setForeignKeyConstraintsEnabled(false);
+        }
+
+        if (ownTransaction) {
             db.beginTransaction();
         }
         try {
-            db.execSQL("DROP TABLE IF EXISTS students_v7");
-            db.execSQL("DROP TABLE IF EXISTS subjects_v7");
-            db.execSQL("DROP TABLE IF EXISTS student_subjects_v7");
-            db.execSQL("DROP TABLE IF EXISTS schedule_fee_history_v7");
-            db.execSQL("DROP TABLE IF EXISTS recurring_schedules_v7");
-            db.execSQL("DROP TABLE IF EXISTS class_occurrences_v7");
-            db.execSQL("DROP TABLE IF EXISTS attendance_records_v7");
-            db.execSQL("DROP TABLE IF EXISTS lessons_v7");
-            db.execSQL("DROP TABLE IF EXISTS fee_agreements_v7");
-            db.execSQL("DROP TABLE IF EXISTS invoices_v7");
-            db.execSQL("DROP TABLE IF EXISTS invoice_items_v7");
-            db.execSQL("DROP TABLE IF EXISTS payments_v7");
-            db.execSQL("DROP TABLE IF EXISTS financial_transactions_v7");
-            db.execSQL("DROP TABLE IF EXISTS payment_allocations_v7");
-            db.execSQL("DROP TABLE IF EXISTS audit_logs_v7");
+            // 1. Remove leftovers of an earlier attempt, then create empty staging tables (parents first).
+            for (String table : MIGRATION_TABLE_ORDER) {
+                db.execSQL("DROP TABLE IF EXISTS " + table + MIGRATION_SUFFIX);
+            }
+            for (String table : MIGRATION_TABLE_ORDER) {
+                db.execSQL(buildCreateSqlFor(table, table + MIGRATION_SUFFIX));
+            }
 
-            db.execSQL(buildCreateStudentsSql("students_v7"));
-            db.execSQL(buildCreateSubjectsSql("subjects_v7"));
-            db.execSQL(buildCreateStudentSubjectsSql("student_subjects_v7"));
-            db.execSQL(buildCreateScheduleFeeHistorySql("schedule_fee_history_v7"));
-            db.execSQL(buildCreateSchedulesSql("recurring_schedules_v7"));
-            db.execSQL(buildCreateOccurrencesSql("class_occurrences_v7"));
-            db.execSQL(buildCreateAttendanceSql("attendance_records_v7"));
-            db.execSQL(buildCreateLessonsSql("lessons_v7"));
-            db.execSQL(buildCreateFeeAgreementsSql("fee_agreements_v7"));
-            db.execSQL(buildCreateInvoicesSql("invoices_v7"));
-            db.execSQL(buildCreateInvoiceItemsSql("invoice_items_v7"));
-            db.execSQL(buildCreatePaymentsSql("payments_v7"));
-            db.execSQL(buildCreateTransactionsSql("financial_transactions_v7"));
-            db.execSQL(buildCreatePaymentAllocationsSql("payment_allocations_v7"));
-            db.execSQL(buildCreateAuditLogsSql("audit_logs_v7"));
+            // 2. Copy every valid legacy row, verifying nothing is lost on the way.
+            for (String table : MIGRATION_TABLE_ORDER) {
+                copyLegacyRows(db, table, table + MIGRATION_SUFFIX);
+            }
 
-            db.execSQL("INSERT OR IGNORE INTO students_v7 (id, account_id, student_id_display, name, grade, school, guardian_name, guardian_phone, address, is_active, is_deleted, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id_display, name, grade, school, guardian_name, guardian_phone, address, is_active, is_deleted, created_at, updated_at, last_modified FROM " + StudentEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
+            // 3. Swap: drop legacy tables (children first), then rename staging tables into place.
+            for (int i = MIGRATION_TABLE_ORDER.length - 1; i >= 0; i--) {
+                db.execSQL("DROP TABLE IF EXISTS " + MIGRATION_TABLE_ORDER[i]);
+            }
+            for (String table : MIGRATION_TABLE_ORDER) {
+                db.execSQL("ALTER TABLE " + table + MIGRATION_SUFFIX + " RENAME TO " + table);
+            }
 
-            db.execSQL("INSERT OR IGNORE INTO subjects_v7 (id, account_id, title, level, is_active, is_deleted, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, title, level, is_active, is_deleted, created_at, updated_at, last_modified FROM " + SubjectEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
+            logForeignKeyViolations(db);
 
-            db.execSQL("INSERT OR IGNORE INTO student_subjects_v7 (id, account_id, student_id, subject_id, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, subject_id, created_at, updated_at, last_modified FROM " + StudentSubjectEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO schedule_fee_history_v7 (id, account_id, student_id, schedule_group_id, billing_model, fee_amount_minor, anchor_day, effective_from, effective_to, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, schedule_group_id, billing_model, fee_amount_minor, anchor_day, effective_from, effective_to, created_at, updated_at, last_modified FROM " + ScheduleFeeHistoryEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO recurring_schedules_v7 (id, account_id, student_id, subject_id, schedule_group_id, day_of_week, start_time_minutes, duration_minutes, start_date, end_date, billing_model, fee_amount_minor, anchor_day, is_active, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, subject_id, schedule_group_id, day_of_week, start_time_minutes, duration_minutes, start_date, end_date, billing_model, fee_amount_minor, anchor_day, is_active, created_at, updated_at, last_modified FROM " + ScheduleEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO class_occurrences_v7 (id, account_id, student_id, subject_id, schedule_id, schedule_group_id, date, start_time_minutes, duration_minutes, rescheduled_from_id, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, subject_id, schedule_id, schedule_group_id, date, start_time_minutes, duration_minutes, rescheduled_from_id, created_at, updated_at, last_modified FROM " + OccurrenceEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO attendance_records_v7 (id, account_id, occurrence_id, status, charge_decision, applicable_fee_minor, needs_reschedule, makeup_occurrence_id, billed_invoice_item_id, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, occurrence_id, status, charge_decision, applicable_fee_minor, needs_reschedule, makeup_occurrence_id, billed_invoice_item_id, created_at, updated_at, last_modified FROM " + AttendanceEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO lessons_v7 (id, account_id, student_id, occurrence_id, topic_covered, homework, tutor_notes, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, occurrence_id, topic_covered, homework, tutor_notes, created_at, updated_at, last_modified FROM " + LessonEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO fee_agreements_v7 (id, account_id, student_id, fee_type, amount_minor_units, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, fee_type, amount_minor_units, created_at, updated_at, last_modified FROM " + FeeAgreementEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO invoices_v7 (id, account_id, student_id, invoice_id_display, billing_period, period_start, period_end, issue_date, due_date, subtotal_minor, discount_minor, total_amount, paid_amount, status, notes, is_void, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, invoice_id_display, billing_period, period_start, period_end, issue_date, due_date, subtotal_minor, discount_minor, total_amount, paid_amount, status, notes, is_void, created_at, updated_at, last_modified FROM " + InvoiceEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO invoice_items_v7 (id, account_id, invoice_id, schedule_group_id, occurrence_id, description, billing_model, quantity, unit_price_minor, amount_minor, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, invoice_id, schedule_group_id, occurrence_id, description, billing_model, quantity, unit_price_minor, amount_minor, created_at, updated_at, last_modified FROM " + InvoiceItemEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO payments_v7 (id, account_id, invoice_id, amount, payment_date, method, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, invoice_id, amount, payment_date, method, created_at, updated_at, last_modified FROM " + PaymentEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO financial_transactions_v7 (id, account_id, student_id, txn_id_display, type, amount_minor, timestamp, method, reference_no, notes, parent_txn_id, is_reversed, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, txn_id_display, type, amount_minor, timestamp, method, reference_no, notes, parent_txn_id, is_reversed, created_at, updated_at, last_modified FROM " + TransactionEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO payment_allocations_v7 (id, account_id, transaction_id, invoice_id, allocated_minor, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, transaction_id, invoice_id, allocated_minor, created_at, updated_at, last_modified FROM " + PaymentAllocationEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("INSERT OR IGNORE INTO audit_logs_v7 (id, account_id, student_id, entity_type, entity_id, action, details, timestamp, created_at, updated_at, last_modified) " +
-                    "SELECT id, account_id, student_id, entity_type, entity_id, action, details, timestamp, created_at, updated_at, last_modified FROM " + AuditLogEntry.TABLE_NAME +
-                    " WHERE account_id IS NOT NULL AND account_id != '' AND id IS NOT NULL AND id != ''");
-
-            db.execSQL("DROP TABLE IF EXISTS " + AuditLogEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + PaymentAllocationEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + TransactionEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + PaymentEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + InvoiceItemEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + InvoiceEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + FeeAgreementEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + LessonEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + AttendanceEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + OccurrenceEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + ScheduleEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + ScheduleFeeHistoryEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + StudentSubjectEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + SubjectEntry.TABLE_NAME);
-            db.execSQL("DROP TABLE IF EXISTS " + StudentEntry.TABLE_NAME);
-
-            db.execSQL("ALTER TABLE students_v7 RENAME TO " + StudentEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE subjects_v7 RENAME TO " + SubjectEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE student_subjects_v7 RENAME TO " + StudentSubjectEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE schedule_fee_history_v7 RENAME TO " + ScheduleFeeHistoryEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE recurring_schedules_v7 RENAME TO " + ScheduleEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE class_occurrences_v7 RENAME TO " + OccurrenceEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE attendance_records_v7 RENAME TO " + AttendanceEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE lessons_v7 RENAME TO " + LessonEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE fee_agreements_v7 RENAME TO " + FeeAgreementEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE invoices_v7 RENAME TO " + InvoiceEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE invoice_items_v7 RENAME TO " + InvoiceItemEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE payments_v7 RENAME TO " + PaymentEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE financial_transactions_v7 RENAME TO " + TransactionEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE payment_allocations_v7 RENAME TO " + PaymentAllocationEntry.TABLE_NAME);
-            db.execSQL("ALTER TABLE audit_logs_v7 RENAME TO " + AuditLogEntry.TABLE_NAME);
-
-            if (!wasInTransaction) {
+            if (ownTransaction) {
                 db.setTransactionSuccessful();
             }
         } finally {
-            if (!wasInTransaction) {
+            if (ownTransaction) {
                 db.endTransaction();
-                db.setForeignKeyConstraintsEnabled(true);
             }
+            // Foreign keys are intentionally NOT re-enabled here; onOpen() does it after the schema is verified.
+        }
+    }
+
+    private boolean isForeignKeyEnforcementOn(SQLiteDatabase db) {
+        try (Cursor c = db.rawQuery("PRAGMA foreign_keys", null)) {
+            return c.moveToFirst() && c.getInt(0) == 1;
+        }
+    }
+
+    private static String buildCreateSqlFor(String table, String physicalName) {
+        switch (table) {
+            case StudentEntry.TABLE_NAME: return buildCreateStudentsSql(physicalName);
+            case SubjectEntry.TABLE_NAME: return buildCreateSubjectsSql(physicalName);
+            case StudentSubjectEntry.TABLE_NAME: return buildCreateStudentSubjectsSql(physicalName);
+            case ScheduleFeeHistoryEntry.TABLE_NAME: return buildCreateScheduleFeeHistorySql(physicalName);
+            case ScheduleEntry.TABLE_NAME: return buildCreateSchedulesSql(physicalName);
+            case OccurrenceEntry.TABLE_NAME: return buildCreateOccurrencesSql(physicalName);
+            case AttendanceEntry.TABLE_NAME: return buildCreateAttendanceSql(physicalName);
+            case LessonEntry.TABLE_NAME: return buildCreateLessonsSql(physicalName);
+            case FeeAgreementEntry.TABLE_NAME: return buildCreateFeeAgreementsSql(physicalName);
+            case InvoiceEntry.TABLE_NAME: return buildCreateInvoicesSql(physicalName);
+            case InvoiceItemEntry.TABLE_NAME: return buildCreateInvoiceItemsSql(physicalName);
+            case PaymentEntry.TABLE_NAME: return buildCreatePaymentsSql(physicalName);
+            case TransactionEntry.TABLE_NAME: return buildCreateTransactionsSql(physicalName);
+            case PaymentAllocationEntry.TABLE_NAME: return buildCreatePaymentAllocationsSql(physicalName);
+            case AuditLogEntry.TABLE_NAME: return buildCreateAuditLogsSql(physicalName);
+            default: throw new IllegalArgumentException("Unknown table for migration: " + table);
+        }
+    }
+
+    /** Column metadata read from PRAGMA table_info. */
+    private static final class ColumnInfo {
+        final String name;
+        final String type;
+        final boolean notNull;
+        final String defaultValue; // raw SQL text of the DEFAULT clause, or null
+
+        ColumnInfo(String name, String type, boolean notNull, String defaultValue) {
+            this.name = name;
+            this.type = type;
+            this.notNull = notNull;
+            this.defaultValue = defaultValue;
+        }
+
+        boolean isNumeric() {
+            String t = type.toUpperCase(Locale.ROOT);
+            return t.contains("INT") || t.contains("REAL") || t.contains("FLOA") || t.contains("DOUB") || t.contains("NUM");
+        }
+    }
+
+    private List<ColumnInfo> readTableColumns(SQLiteDatabase db, String table) {
+        List<ColumnInfo> columns = new ArrayList<>();
+        try (Cursor c = db.rawQuery("PRAGMA table_info(" + table + ")", null)) {
+            int nameIdx = c.getColumnIndex("name");
+            int typeIdx = c.getColumnIndex("type");
+            int notNullIdx = c.getColumnIndex("notnull");
+            int defaultIdx = c.getColumnIndex("dflt_value");
+            while (c.moveToNext()) {
+                String type = (typeIdx >= 0 && !c.isNull(typeIdx)) ? c.getString(typeIdx) : "";
+                String dflt = (defaultIdx >= 0 && !c.isNull(defaultIdx)) ? c.getString(defaultIdx) : null;
+                columns.add(new ColumnInfo(c.getString(nameIdx), type, notNullIdx >= 0 && c.getInt(notNullIdx) != 0, dflt));
+            }
+        }
+        return columns;
+    }
+
+    private long queryCount(SQLiteDatabase db, String sql) {
+        try (Cursor c = db.rawQuery(sql, null)) {
+            return c.moveToFirst() ? c.getLong(0) : 0L;
+        }
+    }
+
+    /**
+     * Copies a legacy (single-key) table into its composite-key staging table.
+     * The copy is driven by the columns that actually exist on both sides, so legacy databases that
+     * pre-date a column no longer fail with "no such column", NULLs in columns that are NOT NULL in the
+     * new schema no longer make INSERT OR IGNORE silently skip the row, and duplicates that would
+     * violate a new UNIQUE constraint are resolved deterministically instead of dropping arbitrary rows.
+     */
+    private void copyLegacyRows(SQLiteDatabase db, String sourceTable, String targetTable) {
+        List<ColumnInfo> targetColumns = readTableColumns(db, targetTable);
+        Set<String> sourceColumns = new HashSet<>();
+        for (ColumnInfo col : readTableColumns(db, sourceTable)) {
+            sourceColumns.add(col.name.toLowerCase(Locale.ROOT));
+        }
+        if (!sourceColumns.contains("id") || !sourceColumns.contains("account_id")) {
+            // Without the key columns rows cannot be attributed to an account; abort (and roll back)
+            // rather than silently discarding the table's data.
+            throw new IllegalStateException("Cannot migrate legacy table '" + sourceTable
+                    + "': it has no id/account_id column.");
+        }
+
+        StringBuilder insertColumns = new StringBuilder();
+        StringBuilder selectExpressions = new StringBuilder();
+        for (ColumnInfo col : targetColumns) {
+            if (insertColumns.length() > 0) {
+                insertColumns.append(", ");
+                selectExpressions.append(", ");
+            }
+            insertColumns.append(col.name);
+            selectExpressions.append(buildMigrationSelectExpression(sourceTable, sourceColumns, col));
+        }
+
+        final String validKey = sourceTable + ".account_id IS NOT NULL AND " + sourceTable + ".account_id != '' AND "
+                + sourceTable + ".id IS NOT NULL AND " + sourceTable + ".id != ''";
+
+        String orderBy = "";
+        if (AttendanceEntry.TABLE_NAME.equals(sourceTable)
+                && sourceColumns.contains(AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID)
+                && sourceColumns.contains("updated_at")) {
+            // If duplicates must be collapsed, keep the record that is already billed.
+            orderBy = " ORDER BY (" + sourceTable + "." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID
+                    + " IS NOT NULL) DESC, " + sourceTable + ".updated_at DESC";
+        } else if (sourceColumns.contains("updated_at")) {
+            orderBy = " ORDER BY " + sourceTable + ".updated_at DESC";
+        }
+
+        db.execSQL("INSERT OR IGNORE INTO " + targetTable + " (" + insertColumns + ") SELECT "
+                + selectExpressions + " FROM " + sourceTable + " WHERE " + validKey + orderBy);
+
+        // ---- verification: nothing valid may disappear silently ----
+        long totalRows = queryCount(db, "SELECT COUNT(*) FROM " + sourceTable);
+        long expectedRows = queryCount(db, "SELECT COUNT(*) FROM (SELECT 1 FROM " + sourceTable
+                + " WHERE " + validKey + " GROUP BY " + sourceTable + ".account_id, " + sourceTable + ".id)");
+        long copiedRows = queryCount(db, "SELECT COUNT(*) FROM " + targetTable);
+
+        long unattributable = totalRows - queryCount(db, "SELECT COUNT(*) FROM " + sourceTable + " WHERE " + validKey);
+        if (unattributable > 0) {
+            Log.w(TAG, "Migration: " + unattributable + " row(s) in '" + sourceTable
+                    + "' have no account_id/id and cannot be attributed; they were not migrated.");
+        }
+        if (copiedRows < expectedRows) {
+            String message = "Migration of '" + sourceTable + "' copied " + copiedRows + " of " + expectedRows + " rows.";
+            if (DEDUPE_TOLERANT_TABLES.contains(sourceTable)) {
+                Log.w(TAG, message + " The remainder were redundant duplicates of a UNIQUE key.");
+            } else {
+                // Throwing rolls the whole migration back, leaving the original database untouched.
+                throw new IllegalStateException(message + " Aborting to avoid data loss.");
+            }
+        }
+    }
+
+    private String buildMigrationSelectExpression(String sourceTable, Set<String> sourceColumns, ColumnInfo target) {
+        String fallback;
+        if (target.defaultValue != null) {
+            fallback = target.defaultValue;
+        } else if (target.notNull) {
+            fallback = target.isNumeric() ? "0" : "''";
+        } else {
+            fallback = "NULL";
+        }
+
+        if (!sourceColumns.contains(target.name.toLowerCase(Locale.ROOT))) {
+            return fallback; // column did not exist in the legacy table
+        }
+
+        String ref = sourceTable + "." + target.name;
+
+        if (StudentEntry.TABLE_NAME.equals(sourceTable)
+                && StudentEntry.COLUMN_STUDENT_ID_DISPLAY.equals(target.name)) {
+            // UNIQUE(account_id, student_id_display): blank/duplicate display ids become NULL instead of
+            // causing the whole student row to be skipped. StudentRepository.migrateLegacyStudentIds()
+            // regenerates missing display ids on next use.
+            return "CASE WHEN " + ref + " IS NULL OR " + ref + " = '' THEN NULL "
+                    + "WHEN EXISTS (SELECT 1 FROM " + sourceTable + " dup WHERE dup.account_id = " + sourceTable + ".account_id "
+                    + "AND dup." + target.name + " = " + ref + " AND dup.rowid < " + sourceTable + ".rowid) THEN NULL "
+                    + "ELSE " + ref + " END";
+        }
+
+        return target.notNull ? "COALESCE(" + ref + ", " + fallback + ")" : ref;
+    }
+
+    private void logForeignKeyViolations(SQLiteDatabase db) {
+        long violations = 0;
+        try (Cursor c = db.rawQuery("PRAGMA foreign_key_check", null)) {
+            while (c.moveToNext()) {
+                violations++;
+            }
+        }
+        if (violations > 0) {
+            Log.w(TAG, "Migration finished with " + violations + " pre-existing orphan reference(s). "
+                    + "Rows were preserved, not deleted.");
         }
     }
 

@@ -18,9 +18,11 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -141,6 +143,10 @@ public class InvoiceRepository {
         int generatedInvoicesCount = 0;
         long now = System.currentTimeMillis();
         YearMonth currentYm = YearMonth.now();
+        ZoneId zone = ZoneId.systemDefault();
+        // Calendar-month bounds, used only to recognise legacy MONTHLY items that have no recorded period.
+        long monthStartMs = currentYm.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        long nextMonthStartMs = currentYm.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
         SimpleDateFormat dateFmt = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
 
         db.beginTransaction();
@@ -165,6 +171,8 @@ public class InvoiceRepository {
             for (String studentId : studentIds) {
                 List<InvoiceItem> pendingItems = new ArrayList<>();
                 List<String> attendanceIdsToLock = new ArrayList<>();
+                // MONTHLY item id -> start of the billing window that item pays for
+                Map<String, Long> monthlyPeriodStartByItemId = new HashMap<>();
                 String invoiceId = UUID.randomUUID().toString();
                 long minPeriodStart = Long.MAX_VALUE;
                 long maxPeriodEnd = 0L;
@@ -203,18 +211,33 @@ public class InvoiceRepository {
                             long pStart = window[0];
                             long pEnd = window[1];
 
+                            // A window is "already billed" when a non-void MONTHLY item of this group records
+                            // exactly this window. The window is stored on the ITEM, not derived from the invoice
+                            // header: the header's period_start is min() over ALL items, so as soon as per-class
+                            // items (or another monthly group) share the invoice it no longer equals this window
+                            // and the same month would be billed again on the next run.
+                            // Legacy items (period_start = 0) fall back to the old header comparison, or to
+                            // "generated during the current calendar month" which is exactly when this method bills.
                             boolean alreadyBilled = false;
                             try (Cursor bc = db.rawQuery(
-                                    "SELECT ii." + InvoiceItemEntry.COLUMN_ID +
-                                            " FROM " + InvoiceItemEntry.TABLE_NAME + " ii " +
+                                    "SELECT 1 FROM " + InvoiceItemEntry.TABLE_NAME + " ii " +
                                             " INNER JOIN " + InvoiceEntry.TABLE_NAME + " i " +
                                             " ON ii." + InvoiceItemEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID +
                                             " AND ii." + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID +
                                             " WHERE ii." + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                                            " AND i." + InvoiceEntry.COLUMN_STUDENT_ID + " = ? " +
                                             " AND ii." + InvoiceItemEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? " +
+                                            " AND ii." + InvoiceItemEntry.COLUMN_BILLING_MODEL + " = 'MONTHLY' " +
                                             " AND i." + InvoiceEntry.COLUMN_IS_VOID + " = 0 " +
-                                            " AND i." + InvoiceEntry.COLUMN_PERIOD_START + " = ?",
-                                    new String[]{accountId, groupId, String.valueOf(pStart)})) {
+                                            " AND (ii." + InvoiceItemEntry.COLUMN_PERIOD_START + " = ? " +
+                                            "      OR (ii." + InvoiceItemEntry.COLUMN_PERIOD_START + " = 0 " +
+                                            "          AND (i." + InvoiceEntry.COLUMN_PERIOD_START + " = ? " +
+                                            "               OR (ii." + InvoiceItemEntry.COLUMN_CREATED_AT + " >= ? " +
+                                            "                   AND ii." + InvoiceItemEntry.COLUMN_CREATED_AT + " < ?)))) " +
+                                            " LIMIT 1",
+                                    new String[]{accountId, studentId, groupId,
+                                            String.valueOf(pStart), String.valueOf(pStart),
+                                            String.valueOf(monthStartMs), String.valueOf(nextMonthStartMs)})) {
                                 if (bc.moveToFirst()) alreadyBilled = true;
                             }
 
@@ -227,8 +250,10 @@ public class InvoiceRepository {
                                 String desc = String.format(Locale.US, "Monthly Schedule (%02d:%02d %s) · %s – %s",
                                         h, startMin % 60, ampm, dateFmt.format(new Date(pStart)), dateFmt.format(new Date(pEnd)));
 
+                                String monthlyItemId = UUID.randomUUID().toString();
+                                monthlyPeriodStartByItemId.put(monthlyItemId, pStart);
                                 pendingItems.add(new InvoiceItem(
-                                        UUID.randomUUID().toString(), accountId, invoiceId,
+                                        monthlyItemId, accountId, invoiceId,
                                         groupId, null, desc, "MONTHLY", 1, feeMinor, feeMinor, now
                                 ));
                             }
@@ -343,6 +368,8 @@ public class InvoiceRepository {
                     itemVal.put(InvoiceItemEntry.COLUMN_QUANTITY, item.getQuantity());
                     itemVal.put(InvoiceItemEntry.COLUMN_UNIT_PRICE_MINOR, item.getUnitPriceMinor());
                     itemVal.put(InvoiceItemEntry.COLUMN_AMOUNT_MINOR, item.getAmountMinor());
+                    Long billedWindowStart = monthlyPeriodStartByItemId.get(item.getId());
+                    itemVal.put(InvoiceItemEntry.COLUMN_PERIOD_START, billedWindowStart != null ? billedWindowStart : 0L);
                     itemVal.put(InvoiceItemEntry.COLUMN_CREATED_AT, now);
                     itemVal.put(InvoiceItemEntry.COLUMN_UPDATED_AT, now);
                     itemVal.put(InvoiceItemEntry.COLUMN_LAST_MODIFIED, now);

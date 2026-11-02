@@ -228,6 +228,8 @@ public final class TutorSyncContract {
         public static final String COLUMN_QUANTITY = "quantity";
         public static final String COLUMN_UNIT_PRICE_MINOR = "unit_price_minor";
         public static final String COLUMN_AMOUNT_MINOR = "amount_minor";
+        /** Start (epoch ms) of the billing window a MONTHLY item pays for; 0 = not recorded (legacy / per-class). */
+        public static final String COLUMN_PERIOD_START = "period_start";
         public static final String COLUMN_CREATED_AT = "created_at";
         public static final String COLUMN_UPDATED_AT = "updated_at";
         public static final String COLUMN_LAST_MODIFIED = "last_modified";
