@@ -264,12 +264,11 @@ public class InvoiceDetailActivity extends BaseActivity {
                             showMessage(rootContent, e.getMessage());
                         }
                     } else if (which == 1 && FinancialTransaction.TYPE_PAYMENT.equals(txn.getType())) {
-                        boolean ok = txnRepo.recordRefundForTransaction(
-                                currentInvoice.getAccountId(), txn.getId(), txn.getAmountMinor(), "Tutor refund");
-                        if (ok) {
+                        // M1: amount + reason + confirmation + clear failure messages
+                        RefundDialogHelper.show(this, txnRepo, currentInvoice.getAccountId(), txn, () -> {
                             showMessage(rootContent, getString(R.string.invoice_refund_saved_msg));
                             refreshDetails();
-                        }
+                        });
                     }
                 })
                 .show();

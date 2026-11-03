@@ -370,4 +370,23 @@
     <string name="dashboard_attendance_history_title">উপস্থিতির ইতিহাস</string>
     <string name="dashboard_attendance_history_sub">পুরনো ক্লাস দেখুন বা সংশোধন করুন</string>
     <string name="dashboard_attendance_history_sub_pending">%1$d টি ক্লাসের উপস্থিতি বাকি</string>
+
+    <!-- M1: Refund -->
+    <string name="refund_hint_amount">রিফান্ডের পরিমাণ (৳)</string>
+    <string name="refund_hint_reason">রিফান্ডের কারণ</string>
+    <string name="refund_default_reason">টিউটর রিফান্ড</string>
+    <string name="refund_remaining_fmt">সর্বোচ্চ %1$s ফেরত দেওয়া যাবে</string>
+    <string name="refund_action_continue">এগিয়ে যান</string>
+    <string name="refund_confirm_title">রিফান্ড নিশ্চিত করুন</string>
+    <string name="refund_confirm_full_msg">সম্পূর্ণ %1$s রিফান্ড করবেন?\n\nএই পেমেন্টটি বাতিল হবে এবং সংশ্লিষ্ট ইনভয়েসের বকেয়া %1$s বেড়ে যাবে। এটি আর ফেরানো যাবে না।</string>
+    <string name="refund_confirm_partial_msg">ফেরতযোগ্য %2$s এর মধ্যে %1$s রিফান্ড করবেন?\n\nসংশ্লিষ্ট ইনভয়েসের বকেয়া %1$s বেড়ে যাবে। এটি আর ফেরানো যাবে না।</string>
+    <string name="refund_confirm_action">রিফান্ড করুন</string>
+    <string name="refund_failed_title">রিফান্ড সংরক্ষণ হয়নি</string>
+    <string name="refund_ok">ঠিক আছে</string>
+    <string name="refund_err_invalid_amount">শূন্যের চেয়ে বড় একটি সঠিক পরিমাণ দিন (সর্বোচ্চ ২ দশমিক ঘর)।</string>
+    <string name="refund_err_exceeds">রিফান্ড %1$s এর বেশি হতে পারবে না, এটিই এখনো ফেরতযোগ্য পরিমাণ।</string>
+    <string name="refund_err_already_refunded">এই পেমেন্ট ইতোমধ্যে সম্পূর্ণ রিফান্ড করা হয়েছে, ফেরত দেওয়ার মতো কিছু নেই।</string>
+    <string name="refund_err_not_eligible">শুধু বাতিল না হওয়া পেমেন্ট রিফান্ড করা যায়।</string>
+    <string name="refund_err_not_found">বর্তমান অ্যাকাউন্টে এই পেমেন্টটি পাওয়া যায়নি।</string>
+    <string name="refund_err_failed">রিফান্ড সংরক্ষণ করা যায়নি এবং কিছুই পরিবর্তন হয়নি। আবার চেষ্টা করুন।</string>
 </resources>

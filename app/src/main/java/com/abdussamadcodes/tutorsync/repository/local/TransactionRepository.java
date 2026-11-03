@@ -146,7 +146,61 @@ public class TransactionRepository {
         return recordPaymentWithAllocations(accountId, studentId, paymentAmountMinor, method, referenceNo, notes, allocations);
     }
 
+    // Result codes of issueRefund()
+    public static final int REFUND_OK = 0;
+    /** The payment does not exist in this account. */
+    public static final int REFUND_NOT_FOUND = 1;
+    /** Only payments that were not reversed can be refunded. */
+    public static final int REFUND_NOT_ELIGIBLE = 2;
+    /** Amount is zero/negative or more than what is still refundable. */
+    public static final int REFUND_INVALID_AMOUNT = 3;
+    /** Unexpected database error; nothing was changed. */
+    public static final int REFUND_ERROR = 4;
+
+    /** Kept for backward compatibility: true only when the refund was saved. */
     public boolean recordRefundForTransaction(
+            @NonNull String accountId,
+            @NonNull String originalTransactionId,
+            int refundAmountMinor,
+            @NonNull String reasonNotes) {
+        return issueRefund(accountId, originalTransactionId, refundAmountMinor, reasonNotes) == REFUND_OK;
+    }
+
+    /**
+     * How much of this payment can still be refunded (payment amount minus refunds already
+     * issued). 0 when the payment does not exist, is not a payment, or was reversed.
+     */
+    public int getRemainingRefundableMinor(@NonNull String accountId, @NonNull String originalTransactionId) {
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            int origAmount;
+            try (Cursor c = db.query(TransactionEntry.TABLE_NAME, null,
+                    TransactionEntry.COLUMN_ID + " = ? AND " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ?",
+                    new String[]{originalTransactionId, accountId}, null, null, null)) {
+                if (!c.moveToFirst()) return 0;
+                String type = c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_TYPE));
+                boolean reversed = c.getInt(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_IS_REVERSED)) == 1;
+                if (!FinancialTransaction.TYPE_PAYMENT.equals(type) || reversed) return 0;
+                origAmount = c.getInt(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_AMOUNT_MINOR));
+            }
+            int alreadyRefunded = 0;
+            try (Cursor rc = db.rawQuery(
+                    "SELECT COALESCE(SUM(" + TransactionEntry.COLUMN_AMOUNT_MINOR + "), 0) " +
+                            "FROM " + TransactionEntry.TABLE_NAME +
+                            " WHERE " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                            " AND " + TransactionEntry.COLUMN_PARENT_TXN_ID + " = ? " +
+                            " AND " + TransactionEntry.COLUMN_TYPE + " = ? " +
+                            " AND " + TransactionEntry.COLUMN_IS_REVERSED + " = 0",
+                    new String[]{accountId, originalTransactionId, FinancialTransaction.TYPE_REFUND})) {
+                if (rc.moveToFirst()) alreadyRefunded = Math.max(0, rc.getInt(0));
+            }
+            return Math.max(0, origAmount - alreadyRefunded);
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
+    public int issueRefund(
             @NonNull String accountId,
             @NonNull String originalTransactionId,
             int refundAmountMinor,
@@ -164,7 +218,7 @@ public class TransactionRepository {
             try (Cursor c = db.query(TransactionEntry.TABLE_NAME, null,
                     TransactionEntry.COLUMN_ID + " = ? AND " + TransactionEntry.COLUMN_ACCOUNT_ID + " = ?",
                     new String[]{originalTransactionId, accountId}, null, null, null)) {
-                if (!c.moveToFirst()) return false;
+                if (!c.moveToFirst()) return REFUND_NOT_FOUND;
                 studentId = c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_STUDENT_ID));
                 method = c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_METHOD));
                 origType = c.getString(c.getColumnIndexOrThrow(TransactionEntry.COLUMN_TYPE));
@@ -173,7 +227,7 @@ public class TransactionRepository {
             }
 
             if (!FinancialTransaction.TYPE_PAYMENT.equals(origType) || origReversed) {
-                return false;
+                return REFUND_NOT_ELIGIBLE;
             }
 
             int alreadyRefundedMinor = 0;
@@ -192,7 +246,7 @@ public class TransactionRepository {
 
             int remainingRefundableMinor = origAmount - alreadyRefundedMinor;
             if (refundAmountMinor <= 0 || refundAmountMinor > remainingRefundableMinor) {
-                return false;
+                return REFUND_INVALID_AMOUNT;
             }
 
             long now = System.currentTimeMillis();
@@ -264,9 +318,9 @@ public class TransactionRepository {
                     "Refunded ৳" + String.format(Locale.US, "%.2f", refundAmountMinor / 100.0) + " (" + reasonNotes + ")");
 
             db.setTransactionSuccessful();
-            return true;
+            return REFUND_OK;
         } catch (Exception e) {
-            return false;
+            return REFUND_ERROR;
         } finally {
             db.endTransaction();
             DatabaseManager.getInstance().closeDatabase();

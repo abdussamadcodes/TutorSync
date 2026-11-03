@@ -1184,46 +1184,10 @@ public class StudentTransactionsActivity extends BaseActivity {
     }
 
     private void showRefundDialog(FinancialTransaction txn) {
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(20);
-        layout.setPadding(pad, dp(12), pad, dp(4));
-
-        EditText etRefundAmt = new EditText(this);
-        etRefundAmt.setHint(tr("Refund Amount (৳)", "রিফান্ডের পরিমাণ (৳)"));
-        etRefundAmt.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        etRefundAmt.setText(String.format(Locale.US, "%.2f", txn.getAmountMinor() / 100.0));
-        layout.addView(etRefundAmt);
-
-        EditText etReason = new EditText(this);
-        etReason.setHint(tr("Reason for refund", "রিফান্ডের কারণ"));
-        etReason.setText(tr("Tutor refund", "টিউটর রিফান্ড"));
-        layout.addView(etReason);
-
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(getString(R.string.invoice_issue_refund))
-                .setView(layout)
-                .setPositiveButton(getString(R.string.action_save), (d, w) -> {
-                    try {
-                        double bdt = Double.parseDouble(etRefundAmt.getText().toString().trim());
-                        int refundMinor = (int) Math.round(bdt * 100);
-                        String reason = etReason.getText().toString().trim();
-                        if (reason.isEmpty()) reason = "Tutor refund";
-
-                        boolean ok = txnRepo.recordRefundForTransaction(
-                                sessionManager.getActiveAccountId(), txn.getId(), refundMinor, reason);
-                        if (ok) {
-                            showMessage(contentContainer, getString(R.string.invoice_refund_saved_msg));
-                            refreshHistory();
-                        } else {
-                            showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
-                        }
-                    } catch (NumberFormatException e) {
-                        showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
-                    }
-                })
-                .setNegativeButton(getString(R.string.action_cancel), null)
-                .show();
+        RefundDialogHelper.show(this, txnRepo, sessionManager.getActiveAccountId(), txn, () -> {
+            showMessage(contentContainer, getString(R.string.invoice_refund_saved_msg));
+            refreshHistory();
+        });
     }
 
     private View createMetricTile(String label, String value, int valueColor) {

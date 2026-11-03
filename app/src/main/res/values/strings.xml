@@ -368,4 +368,23 @@
     <string name="dashboard_attendance_history_title">Attendance history</string>
     <string name="dashboard_attendance_history_sub">Review or correct past classes</string>
     <string name="dashboard_attendance_history_sub_pending">%1$d classes need attendance</string>
+
+    <!-- M1: Refund -->
+    <string name="refund_hint_amount">Refund amount (৳)</string>
+    <string name="refund_hint_reason">Reason for refund</string>
+    <string name="refund_default_reason">Tutor refund</string>
+    <string name="refund_remaining_fmt">Up to %1$s can still be refunded</string>
+    <string name="refund_action_continue">Continue</string>
+    <string name="refund_confirm_title">Confirm refund</string>
+    <string name="refund_confirm_full_msg">Refund the FULL amount of %1$s?\n\nThis payment will be reversed and the related invoice balance(s) will increase by %1$s. This cannot be undone.</string>
+    <string name="refund_confirm_partial_msg">Refund %1$s out of %2$s that can still be refunded?\n\nThe related invoice balance(s) will increase by %1$s. This cannot be undone.</string>
+    <string name="refund_confirm_action">Refund</string>
+    <string name="refund_failed_title">Refund not saved</string>
+    <string name="refund_ok">OK</string>
+    <string name="refund_err_invalid_amount">Enter a valid amount greater than zero, with at most 2 decimals.</string>
+    <string name="refund_err_exceeds">The refund cannot be more than %1$s, the amount that can still be refunded.</string>
+    <string name="refund_err_already_refunded">This payment has already been fully refunded, so nothing is left to refund.</string>
+    <string name="refund_err_not_eligible">Only payments that have not been reversed can be refunded.</string>
+    <string name="refund_err_not_found">This payment could not be found in the current account.</string>
+    <string name="refund_err_failed">The refund could not be saved and nothing was changed. Please try again.</string>
 </resources>
