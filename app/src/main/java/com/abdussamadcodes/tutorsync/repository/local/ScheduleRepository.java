@@ -508,6 +508,203 @@ public class ScheduleRepository {
         }
     }
 
+    // ------------------------------------------------------------------------------------
+    // H1: automatic, idempotent top-up of recurring class occurrences
+    // ------------------------------------------------------------------------------------
+
+    private static final long TOP_UP_TOLERANCE_MILLIS = 12L * 60L * 60L * 1000L;
+    private static final int TOP_UP_DAYS_AHEAD = 30;
+    private static final int TOP_UP_MAX_BACKFILL_DAYS = 30;
+
+    private static final class TopUpSchedule {
+        final String id;
+        final String studentId;
+        final String subjectId;
+        final String groupId;
+        final int dayOfWeek;
+        final int startTimeMinutes;
+        final int durationMinutes;
+        final long startDate;
+        final long endDate;
+
+        TopUpSchedule(String id, String studentId, String subjectId, String groupId, int dayOfWeek,
+                      int startTimeMinutes, int durationMinutes, long startDate, long endDate) {
+            this.id = id;
+            this.studentId = studentId;
+            this.subjectId = subjectId;
+            this.groupId = groupId;
+            this.dayOfWeek = dayOfWeek;
+            this.startTimeMinutes = startTimeMinutes;
+            this.durationMinutes = durationMinutes;
+            this.startDate = startDate;
+            this.endDate = endDate;
+        }
+    }
+
+    /**
+     * Makes sure every active recurring schedule has class occurrences for the next 30 days.
+     * Safe to call as often as you like (idempotent):
+     * - never creates a class that already exists (same schedule, or same student/subject/time that day),
+     * - never recreates a class the user deliberately removed,
+     * - never goes outside the schedule's start/end dates,
+     * - skips deleted students/subjects and inactive schedules,
+     * - if the app was not opened for a while, fills in missed days (at most the last 30 days).
+     *
+     * @return number of occurrences created (0 on any failure; failures never crash the caller)
+     */
+    public int topUpRecurringOccurrences(@NonNull String accountId) {
+        if (accountId.trim().isEmpty()) {
+            return 0;
+        }
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            db.beginTransaction();
+            try {
+                int created = topUpRecurringOccurrencesInternal(db, accountId, System.currentTimeMillis());
+                db.setTransactionSuccessful();
+                return created;
+            } finally {
+                db.endTransaction();
+            }
+        } catch (RuntimeException e) {
+            return 0;
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+    }
+
+    private int topUpRecurringOccurrencesInternal(@NonNull SQLiteDatabase db, @NonNull String accountId, long now) {
+        long startOfToday = startOfLocalDay(now);
+
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(startOfToday);
+        cal.add(Calendar.DATE, TOP_UP_DAYS_AHEAD);
+        long horizon = cal.getTimeInMillis();
+
+        cal.setTimeInMillis(startOfToday);
+        cal.add(Calendar.DATE, -TOP_UP_MAX_BACKFILL_DAYS);
+        long backfillFloor = cal.getTimeInMillis();
+
+        List<TopUpSchedule> schedules = new ArrayList<>();
+        try (Cursor c = db.rawQuery(
+                "SELECT rs." + ScheduleEntry.COLUMN_ID + ", rs." + ScheduleEntry.COLUMN_STUDENT_ID + ", " +
+                        "rs." + ScheduleEntry.COLUMN_SUBJECT_ID + ", rs." + ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + ", " +
+                        "rs." + ScheduleEntry.COLUMN_DAY_OF_WEEK + ", rs." + ScheduleEntry.COLUMN_START_TIME_MINUTES + ", " +
+                        "rs." + ScheduleEntry.COLUMN_DURATION_MINUTES + ", rs." + ScheduleEntry.COLUMN_START_DATE + ", " +
+                        "rs." + ScheduleEntry.COLUMN_END_DATE + " " +
+                        "FROM " + ScheduleEntry.TABLE_NAME + " rs " +
+                        "INNER JOIN " + StudentEntry.TABLE_NAME + " st " +
+                        "ON st." + StudentEntry.COLUMN_ACCOUNT_ID + " = rs." + ScheduleEntry.COLUMN_ACCOUNT_ID + " " +
+                        "AND st." + StudentEntry.COLUMN_ID + " = rs." + ScheduleEntry.COLUMN_STUDENT_ID + " " +
+                        "INNER JOIN " + SubjectEntry.TABLE_NAME + " sb " +
+                        "ON sb." + SubjectEntry.COLUMN_ACCOUNT_ID + " = rs." + ScheduleEntry.COLUMN_ACCOUNT_ID + " " +
+                        "AND sb." + SubjectEntry.COLUMN_ID + " = rs." + ScheduleEntry.COLUMN_SUBJECT_ID + " " +
+                        "WHERE rs." + ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                        "AND rs." + ScheduleEntry.COLUMN_IS_ACTIVE + " = 1 " +
+                        "AND st." + StudentEntry.COLUMN_IS_DELETED + " = 0 " +
+                        "AND sb." + SubjectEntry.COLUMN_IS_DELETED + " = 0",
+                new String[]{accountId})) {
+            while (c.moveToNext()) {
+                schedules.add(new TopUpSchedule(
+                        c.getString(0), c.getString(1), c.getString(2),
+                        c.isNull(3) ? null : c.getString(3),
+                        c.getInt(4), c.getInt(5), c.getInt(6), c.getLong(7), c.getLong(8)));
+            }
+        }
+
+        int created = 0;
+        for (TopUpSchedule s : schedules) {
+            long rangeStart = startOfToday;
+            long lastGenerated = queryLastRegularOccurrenceDate(db, accountId, s.id);
+            if (lastGenerated > 0L) {
+                Calendar next = Calendar.getInstance();
+                next.setTimeInMillis(startOfLocalDay(lastGenerated + TOP_UP_TOLERANCE_MILLIS));
+                next.add(Calendar.DATE, 1);
+                long nextMillis = next.getTimeInMillis();
+                if (nextMillis < rangeStart) {
+                    rangeStart = Math.max(nextMillis, backfillFloor);
+                }
+            }
+
+            Calendar day = Calendar.getInstance();
+            day.setTimeInMillis(rangeStart);
+            while (day.getTimeInMillis() <= horizon) {
+                long dateMillis = day.getTimeInMillis();
+                boolean afterStart = dateMillis + TOP_UP_TOLERANCE_MILLIS >= s.startDate;
+                boolean beforeEnd = s.endDate <= 0L || dateMillis <= s.endDate + TOP_UP_TOLERANCE_MILLIS;
+                if (day.get(Calendar.DAY_OF_WEEK) == s.dayOfWeek && afterStart && beforeEnd
+                        && !topUpOccurrenceExists(db, accountId, s, dateMillis)
+                        && !topUpWasRemoved(db, accountId, s.id, dateMillis)) {
+                    insertSingleOccurrenceInternal(db, accountId, s.studentId, s.subjectId, s.id, s.groupId,
+                            dateMillis, s.startTimeMinutes, s.durationMinutes, now);
+                    created++;
+                }
+                day.add(Calendar.DATE, 1);
+            }
+        }
+        return created;
+    }
+
+    private static long startOfLocalDay(long millis) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(millis);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTimeInMillis();
+    }
+
+    private static long queryLastRegularOccurrenceDate(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                                       @NonNull String scheduleId) {
+        try (Cursor c = db.rawQuery(
+                "SELECT MAX(" + OccurrenceEntry.COLUMN_DATE + ") FROM " + OccurrenceEntry.TABLE_NAME +
+                        " WHERE " + OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ? AND " +
+                        OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID + " IS NULL",
+                new String[]{accountId, scheduleId})) {
+            if (c.moveToFirst() && !c.isNull(0)) {
+                return c.getLong(0);
+            }
+        }
+        return -1L;
+    }
+
+    private static boolean topUpOccurrenceExists(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                                 @NonNull TopUpSchedule s, long dateMillis) {
+        try (Cursor c = db.query(OccurrenceEntry.TABLE_NAME,
+                new String[]{OccurrenceEntry.COLUMN_ID},
+                OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        OccurrenceEntry.COLUMN_DATE + " >= ? AND " + OccurrenceEntry.COLUMN_DATE + " < ? AND (" +
+                        OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ? OR (" +
+                        OccurrenceEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                        OccurrenceEntry.COLUMN_SUBJECT_ID + " = ? AND " +
+                        OccurrenceEntry.COLUMN_START_TIME_MINUTES + " = ?))",
+                new String[]{accountId,
+                        String.valueOf(dateMillis - TOP_UP_TOLERANCE_MILLIS),
+                        String.valueOf(dateMillis + TOP_UP_TOLERANCE_MILLIS),
+                        s.id, s.studentId, s.subjectId, String.valueOf(s.startTimeMinutes)},
+                null, null, null, "1")) {
+            return c.moveToFirst();
+        }
+    }
+
+    private static boolean topUpWasRemoved(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                           @NonNull String scheduleId, long dateMillis) {
+        try (Cursor c = db.query(RemovedOccurrenceEntry.TABLE_NAME,
+                new String[]{RemovedOccurrenceEntry.COLUMN_ID},
+                RemovedOccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        RemovedOccurrenceEntry.COLUMN_SCHEDULE_ID + " = ? AND " +
+                        RemovedOccurrenceEntry.COLUMN_OCCURRENCE_DATE + " >= ? AND " +
+                        RemovedOccurrenceEntry.COLUMN_OCCURRENCE_DATE + " < ?",
+                new String[]{accountId, scheduleId,
+                        String.valueOf(dateMillis - TOP_UP_TOLERANCE_MILLIS),
+                        String.valueOf(dateMillis + TOP_UP_TOLERANCE_MILLIS)},
+                null, null, null, "1")) {
+            return c.moveToFirst();
+        }
+    }
+
     private void generateOccurrencesFor30DaysInternal(
             @NonNull SQLiteDatabase db,
             @NonNull String accountId,

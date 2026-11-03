@@ -8,12 +8,15 @@ import androidx.annotation.Nullable;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.OccurrenceEntry;
+import com.abdussamadcodes.tutorsync.database.TutorSyncContract.RemovedOccurrenceEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.SubjectEntry;
 import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.UUID;
+import java.nio.charset.StandardCharsets;
 
 public class OccurrenceRepository {
 
@@ -47,23 +50,72 @@ public class OccurrenceRepository {
         }
     }
 
+    /**
+     * Deletes one class occurrence (account-scoped).
+     *
+     * - An occurrence that already has attendance recorded is never deleted (returns false).
+     * - When a regular (non-makeup) occurrence of a recurring schedule is removed on purpose, the
+     *   removal is remembered so the automatic top-up never recreates it.
+     */
     public boolean deleteOccurrence(@NonNull String accountId, @NonNull String occurrenceId) {
+        if (accountId.trim().isEmpty() || occurrenceId.trim().isEmpty()) {
+            return false;
+        }
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        db.beginTransaction();
         try {
-            return db.delete(OccurrenceEntry.TABLE_NAME,
+            String scheduleId = null;
+            long dateMillis = 0L;
+            boolean isMakeup = false;
+            boolean found = false;
+            try (Cursor c = db.query(OccurrenceEntry.TABLE_NAME,
+                    new String[]{OccurrenceEntry.COLUMN_SCHEDULE_ID, OccurrenceEntry.COLUMN_DATE,
+                            OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID},
+                    OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_ID + " = ?",
+                    new String[]{accountId, occurrenceId}, null, null, null, "1")) {
+                if (c.moveToFirst()) {
+                    found = true;
+                    scheduleId = c.isNull(0) ? null : c.getString(0);
+                    dateMillis = c.getLong(1);
+                    isMakeup = !c.isNull(2) && !c.getString(2).trim().isEmpty();
+                }
+            }
+            if (!found) {
+                return false;
+            }
+
+            try (Cursor a = db.query(TutorSyncContract.AttendanceEntry.TABLE_NAME,
+                    new String[]{TutorSyncContract.AttendanceEntry.COLUMN_ID},
+                    TutorSyncContract.AttendanceEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " = ?",
+                    new String[]{accountId, occurrenceId}, null, null, null, "1")) {
+                if (a.moveToFirst()) {
+                    return false;
+                }
+            }
+
+            if (scheduleId != null && !scheduleId.trim().isEmpty() && !isMakeup) {
+                long now = System.currentTimeMillis();
+                ContentValues tomb = new ContentValues();
+                tomb.put(RemovedOccurrenceEntry.COLUMN_ID, UUID.nameUUIDFromBytes(
+                        ("RMOCC:" + scheduleId + ":" + dateMillis).getBytes(StandardCharsets.UTF_8)).toString());
+                tomb.put(RemovedOccurrenceEntry.COLUMN_ACCOUNT_ID, accountId);
+                tomb.put(RemovedOccurrenceEntry.COLUMN_SCHEDULE_ID, scheduleId);
+                tomb.put(RemovedOccurrenceEntry.COLUMN_OCCURRENCE_DATE, dateMillis);
+                tomb.put(RemovedOccurrenceEntry.COLUMN_CREATED_AT, now);
+                tomb.put(RemovedOccurrenceEntry.COLUMN_UPDATED_AT, now);
+                tomb.put(RemovedOccurrenceEntry.COLUMN_LAST_MODIFIED, now);
+                db.insertWithOnConflict(RemovedOccurrenceEntry.TABLE_NAME, null, tomb,
+                        SQLiteDatabase.CONFLICT_REPLACE);
+            }
+
+            boolean deleted = db.delete(OccurrenceEntry.TABLE_NAME,
                     OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_ID + " = ?",
                     new String[]{accountId, occurrenceId}) > 0;
+            db.setTransactionSuccessful();
+            return deleted;
         } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-    }
-
-    public boolean deleteOccurrence(@NonNull String occurrenceId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try {
-            return db.delete(OccurrenceEntry.TABLE_NAME,
-                    OccurrenceEntry.COLUMN_ID + " = ?", new String[]{occurrenceId}) > 0;
-        } finally {
+            db.endTransaction();
             DatabaseManager.getInstance().closeDatabase();
         }
     }
@@ -87,30 +139,6 @@ public class OccurrenceRepository {
 
             db.delete(OccurrenceEntry.TABLE_NAME, where,
                     new String[]{accountId, scheduleId, String.valueOf(cal.getTimeInMillis()), accountId});
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-    }
-
-    public void deleteFutureOccurrencesByScheduleId(@NonNull String scheduleId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try {
-            Calendar cal = Calendar.getInstance();
-            cal.set(Calendar.HOUR_OF_DAY, 0);
-            cal.set(Calendar.MINUTE, 0);
-            cal.set(Calendar.SECOND, 0);
-            cal.set(Calendar.MILLISECOND, 0);
-
-            String where = OccurrenceEntry.COLUMN_SCHEDULE_ID + " = ? AND " +
-                    OccurrenceEntry.COLUMN_DATE + " >= ? AND " +
-                    OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT a." +
-                    TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
-                    TutorSyncContract.AttendanceEntry.TABLE_NAME + " a WHERE a." +
-                    TutorSyncContract.AttendanceEntry.COLUMN_ACCOUNT_ID + " = " +
-                    OccurrenceEntry.TABLE_NAME + "." + OccurrenceEntry.COLUMN_ACCOUNT_ID + ")";
-
-            db.delete(OccurrenceEntry.TABLE_NAME, where,
-                    new String[]{scheduleId, String.valueOf(cal.getTimeInMillis())});
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }

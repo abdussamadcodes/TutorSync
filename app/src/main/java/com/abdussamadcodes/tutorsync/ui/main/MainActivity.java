@@ -31,6 +31,7 @@ import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import com.abdussamadcodes.tutorsync.repository.local.InvoiceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
+import com.abdussamadcodes.tutorsync.repository.local.ScheduleRepository;
 import com.abdussamadcodes.tutorsync.repository.local.StudentRepository;
 import com.abdussamadcodes.tutorsync.repository.local.SubjectRepository;
 import com.abdussamadcodes.tutorsync.security.AppLockManager;
@@ -232,6 +233,9 @@ public class MainActivity extends BaseActivity {
                     invoiceRepo.reconcileAccountFinancialData(accountId);
                     lastReconciledAccountId = accountId;
                 }
+
+                // H1: keep recurring classes rolling forward (idempotent; never recreates removed classes)
+                new ScheduleRepository().topUpRecurringOccurrences(accountId);
 
                 final Account account = accountStore.getAccountById(accountId);
                 final List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);

@@ -376,6 +376,20 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
                 "UNIQUE(" + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + ", " + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + ", " + PaymentAllocationEntry.COLUMN_INVOICE_ID + "))";
     }
 
+    private static String buildCreateRemovedOccurrencesSql(String tableName) {
+        return "CREATE TABLE IF NOT EXISTS " + tableName + " (" +
+                RemovedOccurrenceEntry.COLUMN_ID + " TEXT NOT NULL, " +
+                RemovedOccurrenceEntry.COLUMN_ACCOUNT_ID + " TEXT NOT NULL, " +
+                RemovedOccurrenceEntry.COLUMN_SCHEDULE_ID + " TEXT NOT NULL, " +
+                RemovedOccurrenceEntry.COLUMN_OCCURRENCE_DATE + " INTEGER NOT NULL, " +
+                RemovedOccurrenceEntry.COLUMN_CREATED_AT + " INTEGER NOT NULL DEFAULT 0, " +
+                RemovedOccurrenceEntry.COLUMN_UPDATED_AT + " INTEGER NOT NULL DEFAULT 0, " +
+                RemovedOccurrenceEntry.COLUMN_LAST_MODIFIED + " INTEGER NOT NULL DEFAULT 0, " +
+                "PRIMARY KEY(" + RemovedOccurrenceEntry.COLUMN_ACCOUNT_ID + ", " + RemovedOccurrenceEntry.COLUMN_ID + "), " +
+                "FOREIGN KEY(" + RemovedOccurrenceEntry.COLUMN_ACCOUNT_ID + ") REFERENCES " +
+                AccountEntry.TABLE_NAME + "(" + AccountEntry.COLUMN_ID + ") ON DELETE CASCADE)";
+    }
+
     private static String buildCreateAuditLogsSql(String tableName) {
         return "CREATE TABLE IF NOT EXISTS " + tableName + " (" +
                 AuditLogEntry.COLUMN_ID + " TEXT NOT NULL, " +
@@ -460,6 +474,10 @@ public class TutorSyncDbHelper extends SQLiteOpenHelper {
         db.execSQL(buildCreateTransactionsSql(TransactionEntry.TABLE_NAME));
         db.execSQL(buildCreatePaymentAllocationsSql(PaymentAllocationEntry.TABLE_NAME));
         db.execSQL(buildCreateAuditLogsSql(AuditLogEntry.TABLE_NAME));
+        db.execSQL(buildCreateRemovedOccurrencesSql(RemovedOccurrenceEntry.TABLE_NAME));
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_removed_occurrences_lookup ON " + RemovedOccurrenceEntry.TABLE_NAME +
+                "(" + RemovedOccurrenceEntry.COLUMN_ACCOUNT_ID + ", " + RemovedOccurrenceEntry.COLUMN_SCHEDULE_ID + ", " +
+                RemovedOccurrenceEntry.COLUMN_OCCURRENCE_DATE + ")");
     }
 
     private void createIndexes(SQLiteDatabase db) {

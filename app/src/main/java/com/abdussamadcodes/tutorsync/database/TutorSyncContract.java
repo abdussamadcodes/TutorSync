@@ -9,7 +9,7 @@ public final class TutorSyncContract {
     private TutorSyncContract() {}
 
     public static final String DATABASE_NAME = "tutorsync.db";
-    public static final int DATABASE_VERSION = 8;
+    public static final int DATABASE_VERSION = 9;
 
     public static final String COLUMN_SYNC_CREATED_AT = "created_at";
     public static final String COLUMN_SYNC_UPDATED_AT = "updated_at";
@@ -146,6 +146,21 @@ public final class TutorSyncContract {
         public static final String COLUMN_START_TIME_MINUTES = "start_time_minutes";
         public static final String COLUMN_DURATION_MINUTES = "duration_minutes";
         public static final String COLUMN_RESCHEDULED_FROM_ID = "rescheduled_from_id";
+        public static final String COLUMN_CREATED_AT = "created_at";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
+        public static final String COLUMN_LAST_MODIFIED = "last_modified";
+    }
+
+    /**
+     * Remembers recurring-class occurrences the user deliberately removed, so the automatic
+     * top-up never recreates them.
+     */
+    public static class RemovedOccurrenceEntry implements BaseColumns {
+        public static final String TABLE_NAME = "removed_occurrences";
+        public static final String COLUMN_ID = "id";
+        public static final String COLUMN_ACCOUNT_ID = "account_id";
+        public static final String COLUMN_SCHEDULE_ID = "schedule_id";
+        public static final String COLUMN_OCCURRENCE_DATE = "occurrence_date";
         public static final String COLUMN_CREATED_AT = "created_at";
         public static final String COLUMN_UPDATED_AT = "updated_at";
         public static final String COLUMN_LAST_MODIFIED = "last_modified";

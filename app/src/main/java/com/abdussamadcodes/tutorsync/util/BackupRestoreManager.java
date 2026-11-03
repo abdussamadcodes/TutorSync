@@ -54,6 +54,7 @@ public final class BackupRestoreManager {
             ScheduleFeeHistoryEntry.TABLE_NAME,
             ScheduleEntry.TABLE_NAME,
             OccurrenceEntry.TABLE_NAME,
+            RemovedOccurrenceEntry.TABLE_NAME,
             AttendanceEntry.TABLE_NAME,
             LessonEntry.TABLE_NAME,
             FeeAgreementEntry.TABLE_NAME,
