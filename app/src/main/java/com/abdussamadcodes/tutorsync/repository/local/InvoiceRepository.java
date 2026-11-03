@@ -116,6 +116,137 @@ public class InvoiceRepository {
         BackupRestoreManager.reconcileAccountFinancialData(db, accountId);
     }
 
+    // ------------------------------------------------------------------------------------
+    // M2: monthly billing windows
+    // ------------------------------------------------------------------------------------
+
+    /** Billing windows are at least ~28 days apart, so a 3-day tolerance can never mix two windows. */
+    private static final long MONTHLY_WINDOW_TOLERANCE_MS = 3L * 24L * 60L * 60L * 1000L;
+    private static final long HALF_DAY_MS = 12L * 60L * 60L * 1000L;
+    /** Safety limit: at most this many (most recent) missed windows are billed in one run. */
+    private static final int MAX_MONTHLY_BACKFILL_WINDOWS = 24;
+
+    /**
+     * All monthly billing windows of a schedule group that are due now, oldest first.
+     *
+     * - starts with the window that contains the schedule's start date,
+     * - includes every window that has already STARTED (never a future one),
+     * - stops after the schedule's end date,
+     * - when the schedule start is unknown only the window containing today is returned.
+     */
+    @NonNull
+    static List<long[]> computeDueMonthlyWindows(int anchorDay, long groupStartMs, long groupEndMs, long nowMs) {
+        ZoneId zone = ZoneId.systemDefault();
+        int anchor = Math.max(1, anchorDay);
+
+        YearMonth ym;
+        if (groupStartMs > 0L) {
+            // +12h normalises a start date that was stored in another timezone
+            LocalDate d = java.time.Instant.ofEpochMilli(groupStartMs + HALF_DAY_MS).atZone(zone).toLocalDate();
+            ym = YearMonth.from(d);
+            if (d.getDayOfMonth() < Math.min(anchor, ym.lengthOfMonth())) {
+                ym = ym.minusMonths(1);
+            }
+        } else {
+            ym = YearMonth.from(java.time.Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate());
+            if (computeAnniversaryBillingWindow(anchor, ym)[0] > nowMs) {
+                ym = ym.minusMonths(1);
+            }
+        }
+
+        List<long[]> windows = new ArrayList<>();
+        for (int i = 0; i < 1200; i++) {
+            long[] w = computeAnniversaryBillingWindow(anchor, ym);
+            if (w[0] > nowMs) break; // a window that has not started yet is never billed
+            if (groupEndMs > 0L && w[0] > groupEndMs + MONTHLY_WINDOW_TOLERANCE_MS) break; // schedule already ended
+            windows.add(w);
+            ym = ym.plusMonths(1);
+        }
+        if (windows.size() > MAX_MONTHLY_BACKFILL_WINDOWS) {
+            windows = new ArrayList<>(windows.subList(windows.size() - MAX_MONTHLY_BACKFILL_WINDOWS, windows.size()));
+        }
+        return windows;
+    }
+
+    /**
+     * True when a non-void MONTHLY item of this student/group already pays for this window.
+     * Stored window starts are compared with a tolerance so a timezone change cannot cause a
+     * second invoice for the same month. Legacy items (no recorded window) count when they were
+     * created during the window's calendar month.
+     */
+    private static boolean isMonthlyWindowAlreadyBilled(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                                        @NonNull String studentId, @NonNull String groupId,
+                                                        long windowStartMs) {
+        ZoneId zone = ZoneId.systemDefault();
+        YearMonth wm = YearMonth.from(java.time.Instant.ofEpochMilli(windowStartMs + HALF_DAY_MS).atZone(zone).toLocalDate());
+        long monthStart = wm.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        long nextMonthStart = wm.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        long lo = windowStartMs - MONTHLY_WINDOW_TOLERANCE_MS;
+        long hi = windowStartMs + MONTHLY_WINDOW_TOLERANCE_MS;
+
+        try (Cursor bc = db.rawQuery(
+                "SELECT 1 FROM " + InvoiceItemEntry.TABLE_NAME + " ii " +
+                        " INNER JOIN " + InvoiceEntry.TABLE_NAME + " i " +
+                        " ON ii." + InvoiceItemEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID +
+                        " AND ii." + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID +
+                        " WHERE ii." + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? " +
+                        " AND i." + InvoiceEntry.COLUMN_STUDENT_ID + " = ? " +
+                        " AND ii." + InvoiceItemEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? " +
+                        " AND ii." + InvoiceItemEntry.COLUMN_BILLING_MODEL + " = 'MONTHLY' " +
+                        " AND i." + InvoiceEntry.COLUMN_IS_VOID + " = 0 " +
+                        " AND ((ii." + InvoiceItemEntry.COLUMN_PERIOD_START + " >= ? AND ii." + InvoiceItemEntry.COLUMN_PERIOD_START + " <= ?) " +
+                        "      OR (ii." + InvoiceItemEntry.COLUMN_PERIOD_START + " = 0 " +
+                        "          AND ((i." + InvoiceEntry.COLUMN_PERIOD_START + " >= ? AND i." + InvoiceEntry.COLUMN_PERIOD_START + " <= ?) " +
+                        "               OR (ii." + InvoiceItemEntry.COLUMN_CREATED_AT + " >= ? " +
+                        "                   AND ii." + InvoiceItemEntry.COLUMN_CREATED_AT + " < ?)))) " +
+                        " LIMIT 1",
+                new String[]{accountId, studentId, groupId,
+                        String.valueOf(lo), String.valueOf(hi),
+                        String.valueOf(lo), String.valueOf(hi),
+                        String.valueOf(monthStart), String.valueOf(nextMonthStart)})) {
+            return bc.moveToFirst();
+        }
+    }
+
+    /**
+     * Billing model and fee that applied to this group when the window STARTED:
+     * the fee-history row covering that date; for windows older than the first history row the
+     * earliest known row (never today's fee); otherwise the group's current model and fee.
+     */
+    @NonNull
+    private static String[] resolveMonthlyWindowBilling(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                                        @NonNull String groupId, long windowStartMs,
+                                                        @Nullable String currentModel, int currentFeeMinor) {
+        long endOfStartDay = windowStartMs + 86_399_999L;
+
+        try (Cursor hc = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
+                new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR},
+                ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " <= ? AND (" +
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL OR " +
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " >= ?)",
+                new String[]{accountId, groupId, String.valueOf(endOfStartDay), String.valueOf(windowStartMs)},
+                null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
+            if (hc.moveToFirst() && hc.getInt(1) > 0) {
+                return new String[]{hc.getString(0), String.valueOf(hc.getInt(1))};
+            }
+        }
+
+        try (Cursor ec = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
+                new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR,
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM},
+                ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?",
+                new String[]{accountId, groupId},
+                null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " ASC", "1")) {
+            if (ec.moveToFirst() && ec.getLong(2) > windowStartMs && ec.getInt(1) > 0) {
+                return new String[]{ec.getString(0), String.valueOf(ec.getInt(1))};
+            }
+        }
+
+        return new String[]{currentModel == null ? "MONTHLY" : currentModel, String.valueOf(Math.max(0, currentFeeMinor))};
+    }
+
     public static long[] computeAnniversaryBillingWindow(int anchorDay, @NonNull YearMonth targetMonth) {
         int clampedStartDay = Math.min(Math.max(1, anchorDay), targetMonth.lengthOfMonth());
         LocalDate startDate = targetMonth.atDay(clampedStartDay);
@@ -161,9 +292,6 @@ public class InvoiceRepository {
         long now = System.currentTimeMillis();
         YearMonth currentYm = YearMonth.now();
         ZoneId zone = ZoneId.systemDefault();
-        // Calendar-month bounds, used only to recognise legacy MONTHLY items that have no recorded period.
-        long monthStartMs = currentYm.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
-        long nextMonthStartMs = currentYm.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
         SimpleDateFormat dateFmt = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
 
         db.beginTransaction();
@@ -193,6 +321,8 @@ public class InvoiceRepository {
                 String invoiceId = UUID.randomUUID().toString();
                 long minPeriodStart = Long.MAX_VALUE;
                 long maxPeriodEnd = 0L;
+                long monthlyFirstWindowStart = Long.MAX_VALUE;
+                long monthlyLastWindowStart = 0L;
 
                 // 1. Evaluate MONTHLY schedule groups for this student
                 try (Cursor gc = db.rawQuery(
@@ -200,7 +330,9 @@ public class InvoiceRepository {
                                 ScheduleEntry.COLUMN_BILLING_MODEL + ", " +
                                 ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR + ", " +
                                 ScheduleEntry.COLUMN_ANCHOR_DAY + ", " +
-                                ScheduleEntry.COLUMN_START_TIME_MINUTES + " " +
+                                ScheduleEntry.COLUMN_START_TIME_MINUTES + ", " +
+                                "MIN(" + ScheduleEntry.COLUMN_START_DATE + "), " +
+                                "MAX(" + ScheduleEntry.COLUMN_END_DATE + ") " +
                                 "FROM " + ScheduleEntry.TABLE_NAME +
                                 " WHERE " + ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
                                 ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " +
@@ -214,66 +346,48 @@ public class InvoiceRepository {
                         int feeMinor = gc.getInt(2);
                         int anchorDay = gc.getInt(3);
                         int startMin = gc.getInt(4);
+                        long groupStart = gc.getLong(5);
+                        long groupEnd = gc.getLong(6);
 
                         if (feeMinor <= 0) {
                             String[] fallback = AttendanceRepository.resolveBillingForOccurrence(db, accountId, studentId, null, groupId, startMin, now);
                             model = fallback[0];
                             feeMinor = Integer.parseInt(fallback[1]);
                         }
-                        if (feeMinor <= 0) continue;
                         if (groupId == null) groupId = "GRP-" + studentId + "-" + startMin;
+                        if (!includeMonthly) continue;
 
-                        if (includeMonthly && "MONTHLY".equals(model)) {
-                            long[] window = computeAnniversaryBillingWindow(anchorDay, currentYm);
+                        // M2: every window that has already started and is not billed yet (oldest first),
+                        // inside the schedule's start/end dates; never a window that starts in the future.
+                        for (long[] window : computeDueMonthlyWindows(anchorDay, groupStart, groupEnd, now)) {
                             long pStart = window[0];
                             long pEnd = window[1];
 
-                            // A window is "already billed" when a non-void MONTHLY item of this group records
-                            // exactly this window. The window is stored on the ITEM, not derived from the invoice
-                            // header: the header's period_start is min() over ALL items, so as soon as per-class
-                            // items (or another monthly group) share the invoice it no longer equals this window
-                            // and the same month would be billed again on the next run.
-                            // Legacy items (period_start = 0) fall back to the old header comparison, or to
-                            // "generated during the current calendar month" which is exactly when this method bills.
-                            boolean alreadyBilled = false;
-                            try (Cursor bc = db.rawQuery(
-                                    "SELECT 1 FROM " + InvoiceItemEntry.TABLE_NAME + " ii " +
-                                            " INNER JOIN " + InvoiceEntry.TABLE_NAME + " i " +
-                                            " ON ii." + InvoiceItemEntry.COLUMN_INVOICE_ID + " = i." + InvoiceEntry.COLUMN_ID +
-                                            " AND ii." + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = i." + InvoiceEntry.COLUMN_ACCOUNT_ID +
-                                            " WHERE ii." + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? " +
-                                            " AND i." + InvoiceEntry.COLUMN_STUDENT_ID + " = ? " +
-                                            " AND ii." + InvoiceItemEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? " +
-                                            " AND ii." + InvoiceItemEntry.COLUMN_BILLING_MODEL + " = 'MONTHLY' " +
-                                            " AND i." + InvoiceEntry.COLUMN_IS_VOID + " = 0 " +
-                                            " AND (ii." + InvoiceItemEntry.COLUMN_PERIOD_START + " = ? " +
-                                            "      OR (ii." + InvoiceItemEntry.COLUMN_PERIOD_START + " = 0 " +
-                                            "          AND (i." + InvoiceEntry.COLUMN_PERIOD_START + " = ? " +
-                                            "               OR (ii." + InvoiceItemEntry.COLUMN_CREATED_AT + " >= ? " +
-                                            "                   AND ii." + InvoiceItemEntry.COLUMN_CREATED_AT + " < ?)))) " +
-                                            " LIMIT 1",
-                                    new String[]{accountId, studentId, groupId,
-                                            String.valueOf(pStart), String.valueOf(pStart),
-                                            String.valueOf(monthStartMs), String.valueOf(nextMonthStartMs)})) {
-                                if (bc.moveToFirst()) alreadyBilled = true;
-                            }
+                            if (isMonthlyWindowAlreadyBilled(db, accountId, studentId, groupId, pStart)) continue;
 
-                            if (!alreadyBilled) {
-                                minPeriodStart = Math.min(minPeriodStart, pStart);
-                                maxPeriodEnd = Math.max(maxPeriodEnd, pEnd);
-                                int h = (startMin / 60) % 12;
-                                if (h == 0) h = 12;
-                                String ampm = (startMin >= 720) ? "PM" : "AM";
-                                String desc = String.format(Locale.US, "Monthly Schedule (%02d:%02d %s) · %s – %s",
-                                        h, startMin % 60, ampm, dateFmt.format(new Date(pStart)), dateFmt.format(new Date(pEnd)));
+                            // The fee/model that applied when this window started (not necessarily today's).
+                            String[] windowBilling = resolveMonthlyWindowBilling(db, accountId, groupId, pStart, model, feeMinor);
+                            if (!"MONTHLY".equals(windowBilling[0])) continue;
+                            int windowFeeMinor = Integer.parseInt(windowBilling[1]);
+                            if (windowFeeMinor <= 0) continue;
 
-                                String monthlyItemId = UUID.randomUUID().toString();
-                                monthlyPeriodStartByItemId.put(monthlyItemId, pStart);
-                                pendingItems.add(new InvoiceItem(
-                                        monthlyItemId, accountId, invoiceId,
-                                        groupId, null, desc, "MONTHLY", 1, feeMinor, feeMinor, now
-                                ));
-                            }
+                            minPeriodStart = Math.min(minPeriodStart, pStart);
+                            maxPeriodEnd = Math.max(maxPeriodEnd, pEnd);
+                            monthlyFirstWindowStart = Math.min(monthlyFirstWindowStart, pStart);
+                            monthlyLastWindowStart = Math.max(monthlyLastWindowStart, pStart);
+
+                            int h = (startMin / 60) % 12;
+                            if (h == 0) h = 12;
+                            String ampm = (startMin >= 720) ? "PM" : "AM";
+                            String desc = String.format(Locale.US, "Monthly Schedule (%02d:%02d %s) · %s – %s",
+                                    h, startMin % 60, ampm, dateFmt.format(new Date(pStart)), dateFmt.format(new Date(pEnd)));
+
+                            String monthlyItemId = UUID.randomUUID().toString();
+                            monthlyPeriodStartByItemId.put(monthlyItemId, pStart);
+                            pendingItems.add(new InvoiceItem(
+                                    monthlyItemId, accountId, invoiceId,
+                                    groupId, null, desc, "MONTHLY", 1, windowFeeMinor, windowFeeMinor, now
+                            ));
                         }
                     }
                 }
@@ -349,7 +463,15 @@ public class InvoiceRepository {
                 if (subtotalMinor <= 0) continue;
 
                 String displayId = generateNextInvoiceId(accountId, db);
-                String billingPeriod = new SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(new Date(now));
+                SimpleDateFormat periodFmt = new SimpleDateFormat("MMM yyyy", Locale.getDefault());
+                String billingPeriod;
+                if (monthlyFirstWindowStart == Long.MAX_VALUE) {
+                    billingPeriod = periodFmt.format(new Date(now));
+                } else {
+                    String first = periodFmt.format(new Date(monthlyFirstWindowStart));
+                    String last = periodFmt.format(new Date(monthlyLastWindowStart));
+                    billingPeriod = first.equals(last) ? first : first + " – " + last;
+                }
                 long dueDate = now + (7L * 24L * 60L * 60L * 1000L);
 
                 ContentValues invVal = new ContentValues();
