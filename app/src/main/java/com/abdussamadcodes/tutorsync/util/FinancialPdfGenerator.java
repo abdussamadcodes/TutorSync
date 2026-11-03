@@ -40,6 +40,7 @@ import com.abdussamadcodes.tutorsync.database.TutorSyncContract.PaymentAllocatio
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.PaymentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.StudentEntry;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.TransactionEntry;
+import com.abdussamadcodes.tutorsync.model.FinancialTransaction;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
@@ -93,10 +94,14 @@ public final class FinancialPdfGenerator {
 
     @Nullable
     public static File generateInvoicePdf(@NonNull Context context, Object... args) {
-        String invoiceId = resolveInvoiceIdFromArgs(args);
+        // H3: everything is resolved inside the ACTIVE account only.
+        String accountId = resolveAccountId(context, args);
+        if (TextUtils.isEmpty(accountId)) return null;
+
+        String invoiceId = resolveInvoiceIdFromArgs(accountId, args);
         if (TextUtils.isEmpty(invoiceId)) return null;
 
-        InvoiceData data = loadInvoiceData(context, invoiceId);
+        InvoiceData data = loadInvoiceData(context, accountId, invoiceId);
         if (data == null) return null;
 
         File pdf = renderInvoiceDocument(context, data);
@@ -108,6 +113,9 @@ public final class FinancialPdfGenerator {
 
     @Nullable
     public static File generatePaymentReceiptPdf(@NonNull Context context, Object... args) {
+        String accountId = resolveAccountId(context, args);
+        if (TextUtils.isEmpty(accountId)) return null;
+
         String txnOrPaymentId = null;
         String invoiceIdHint = null;
         String studentIdHint = null;
@@ -127,13 +135,13 @@ public final class FinancialPdfGenerator {
                 }
             }
             if (TextUtils.isEmpty(txnOrPaymentId)) {
-                txnOrPaymentId = resolveTransactionIdFromStrings(args);
+                txnOrPaymentId = resolveTransactionIdFromStrings(accountId, args);
             }
         }
 
         if (TextUtils.isEmpty(txnOrPaymentId)) return null;
 
-        ReceiptData data = loadReceiptData(context, txnOrPaymentId, invoiceIdHint, studentIdHint);
+        ReceiptData data = loadReceiptData(context, accountId, txnOrPaymentId, invoiceIdHint, studentIdHint);
         if (data == null) return null;
 
         File pdf = renderReceiptDocument(context, data);
@@ -155,10 +163,13 @@ public final class FinancialPdfGenerator {
 
     @Nullable
     public static File generateStudentStatementPdf(@NonNull Context context, Object... args) {
-        String studentId = resolveStudentIdFromArgs(args);
+        String accountId = resolveAccountId(context, args);
+        if (TextUtils.isEmpty(accountId)) return null;
+
+        String studentId = resolveStudentIdFromArgs(accountId, args);
         if (TextUtils.isEmpty(studentId)) return null;
 
-        StatementData data = loadStudentStatementData(context, studentId);
+        StatementData data = loadStudentStatementData(context, accountId, studentId);
         if (data == null) return null;
 
         File pdf = renderStudentStatementDocument(context, data);
@@ -166,6 +177,32 @@ public final class FinancialPdfGenerator {
             savePdfToDownloads(context, pdf);
         }
         return pdf;
+    }
+
+    /**
+     * H3: the PDF is always built for the ACTIVE account. If any object passed in (invoice,
+     * student, transaction) belongs to a different account, nothing is generated.
+     */
+    @Nullable
+    private static String resolveAccountId(@NonNull Context context, @Nullable Object[] args) {
+        String active = new SessionManager(context).getActiveAccountId();
+        if (TextUtils.isEmpty(active)) return null;
+        if (args != null) {
+            for (Object arg : args) {
+                String owner = null;
+                if (arg instanceof Invoice) {
+                    owner = ((Invoice) arg).getAccountId();
+                } else if (arg instanceof Student) {
+                    owner = ((Student) arg).getAccountId();
+                } else if (arg instanceof FinancialTransaction) {
+                    owner = ((FinancialTransaction) arg).getAccountId();
+                }
+                if (!TextUtils.isEmpty(owner) && !active.equals(owner)) {
+                    return null;
+                }
+            }
+        }
+        return active;
     }
 
     @Nullable
@@ -316,7 +353,7 @@ public final class FinancialPdfGenerator {
     }
 
     @Nullable
-    private static String resolveInvoiceIdFromArgs(@Nullable Object[] args) {
+    private static String resolveInvoiceIdFromArgs(@NonNull String accountId, @Nullable Object[] args) {
         if (args == null) return null;
         for (Object arg : args) {
             if (arg instanceof Invoice) {
@@ -328,7 +365,7 @@ public final class FinancialPdfGenerator {
             for (Object arg : args) {
                 if (arg instanceof String) {
                     String candidate = ((String) arg).trim();
-                    if (!candidate.isEmpty() && querySingleInvoice(db, candidate) != null) {
+                    if (!candidate.isEmpty() && querySingleInvoice(db, accountId, candidate) != null) {
                         return candidate;
                     }
                 }
@@ -340,7 +377,7 @@ public final class FinancialPdfGenerator {
     }
 
     @Nullable
-    private static String resolveTransactionIdFromStrings(@Nullable Object[] args) {
+    private static String resolveTransactionIdFromStrings(@NonNull String accountId, @Nullable Object[] args) {
         if (args == null) return null;
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
@@ -349,12 +386,14 @@ public final class FinancialPdfGenerator {
                     String s = ((String) arg).trim();
                     if (s.isEmpty()) continue;
                     try (Cursor c = db.query(TransactionEntry.TABLE_NAME, new String[]{TransactionEntry.COLUMN_ID},
-                            TransactionEntry.COLUMN_ID + " = ? OR " + TransactionEntry.COLUMN_TXN_ID_DISPLAY + " = ?",
-                            new String[]{s, s}, null, null, null)) {
+                            TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND (" +
+                                    TransactionEntry.COLUMN_ID + " = ? OR " + TransactionEntry.COLUMN_TXN_ID_DISPLAY + " = ?)",
+                            new String[]{accountId, s, s}, null, null, null)) {
                         if (c != null && c.moveToFirst()) return c.getString(0);
                     }
                     try (Cursor c = db.query(PaymentEntry.TABLE_NAME, new String[]{PaymentEntry.COLUMN_ID},
-                            PaymentEntry.COLUMN_ID + " = ?", new String[]{s}, null, null, null)) {
+                            PaymentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + PaymentEntry.COLUMN_ID + " = ?",
+                            new String[]{accountId, s}, null, null, null)) {
                         if (c != null && c.moveToFirst()) return c.getString(0);
                     }
                 }
@@ -366,7 +405,7 @@ public final class FinancialPdfGenerator {
     }
 
     @Nullable
-    private static String resolveStudentIdFromArgs(@Nullable Object[] args) {
+    private static String resolveStudentIdFromArgs(@NonNull String accountId, @Nullable Object[] args) {
         if (args == null) return null;
         for (Object arg : args) {
             if (arg instanceof Student) {
@@ -380,8 +419,9 @@ public final class FinancialPdfGenerator {
                     String s = ((String) arg).trim();
                     if (s.isEmpty()) continue;
                     try (Cursor c = db.query(StudentEntry.TABLE_NAME, new String[]{StudentEntry.COLUMN_ID},
-                            StudentEntry.COLUMN_ID + " = ? OR " + StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " = ?",
-                            new String[]{s, s}, null, null, null)) {
+                            StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND (" +
+                                    StudentEntry.COLUMN_ID + " = ? OR " + StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " = ?)",
+                            new String[]{accountId, s, s}, null, null, null)) {
                         if (c != null && c.moveToFirst()) return c.getString(0);
                     }
                 }
@@ -1394,19 +1434,16 @@ public final class FinancialPdfGenerator {
     // =========================================================================================
 
     @Nullable
-    private static InvoiceData loadInvoiceData(@NonNull Context context, @NonNull String invoiceId) {
+    private static InvoiceData loadInvoiceData(@NonNull Context context, @NonNull String accountId, @NonNull String invoiceId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
-            InvoiceData data = querySingleInvoice(db, invoiceId);
+            InvoiceData data = querySingleInvoice(db, accountId, invoiceId);
             if (data == null) return null;
 
-            String accountId = !TextUtils.isEmpty(data.accountId)
-                    ? data.accountId
-                    : new SessionManager(context).getActiveAccountId();
             data.tutor = queryTutorProfile(db, accountId);
-            data.student = queryStudentProfile(db, data.studentId);
+            data.student = queryStudentProfile(db, accountId, data.studentId);
             data.items = queryInvoiceItemsWithClassDates(db, data);
-            data.payments = queryPaymentsForInvoice(db, data.id);
+            data.payments = queryPaymentsForInvoice(db, accountId, data.id);
             computePreviousDues(db, data);
 
             return data;
@@ -1416,12 +1453,14 @@ public final class FinancialPdfGenerator {
     }
 
     @Nullable
-    private static InvoiceData querySingleInvoice(@NonNull SQLiteDatabase db, @NonNull String invoiceId) {
+    private static InvoiceData querySingleInvoice(@NonNull SQLiteDatabase db, @NonNull String accountId, @NonNull String invoiceId) {
+        // Display numbers (e.g. TS-2026-000001) repeat across accounts, so the account is part of the key.
         try (Cursor c = db.query(
                 InvoiceEntry.TABLE_NAME,
                 null,
-                InvoiceEntry.COLUMN_ID + " = ? OR " + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " = ?",
-                new String[]{invoiceId, invoiceId},
+                InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND (" +
+                        InvoiceEntry.COLUMN_ID + " = ? OR " + InvoiceEntry.COLUMN_INVOICE_ID_DISPLAY + " = ?)",
+                new String[]{accountId, invoiceId, invoiceId},
                 null, null, null)) {
             if (c != null && c.moveToFirst()) {
                 return parseInvoiceCursor(c);
@@ -1478,16 +1517,16 @@ public final class FinancialPdfGenerator {
     }
 
     @NonNull
-    private static StudentProfile queryStudentProfile(@NonNull SQLiteDatabase db, @NonNull String studentId) {
+    private static StudentProfile queryStudentProfile(@NonNull SQLiteDatabase db, @NonNull String accountId, @NonNull String studentId) {
         StudentProfile s = new StudentProfile();
         s.name = "Unknown Student";
-        if (TextUtils.isEmpty(studentId)) return s;
+        if (TextUtils.isEmpty(studentId) || TextUtils.isEmpty(accountId)) return s;
 
         try (Cursor c = db.query(
                 StudentEntry.TABLE_NAME,
                 null,
-                StudentEntry.COLUMN_ID + " = ?",
-                new String[]{studentId},
+                StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, studentId},
                 null, null, null)) {
             if (c != null && c.moveToFirst()) {
                 s.id = getStringOrEmpty(c, StudentEntry.COLUMN_ID);
@@ -1503,14 +1542,24 @@ public final class FinancialPdfGenerator {
         return s;
     }
 
+    private static boolean studentExistsInAccount(@NonNull SQLiteDatabase db, @NonNull String accountId, @NonNull String studentId) {
+        try (Cursor c = db.query(StudentEntry.TABLE_NAME, new String[]{StudentEntry.COLUMN_ID},
+                StudentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + StudentEntry.COLUMN_ID + " = ?",
+                new String[]{accountId, studentId}, null, null, null, "1")) {
+            return c != null && c.moveToFirst();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     @NonNull
     private static List<LineItemRow> queryInvoiceItemsWithClassDates(@NonNull SQLiteDatabase db, @NonNull InvoiceData invoice) {
         List<LineItemRow> list = new ArrayList<>();
         try (Cursor c = db.query(
                 InvoiceItemEntry.TABLE_NAME,
                 null,
-                InvoiceItemEntry.COLUMN_INVOICE_ID + " = ?",
-                new String[]{invoice.id},
+                InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceItemEntry.COLUMN_INVOICE_ID + " = ?",
+                new String[]{invoice.accountId, invoice.id},
                 null, null,
                 InvoiceItemEntry.COLUMN_CREATED_AT + " ASC")) {
             if (c != null) {
@@ -1523,7 +1572,7 @@ public final class FinancialPdfGenerator {
                     row.quantity = Math.max(1, getIntOrZero(c, InvoiceItemEntry.COLUMN_QUANTITY));
                     row.unitPriceMinor = getIntOrZero(c, InvoiceItemEntry.COLUMN_UNIT_PRICE_MINOR);
                     row.amountMinor = getIntOrZero(c, InvoiceItemEntry.COLUMN_AMOUNT_MINOR);
-                    row.classDatesSummary = queryLinkedClassDates(db, row.id, row.occurrenceId);
+                    row.classDatesSummary = queryLinkedClassDates(db, invoice.accountId, row.id, row.occurrenceId);
                     list.add(row);
                 }
             }
@@ -1543,16 +1592,19 @@ public final class FinancialPdfGenerator {
     }
 
     @Nullable
-    private static String queryLinkedClassDates(@NonNull SQLiteDatabase db, @NonNull String invoiceItemId, @Nullable String singleOccurrenceId) {
+    private static String queryLinkedClassDates(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                                @NonNull String invoiceItemId, @Nullable String singleOccurrenceId) {
         List<String> dates = new ArrayList<>();
         SimpleDateFormat sdf = new SimpleDateFormat("dd MMM", Locale.getDefault());
 
         String sql = "SELECT o." + OccurrenceEntry.COLUMN_DATE +
                 " FROM " + AttendanceEntry.TABLE_NAME + " a" +
                 " INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID +
-                " WHERE a." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " = ?" +
+                " AND a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = o." + OccurrenceEntry.COLUMN_ACCOUNT_ID +
+                " WHERE a." + AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?" +
+                " AND a." + AttendanceEntry.COLUMN_BILLED_INVOICE_ITEM_ID + " = ?" +
                 " ORDER BY o." + OccurrenceEntry.COLUMN_DATE + " ASC";
-        try (Cursor c = db.rawQuery(sql, new String[]{invoiceItemId})) {
+        try (Cursor c = db.rawQuery(sql, new String[]{accountId, invoiceItemId})) {
             if (c != null) {
                 while (c.moveToNext()) {
                     long dt = c.getLong(0);
@@ -1563,7 +1615,8 @@ public final class FinancialPdfGenerator {
 
         if (dates.isEmpty() && !TextUtils.isEmpty(singleOccurrenceId)) {
             try (Cursor c = db.query(OccurrenceEntry.TABLE_NAME, new String[]{OccurrenceEntry.COLUMN_DATE},
-                    OccurrenceEntry.COLUMN_ID + " = ?", new String[]{singleOccurrenceId}, null, null, null)) {
+                    OccurrenceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + OccurrenceEntry.COLUMN_ID + " = ?",
+                    new String[]{accountId, singleOccurrenceId}, null, null, null)) {
                 if (c != null && c.moveToFirst()) {
                     long dt = c.getLong(0);
                     if (dt > 0) dates.add(sdf.format(new Date(dt)));
@@ -1576,7 +1629,7 @@ public final class FinancialPdfGenerator {
     }
 
     @NonNull
-    private static List<PaymentRow> queryPaymentsForInvoice(@NonNull SQLiteDatabase db, @NonNull String invoiceId) {
+    private static List<PaymentRow> queryPaymentsForInvoice(@NonNull SQLiteDatabase db, @NonNull String accountId, @NonNull String invoiceId) {
         List<PaymentRow> list = new ArrayList<>();
 
         String sql = "SELECT t." + TransactionEntry.COLUMN_ID + ", " +
@@ -1588,10 +1641,12 @@ public final class FinancialPdfGenerator {
                 "pa." + PaymentAllocationEntry.COLUMN_ALLOCATED_MINOR +
                 " FROM " + PaymentAllocationEntry.TABLE_NAME + " pa" +
                 " INNER JOIN " + TransactionEntry.TABLE_NAME + " t ON pa." + PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = t." + TransactionEntry.COLUMN_ID +
-                " WHERE pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0" +
+                " AND pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = t." + TransactionEntry.COLUMN_ACCOUNT_ID +
+                " WHERE pa." + PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ?" +
+                " AND pa." + PaymentAllocationEntry.COLUMN_INVOICE_ID + " = ? AND t." + TransactionEntry.COLUMN_IS_REVERSED + " = 0" +
                 " ORDER BY t." + TransactionEntry.COLUMN_TIMESTAMP + " ASC";
 
-        try (Cursor c = db.rawQuery(sql, new String[]{invoiceId})) {
+        try (Cursor c = db.rawQuery(sql, new String[]{accountId, invoiceId})) {
             if (c != null) {
                 while (c.moveToNext()) {
                     PaymentRow row = new PaymentRow();
@@ -1612,8 +1667,8 @@ public final class FinancialPdfGenerator {
             try (Cursor c = db.query(
                     PaymentEntry.TABLE_NAME,
                     null,
-                    PaymentEntry.COLUMN_INVOICE_ID + " = ?",
-                    new String[]{invoiceId},
+                    PaymentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + PaymentEntry.COLUMN_INVOICE_ID + " = ?",
+                    new String[]{accountId, invoiceId},
                     null, null,
                     PaymentEntry.COLUMN_PAYMENT_DATE + " ASC")) {
                 if (c != null) {
@@ -1674,6 +1729,7 @@ public final class FinancialPdfGenerator {
 
     @Nullable
     private static ReceiptData loadReceiptData(@NonNull Context context,
+                                               @NonNull String accountId,
                                                @NonNull String paymentOrTxnId,
                                                @Nullable String invoiceIdHint,
                                                @Nullable String studentIdHint) {
@@ -1682,18 +1738,19 @@ public final class FinancialPdfGenerator {
             ReceiptData r = new ReceiptData();
             String resolvedInvoiceId = invoiceIdHint;
             r.studentId = studentIdHint != null ? studentIdHint : "";
+            r.accountId = accountId;
 
             try (Cursor c = db.query(
                     TransactionEntry.TABLE_NAME,
                     null,
-                    TransactionEntry.COLUMN_ID + " = ? OR " + TransactionEntry.COLUMN_TXN_ID_DISPLAY + " = ?",
-                    new String[]{paymentOrTxnId, paymentOrTxnId},
+                    TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND (" +
+                            TransactionEntry.COLUMN_ID + " = ? OR " + TransactionEntry.COLUMN_TXN_ID_DISPLAY + " = ?)",
+                    new String[]{accountId, paymentOrTxnId, paymentOrTxnId},
                     null, null, null)) {
                 if (c != null && c.moveToFirst()) {
                     String internalId = getStringOrEmpty(c, TransactionEntry.COLUMN_ID);
                     String disp = getStringOrNull(c, TransactionEntry.COLUMN_TXN_ID_DISPLAY);
                     r.receiptDisplayId = !TextUtils.isEmpty(disp) ? disp : ("PAY-" + internalId.substring(0, Math.min(6, internalId.length())).toUpperCase(Locale.US));
-                    r.accountId = getStringOrEmpty(c, TransactionEntry.COLUMN_ACCOUNT_ID);
                     String dbStudentId = getStringOrEmpty(c, TransactionEntry.COLUMN_STUDENT_ID);
                     if (!TextUtils.isEmpty(dbStudentId)) r.studentId = dbStudentId;
                     r.type = getStringOrNull(c, TransactionEntry.COLUMN_TYPE);
@@ -1707,8 +1764,9 @@ public final class FinancialPdfGenerator {
                     if (TextUtils.isEmpty(resolvedInvoiceId)) {
                         try (Cursor ac = db.query(PaymentAllocationEntry.TABLE_NAME,
                                 new String[]{PaymentAllocationEntry.COLUMN_INVOICE_ID},
-                                PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ?",
-                                new String[]{internalId}, null, null, null)) {
+                                PaymentAllocationEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                                        PaymentAllocationEntry.COLUMN_TRANSACTION_ID + " = ?",
+                                new String[]{accountId, internalId}, null, null, null)) {
                             if (ac != null && ac.moveToFirst()) {
                                 resolvedInvoiceId = ac.getString(0);
                             }
@@ -1721,13 +1779,12 @@ public final class FinancialPdfGenerator {
                 try (Cursor c = db.query(
                         PaymentEntry.TABLE_NAME,
                         null,
-                        PaymentEntry.COLUMN_ID + " = ?",
-                        new String[]{paymentOrTxnId},
+                        PaymentEntry.COLUMN_ACCOUNT_ID + " = ? AND " + PaymentEntry.COLUMN_ID + " = ?",
+                        new String[]{accountId, paymentOrTxnId},
                         null, null, null)) {
                     if (c != null && c.moveToFirst()) {
                         String id = getStringOrEmpty(c, PaymentEntry.COLUMN_ID);
                         r.receiptDisplayId = id.startsWith("PAY-") ? id : ("PAY-" + id.substring(0, Math.min(6, id.length())).toUpperCase(Locale.US));
-                        r.accountId = getStringOrEmpty(c, PaymentEntry.COLUMN_ACCOUNT_ID);
                         resolvedInvoiceId = getStringOrEmpty(c, PaymentEntry.COLUMN_INVOICE_ID);
                         r.type = "PAYMENT";
                         r.amountMinor = getIntOrZero(c, PaymentEntry.COLUMN_AMOUNT);
@@ -1740,10 +1797,9 @@ public final class FinancialPdfGenerator {
             if (TextUtils.isEmpty(r.receiptDisplayId)) return null;
 
             if (!TextUtils.isEmpty(resolvedInvoiceId)) {
-                InvoiceData inv = querySingleInvoice(db, resolvedInvoiceId);
+                InvoiceData inv = querySingleInvoice(db, accountId, resolvedInvoiceId);
                 if (inv != null) {
                     if (TextUtils.isEmpty(r.studentId)) r.studentId = inv.studentId;
-                    if (TextUtils.isEmpty(r.accountId)) r.accountId = inv.accountId;
                     r.invoiceDisplayId = inv.invoiceDisplayId;
                     r.billingPeriod = inv.billingPeriod;
                     r.invoiceTotalMinor = inv.totalAmountMinor;
@@ -1751,11 +1807,8 @@ public final class FinancialPdfGenerator {
                 }
             }
 
-            if (TextUtils.isEmpty(r.accountId)) {
-                r.accountId = new SessionManager(context).getActiveAccountId();
-            }
-            r.tutor = queryTutorProfile(db, r.accountId);
-            r.student = queryStudentProfile(db, r.studentId);
+            r.tutor = queryTutorProfile(db, accountId);
+            r.student = queryStudentProfile(db, accountId, r.studentId);
             return r;
         } finally {
             DatabaseManager.getInstance().closeDatabase();
@@ -1763,24 +1816,26 @@ public final class FinancialPdfGenerator {
     }
 
     @Nullable
-    private static StatementData loadStudentStatementData(@NonNull Context context, @NonNull String studentId) {
+    private static StatementData loadStudentStatementData(@NonNull Context context, @NonNull String accountId, @NonNull String studentId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
+            // A statement is only produced for a student that really belongs to this account.
+            if (!studentExistsInAccount(db, accountId, studentId)) return null;
+
             StatementData data = new StatementData();
-            data.student = queryStudentProfile(db, studentId);
-            String accountId = new SessionManager(context).getActiveAccountId();
+            data.student = queryStudentProfile(db, accountId, studentId);
 
             try (Cursor c = db.query(
                     InvoiceEntry.TABLE_NAME,
                     null,
-                    InvoiceEntry.COLUMN_STUDENT_ID + " = ? AND " + InvoiceEntry.COLUMN_IS_VOID + " = 0",
-                    new String[]{studentId},
+                    InvoiceEntry.COLUMN_ACCOUNT_ID + " = ? AND " + InvoiceEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                            InvoiceEntry.COLUMN_IS_VOID + " = 0",
+                    new String[]{accountId, studentId},
                     null, null,
                     InvoiceEntry.COLUMN_CREATED_AT + " DESC")) {
                 if (c != null) {
                     while (c.moveToNext()) {
                         InvoiceData inv = parseInvoiceCursor(c);
-                        if (TextUtils.isEmpty(accountId)) accountId = inv.accountId;
                         data.totalBilledMinor += inv.totalAmountMinor;
                         data.totalPaidMinor += inv.paidAmountMinor;
                         data.invoices.add(inv);
@@ -1791,8 +1846,9 @@ public final class FinancialPdfGenerator {
             try (Cursor c = db.query(
                     TransactionEntry.TABLE_NAME,
                     null,
-                    TransactionEntry.COLUMN_STUDENT_ID + " = ? AND " + TransactionEntry.COLUMN_IS_REVERSED + " = 0",
-                    new String[]{studentId},
+                    TransactionEntry.COLUMN_ACCOUNT_ID + " = ? AND " + TransactionEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                            TransactionEntry.COLUMN_IS_REVERSED + " = 0",
+                    new String[]{accountId, studentId},
                     null, null,
                     TransactionEntry.COLUMN_TIMESTAMP + " DESC")) {
                 if (c != null) {
@@ -1842,7 +1898,7 @@ public final class FinancialPdfGenerator {
                 if (c != null) {
                     while (c.moveToNext()) {
                         InvoiceData inv = parseInvoiceCursor(c);
-                        inv.student = queryStudentProfile(db, inv.studentId);
+                        inv.student = queryStudentProfile(db, accountId, inv.studentId);
                         data.totalBilledMinor += inv.totalAmountMinor;
                         data.totalCollectedMinor += inv.paidAmountMinor;
                         data.invoices.add(inv);

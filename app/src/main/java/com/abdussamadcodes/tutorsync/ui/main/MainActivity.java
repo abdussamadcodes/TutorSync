@@ -39,7 +39,9 @@ import com.abdussamadcodes.tutorsync.security.BiometricAuthHelper;
 import com.abdussamadcodes.tutorsync.security.PasswordHasher;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
+import com.abdussamadcodes.tutorsync.repository.local.AttendanceRepository;
 import com.abdussamadcodes.tutorsync.ui.attendance.AttendanceBottomSheetFragment;
+import com.abdussamadcodes.tutorsync.ui.attendance.AttendanceHistoryActivity;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.finance.InvoiceListActivity;
 import com.abdussamadcodes.tutorsync.ui.onboarding.WelcomeActivity;
@@ -242,6 +244,7 @@ public class MainActivity extends BaseActivity {
                 final List<Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
                 final int totalRevenueMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
                 final List<ClassOccurrence> occurrences = occurrenceRepo.getOccurrencesForToday(accountId);
+                final int needsAttendanceCount = new AttendanceRepository().countClassesNeedingAttendance(accountId);
 
                 final List<OccurrenceGroup> groups = new ArrayList<>();
                 for (ClassOccurrence occ : occurrences) {
@@ -273,6 +276,16 @@ public class MainActivity extends BaseActivity {
                 AppExecutors.getInstance().mainThread().execute(() -> {
                     if (isFinishing() || isDestroyed() || binding == null) return;
                     if (!accountId.equals(sessionManager.getActiveAccountId())) return;
+
+                    // H2: attendance-history card shows how many recent classes still need attendance
+                    if (needsAttendanceCount > 0) {
+                        binding.tvAttendanceHistoryBadge.setVisibility(View.VISIBLE);
+                        binding.tvAttendanceHistoryBadge.setText(needsAttendanceCount > 99 ? "99+" : String.valueOf(needsAttendanceCount));
+                        binding.tvAttendanceHistorySub.setText(getString(R.string.dashboard_attendance_history_sub_pending, needsAttendanceCount));
+                    } else {
+                        binding.tvAttendanceHistoryBadge.setVisibility(View.GONE);
+                        binding.tvAttendanceHistorySub.setText(R.string.dashboard_attendance_history_sub);
+                    }
 
                     String accountName = (account != null && !account.getFullName().trim().isEmpty())
                             ? account.getFullName() : "Tutor";
@@ -379,6 +392,10 @@ public class MainActivity extends BaseActivity {
 
         binding.cardManageSchedules.setOnClickListener(v ->
                 startActivity(new Intent(this, ScheduleListActivity.class))
+        );
+
+        binding.cardAttendanceHistory.setOnClickListener(v ->
+                startActivity(new Intent(this, AttendanceHistoryActivity.class))
         );
 
         binding.cardRevenue.setOnClickListener(v ->

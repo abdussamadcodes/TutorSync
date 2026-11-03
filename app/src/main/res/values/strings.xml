@@ -316,4 +316,56 @@
     <string name="attendance_notes_hint">Private Tutor Notes</string>
     <string name="attendance_remove_class">Remove Class from Dashboard</string>
     <string name="attendance_save">Save Attendance</string>
+
+    <!-- H2: Attendance history & correction -->
+    <string name="attendance_edit_title">Correct attendance</string>
+    <string name="attendance_edit_subtitle">Update how this class was recorded</string>
+    <string name="attendance_edit_save">Update attendance</string>
+    <string name="attendance_locked_subtitle">Locked – this class is already on an invoice</string>
+    <string name="attendance_locked_toast">This class is already on an invoice, so its attendance can\'t be changed.</string>
+    <string name="attendance_makeup_recorded_toast">The makeup class already has attendance recorded. Correct that class first.</string>
+    <string name="attendance_save_failed">Could not save attendance. Please try again.</string>
+    <string name="attendance_update_saved">Attendance updated</string>
+    <string name="attendance_remove_blocked">This class already has attendance recorded, so it can\'t be removed.</string>
+
+    <string name="attendance_history_title">Attendance history</string>
+    <string name="attendance_history_stat_needs">Need recording</string>
+    <string name="attendance_history_stat_recorded">Recorded</string>
+    <string name="attendance_history_stat_invoiced">Invoiced</string>
+    <string name="attendance_history_load_failed">Could not load classes. Please try again.</string>
+    <string name="attendance_filter_all">All</string>
+    <string name="attendance_filter_needs">Needs recording</string>
+    <string name="attendance_filter_recorded">Recorded</string>
+    <string name="attendance_range_7">Last 7 days</string>
+    <string name="attendance_range_30">Last 30 days</string>
+    <string name="attendance_range_90">Last 90 days</string>
+    <string name="attendance_day_today">Today</string>
+    <string name="attendance_day_yesterday">Yesterday</string>
+    <string name="attendance_header_meta_pending">%1$d to record</string>
+    <string name="attendance_header_meta_classes">%1$d classes</string>
+    <string name="attendance_duration_min">%1$d min</string>
+    <string name="attendance_label_needs">Needs recording</string>
+    <string name="attendance_label_present">Present</string>
+    <string name="attendance_label_student_absent">Student absent</string>
+    <string name="attendance_label_tutor_absent">Tutor absent</string>
+    <string name="attendance_label_cancelled_student">Cancelled by student</string>
+    <string name="attendance_label_cancelled_tutor">Cancelled by tutor</string>
+    <string name="attendance_label_rescheduled">Rescheduled</string>
+    <string name="attendance_billing_charged">Charged %1$s</string>
+    <string name="attendance_billing_charged_plain">Charged</string>
+    <string name="attendance_billing_monthly">Monthly plan</string>
+    <string name="attendance_billing_waived">Not charged</string>
+    <string name="attendance_pill_invoiced">Invoiced</string>
+    <string name="attendance_pill_makeup_scheduled">Makeup scheduled</string>
+    <string name="attendance_pill_makeup_class">Makeup class</string>
+    <string name="attendance_action_record">Record attendance</string>
+    <string name="attendance_action_correct">Correct</string>
+    <string name="attendance_action_locked">Locked – view</string>
+    <string name="attendance_empty_title">No classes here</string>
+    <string name="attendance_empty_subtitle">There are no classes in this period yet.</string>
+    <string name="attendance_empty_caught_up_title">You\'re all caught up</string>
+    <string name="attendance_empty_caught_up_subtitle">Every recent class has its attendance recorded.</string>
+    <string name="dashboard_attendance_history_title">Attendance history</string>
+    <string name="dashboard_attendance_history_sub">Review or correct past classes</string>
+    <string name="dashboard_attendance_history_sub_pending">%1$d classes need attendance</string>
 </resources>

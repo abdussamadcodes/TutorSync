@@ -22,20 +22,6 @@ public class EnrollmentRepository {
         return UUID.nameUUIDFromBytes(("ENR:" + studentId + ":" + subjectId).getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    @Nullable
-    private String resolveAccountIdForStudent(@NonNull SQLiteDatabase db, @NonNull String studentId) {
-        try (Cursor c = db.query(StudentEntry.TABLE_NAME,
-                new String[]{StudentEntry.COLUMN_ACCOUNT_ID},
-                StudentEntry.COLUMN_ID + " = ?",
-                new String[]{studentId}, null, null,
-                StudentEntry.COLUMN_IS_DELETED + " ASC, " + StudentEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
-            if (c.moveToFirst()) {
-                return c.getString(0);
-            }
-        }
-        return null;
-    }
-
     public boolean enrollStudentInSubject(@NonNull String accountId, @NonNull String studentId, @NonNull String subjectId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
@@ -57,18 +43,6 @@ public class EnrollmentRepository {
         }
     }
 
-    public boolean enrollStudentInSubject(@NonNull String studentId, @NonNull String subjectId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String accountId;
-        try {
-            accountId = resolveAccountIdForStudent(db, studentId);
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        if (accountId == null || accountId.isEmpty()) return false;
-        return enrollStudentInSubject(accountId, studentId, subjectId);
-    }
-
     public boolean unenrollStudentFromSubject(@NonNull String accountId, @NonNull String studentId, @NonNull String subjectId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         try {
@@ -80,18 +54,6 @@ public class EnrollmentRepository {
         } finally {
             DatabaseManager.getInstance().closeDatabase();
         }
-    }
-
-    public boolean unenrollStudentFromSubject(@NonNull String studentId, @NonNull String subjectId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String accountId;
-        try {
-            accountId = resolveAccountIdForStudent(db, studentId);
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        if (accountId == null || accountId.isEmpty()) return false;
-        return unenrollStudentFromSubject(accountId, studentId, subjectId);
     }
 
     @NonNull
@@ -117,19 +79,6 @@ public class EnrollmentRepository {
             DatabaseManager.getInstance().closeDatabase();
         }
         return subjectIds;
-    }
-
-    @NonNull
-    public List<String> getEnrolledSubjectIdsForStudent(@NonNull String studentId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String accountId;
-        try {
-            accountId = resolveAccountIdForStudent(db, studentId);
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        if (accountId == null || accountId.isEmpty()) return new ArrayList<>();
-        return getEnrolledSubjectIdsForStudent(accountId, studentId);
     }
 
     public boolean syncStudentEnrollments(@NonNull String accountId, @NonNull String studentId, @NonNull Set<String> targetSubjectIds) {
@@ -181,15 +130,4 @@ public class EnrollmentRepository {
         }
     }
 
-    public boolean syncStudentEnrollments(@NonNull String studentId, @NonNull Set<String> targetSubjectIds) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String accountId;
-        try {
-            accountId = resolveAccountIdForStudent(db, studentId);
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        if (accountId == null || accountId.isEmpty()) return false;
-        return syncStudentEnrollments(accountId, studentId, targetSubjectIds);
-    }
 }

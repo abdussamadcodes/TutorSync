@@ -30,6 +30,10 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity
+            android:name=".ui.attendance.AttendanceHistoryActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".ui.student.StudentListActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />

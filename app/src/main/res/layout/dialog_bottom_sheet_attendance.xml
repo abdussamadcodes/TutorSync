@@ -55,6 +55,7 @@
                 android:orientation="vertical">
 
                 <TextView
+                    android:id="@+id/tvAttendanceTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/attendance_title"
@@ -63,6 +64,7 @@
                     android:textStyle="bold" />
 
                 <TextView
+                    android:id="@+id/tvAttendanceSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"

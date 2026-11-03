@@ -244,29 +244,6 @@ public class SubjectRepository {
         }
     }
 
-    public boolean deleteSubject(@NonNull String subjectId) {
-        if (subjectId.trim().isEmpty()) {
-            return false;
-        }
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String accountId = null;
-        try (Cursor c = db.query(SubjectEntry.TABLE_NAME,
-                new String[]{SubjectEntry.COLUMN_ACCOUNT_ID},
-                SubjectEntry.COLUMN_ID + " = ? AND " + SubjectEntry.COLUMN_IS_DELETED + " = 0",
-                new String[]{subjectId}, null, null,
-                SubjectEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
-            if (c.moveToFirst()) {
-                accountId = c.getString(0);
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        if (accountId == null || accountId.trim().isEmpty()) {
-            return false;
-        }
-        return deleteSubject(accountId, subjectId);
-    }
-
     @NonNull
     public List<Subject> getActiveSubjectsForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();

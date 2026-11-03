@@ -52,21 +52,6 @@ public class PaymentRepository {
     }
 
     @NonNull
-    public List<Payment> getPaymentsForInvoice(@NonNull String invoiceId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        List<Payment> payments = new ArrayList<>();
-        try (Cursor cursor = db.query(PaymentEntry.TABLE_NAME, null,
-                PaymentEntry.COLUMN_INVOICE_ID + " = ?", new String[]{invoiceId}, null, null, PaymentEntry.COLUMN_PAYMENT_DATE + " DESC")) {
-            while (cursor.moveToNext()) {
-                payments.add(mapCursorToPayment(cursor));
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        return payments;
-    }
-
-    @NonNull
     private Payment mapCursorToPayment(@NonNull Cursor cursor) {
         long updatedAt = 0L;
         int lastModIdx = cursor.getColumnIndex(PaymentEntry.COLUMN_LAST_MODIFIED);

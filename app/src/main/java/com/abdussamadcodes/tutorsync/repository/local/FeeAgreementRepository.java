@@ -76,21 +76,6 @@ public class FeeAgreementRepository {
         return null;
     }
 
-    @Nullable
-    public FeeAgreement getAgreementForStudent(@NonNull String studentId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try (Cursor cursor = db.query(FeeAgreementEntry.TABLE_NAME, null,
-                FeeAgreementEntry.COLUMN_STUDENT_ID + " = ?", new String[]{studentId},
-                null, null, FeeAgreementEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
-            if (cursor.moveToFirst()) {
-                return mapCursorToAgreement(cursor);
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        return null;
-    }
-
     @NonNull
     private FeeAgreement mapCursorToAgreement(@NonNull Cursor cursor) {
         long lastMod = 0L;

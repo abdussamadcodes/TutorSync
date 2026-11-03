@@ -888,21 +888,6 @@ public class ScheduleRepository {
         }
     }
 
-    public boolean deleteScheduleSafely(@NonNull String scheduleId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String accountId = null;
-        try (Cursor c = db.query(ScheduleEntry.TABLE_NAME, new String[]{ScheduleEntry.COLUMN_ACCOUNT_ID},
-                ScheduleEntry.COLUMN_ID + " = ?", new String[]{scheduleId}, null, null, null)) {
-            if (c.moveToFirst()) {
-                accountId = c.getString(0);
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        if (accountId == null || accountId.isEmpty()) return false;
-        return deleteScheduleSafely(accountId, scheduleId);
-    }
-
     @NonNull
     public List<RecurringSchedule> getSchedulesForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();

@@ -155,21 +155,6 @@ public class StudentRepository {
         return null;
     }
 
-    @Nullable
-    public Student getStudentById(@NonNull String studentId) {
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        try (Cursor cursor = db.query(StudentEntry.TABLE_NAME, null,
-                StudentEntry.COLUMN_ID + " = ?", new String[]{studentId}, null, null,
-                StudentEntry.COLUMN_IS_DELETED + " ASC, " + StudentEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
-            if (cursor.moveToFirst()) {
-                return mapCursorToStudent(cursor);
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        return null;
-    }
-
     public boolean hasFinancialRecords(@NonNull String accountId, @NonNull String studentId) {
         if (accountId.trim().isEmpty() || studentId.trim().isEmpty()) {
             return false;
@@ -293,29 +278,6 @@ public class StudentRepository {
             db.endTransaction();
             DatabaseManager.getInstance().closeDatabase();
         }
-    }
-
-    public boolean deleteStudent(@NonNull String studentId) {
-        if (studentId.trim().isEmpty()) {
-            return false;
-        }
-        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-        String accountId = null;
-        try (Cursor c = db.query(StudentEntry.TABLE_NAME,
-                new String[]{StudentEntry.COLUMN_ACCOUNT_ID},
-                StudentEntry.COLUMN_ID + " = ? AND " + StudentEntry.COLUMN_IS_DELETED + " = 0",
-                new String[]{studentId}, null, null,
-                StudentEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
-            if (c.moveToFirst()) {
-                accountId = c.getString(0);
-            }
-        } finally {
-            DatabaseManager.getInstance().closeDatabase();
-        }
-        if (accountId == null || accountId.trim().isEmpty()) {
-            return false;
-        }
-        return deleteStudent(accountId, studentId);
     }
 
     @NonNull
