@@ -9,6 +9,7 @@ import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.*;
 import com.abdussamadcodes.tutorsync.model.RecurringSchedule;
+import com.abdussamadcodes.tutorsync.util.MoneyInput;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashSet;
@@ -137,6 +138,8 @@ public class ScheduleRepository {
             @NonNull String newBillingModel,
             int newFeeAmountMinor,
             int anchorDay) {
+        if (newFeeAmountMinor <= 0 || newFeeAmountMinor > MoneyInput.MAX_FEE_MINOR) return false;
+        if (!RecurringSchedule.MODEL_MONTHLY.equals(newBillingModel) && !RecurringSchedule.MODEL_PER_CLASS.equals(newBillingModel)) return false;
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         db.beginTransaction();
         try {
@@ -314,6 +317,11 @@ public class ScheduleRepository {
         if (accountId.trim().isEmpty()) return false;
         if (studentIds.isEmpty() || subjectIds.isEmpty()) return false;
         if (startTimeMinutes < 0 || startTimeMinutes >= 1440 || durationMinutes <= 0) return false;
+        // M5: a real fee is required (> 0, within the allowed maximum) and the model must be known
+        if (feeMinor <= 0 || feeMinor > MoneyInput.MAX_FEE_MINOR) return false;
+        if (!RecurringSchedule.MODEL_MONTHLY.equals(billingModel) && !RecurringSchedule.MODEL_PER_CLASS.equals(billingModel)) return false;
+        // M5: a one-off class can only be charged per class (monthly billing needs a recurring schedule)
+        if (!isRecurring) billingModel = RecurringSchedule.MODEL_PER_CLASS;
         if (isRecurring) {
             if (selectedDays == null || selectedDays.isEmpty()) return false;
         } else {

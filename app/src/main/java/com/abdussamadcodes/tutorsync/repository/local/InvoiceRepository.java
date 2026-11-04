@@ -456,11 +456,13 @@ public class InvoiceRepository {
 
                 if (pendingItems.isEmpty()) continue;
 
-                int subtotalMinor = 0;
+                // M5: add up in 64 bits; an invoice that would not fit in an int is never created
+                long subtotalLong = 0L;
                 for (InvoiceItem item : pendingItems) {
-                    subtotalMinor += item.getAmountMinor();
+                    subtotalLong += item.getAmountMinor();
                 }
-                if (subtotalMinor <= 0) continue;
+                if (subtotalLong <= 0L || subtotalLong > Integer.MAX_VALUE) continue;
+                int subtotalMinor = (int) subtotalLong;
 
                 String displayId = generateNextInvoiceId(accountId, db);
                 SimpleDateFormat periodFmt = new SimpleDateFormat("MMM yyyy", Locale.getDefault());

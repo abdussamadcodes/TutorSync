@@ -18,6 +18,7 @@ import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.model.Account;
 import com.abdussamadcodes.tutorsync.model.FinancialTransaction;
+import com.abdussamadcodes.tutorsync.util.MoneyInput;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.InvoiceItem;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -136,7 +137,13 @@ public class InvoiceDetailActivity extends BaseActivity {
 
         toolbar.setTitle(currentInvoice.getInvoiceIdDisplay());
         addHeader(currentInvoice.getInvoiceIdDisplay() + " · " + currentInvoice.getStatus());
-        addLine(currentStudent != null ? currentStudent.getFormattedDisplayName() : getString(R.string.unknown_student));
+        if (currentStudent == null) {
+            addLine(getString(R.string.unknown_student));
+        } else if (currentStudent.isDeleted()) {
+            addLine(currentStudent.getFormattedDisplayName() + "  [" + getString(R.string.student_deleted_label) + "]");
+        } else {
+            addLine(currentStudent.getFormattedDisplayName());
+        }
         addLine(getString(R.string.invoice_card_dates_fmt,
                 currentInvoice.getBillingPeriod(),
                 df.format(new Date(currentInvoice.getIssueDate())),
@@ -220,8 +227,7 @@ public class InvoiceDetailActivity extends BaseActivity {
                 .setView(layout)
                 .setPositiveButton(getString(R.string.action_save), (d, w) -> {
                     try {
-                        double bdt = Double.parseDouble(etAmount.getText().toString().trim());
-                        int amountMinor = (int) Math.round(bdt * 100);
+                        int amountMinor = MoneyInput.parse(etAmount.getText().toString(), MoneyInput.MAX_PAYMENT_MINOR);
                         if (amountMinor <= 0 || amountMinor > currentInvoice.getOutstandingBalance()) {
                             showMessage(rootContent, getString(R.string.invoice_err_invalid_amount));
                             return;

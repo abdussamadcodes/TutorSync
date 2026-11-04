@@ -17,6 +17,7 @@ import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivityScheduleFormBinding;
 import com.abdussamadcodes.tutorsync.model.FeeAgreement;
 import com.abdussamadcodes.tutorsync.model.RecurringSchedule;
+import com.abdussamadcodes.tutorsync.util.MoneyInput;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.model.Subject;
 import com.abdussamadcodes.tutorsync.repository.local.EnrollmentRepository;
@@ -94,7 +95,7 @@ public class ScheduleFormActivity extends BaseActivity {
                 binding.toggleGroupBillingModel.check(R.id.btnBillingMonthly);
             }
             if (editFeeMinor > 0) {
-                binding.etScheduleFee.setText(String.format(Locale.US, "%.0f", editFeeMinor / 100.0));
+                binding.etScheduleFee.setText(MoneyInput.formatForInput(editFeeMinor));
             }
         }
 
@@ -112,7 +113,17 @@ public class ScheduleFormActivity extends BaseActivity {
         binding.switchRecurring.setOnCheckedChangeListener((buttonView, isChecked) -> {
             binding.layoutRecurringOptions.setVisibility(isChecked ? View.VISIBLE : View.GONE);
             binding.layoutOneOffOptions.setVisibility(isChecked ? View.GONE : View.VISIBLE);
+            applyBillingModelRule(isChecked);
         });
+        applyBillingModelRule(binding.switchRecurring.isChecked());
+    }
+
+    /** M5: one-off classes are always billed per class, so "Monthly" is not selectable for them. */
+    private void applyBillingModelRule(boolean isRecurring) {
+        binding.btnBillingMonthly.setEnabled(isRecurring);
+        if (!isRecurring) {
+            binding.toggleGroupBillingModel.check(R.id.btnBillingPerClass);
+        }
     }
 
     private void setupPickers() {
@@ -159,7 +170,7 @@ public class ScheduleFormActivity extends BaseActivity {
                 if (fa != null && fa.getAmountMinorUnits() > 0) {
                     editFeeMinor = fa.getAmountMinorUnits();
                     editBillingModel = fa.getFeeType();
-                    binding.etScheduleFee.setText(String.format(Locale.US, "%.0f", editFeeMinor / 100.0));
+                    binding.etScheduleFee.setText(MoneyInput.formatForInput(editFeeMinor));
                     if (RecurringSchedule.MODEL_PER_CLASS.equals(editBillingModel)) {
                         binding.toggleGroupBillingModel.check(R.id.btnBillingPerClass);
                     } else {
@@ -269,7 +280,7 @@ public class ScheduleFormActivity extends BaseActivity {
         if (currentFeeText.isEmpty()) {
             FeeAgreement fa = new FeeAgreementRepository().getAgreementForStudent(accountId, studentId);
             if (fa != null && fa.getAmountMinorUnits() > 0) {
-                binding.etScheduleFee.setText(String.format(Locale.US, "%.0f", fa.getAmountMinorUnits() / 100.0));
+                binding.etScheduleFee.setText(MoneyInput.formatForInput(fa.getAmountMinorUnits()));
                 if (FeeAgreement.TYPE_PER_CLASS.equals(fa.getFeeType())) {
                     binding.toggleGroupBillingModel.check(R.id.btnBillingPerClass);
                 } else {
@@ -512,19 +523,18 @@ public class ScheduleFormActivity extends BaseActivity {
         }
 
         String feeStr = binding.etScheduleFee.getText() != null ? binding.etScheduleFee.getText().toString().trim() : "";
-        int feeMinor = 0;
-        if (!feeStr.isEmpty()) {
-            try {
-                double parsedFee = Double.parseDouble(feeStr);
-                if (parsedFee < 0) {
-                    binding.etScheduleFee.setError("Invalid fee amount");
-                    return;
-                }
-                feeMinor = (int) Math.round(parsedFee * 100);
-            } catch (NumberFormatException e) {
-                binding.etScheduleFee.setError("Invalid fee amount");
-                return;
-            }
+        // M5: the fee must be a real amount: > 0, at most 2 decimals, not absurdly large.
+        int feeMinor = MoneyInput.parse(feeStr, MoneyInput.MAX_FEE_MINOR);
+        if (feeMinor == MoneyInput.TOO_LARGE) {
+            binding.etScheduleFee.setError(getString(R.string.fee_err_too_large,
+                    MoneyInput.formatDisplay(MoneyInput.MAX_FEE_MINOR)));
+            binding.etScheduleFee.requestFocus();
+            return;
+        }
+        if (feeMinor <= 0) {
+            binding.etScheduleFee.setError(getString(feeStr.isEmpty() ? R.string.fee_err_required : R.string.fee_err_invalid));
+            binding.etScheduleFee.requestFocus();
+            return;
         }
 
         String durationStr = binding.etDuration.getText() != null ? binding.etDuration.getText().toString().trim() : "";
@@ -566,6 +576,10 @@ public class ScheduleFormActivity extends BaseActivity {
 
         String billingModel = binding.toggleGroupBillingModel.getCheckedButtonId() == R.id.btnBillingPerClass
                 ? RecurringSchedule.MODEL_PER_CLASS : RecurringSchedule.MODEL_MONTHLY;
+        // M5: a one-off class has no monthly schedule to bill, so it is always charged per class.
+        if (!isRecurring) {
+            billingModel = RecurringSchedule.MODEL_PER_CLASS;
+        }
 
         int defaultAnchorDay = isEditMode ? editAnchorDay : Calendar.getInstance().get(Calendar.DAY_OF_MONTH);
 

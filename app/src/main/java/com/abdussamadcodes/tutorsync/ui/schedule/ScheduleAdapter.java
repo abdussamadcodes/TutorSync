@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.abdussamadcodes.tutorsync.R;
+import com.abdussamadcodes.tutorsync.util.MoneyInput;
 import com.abdussamadcodes.tutorsync.databinding.ItemScheduleBinding;
 import com.abdussamadcodes.tutorsync.model.ScheduleGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -95,7 +96,7 @@ public class ScheduleAdapter extends RecyclerView.Adapter<ScheduleAdapter.ViewHo
             String modelLabel = "PER_CLASS".equals(group.getBillingModel())
                     ? context.getString(R.string.fee_type_per_class)
                     : context.getString(R.string.fee_type_monthly);
-            String feeLabel = String.format(Locale.getDefault(), " · ৳%.0f (%s)", group.getFeeAmountMinor() / 100.0, modelLabel);
+            String feeLabel = " · " + MoneyInput.formatDisplay(group.getFeeAmountMinor()) + " (" + modelLabel + ")";
             binding.tvSubjectName.setText(subjectName + feeLabel);
 
             int hours = group.getStartTimeMinutes() / 60;

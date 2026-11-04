@@ -389,4 +389,10 @@
     <string name="refund_err_not_eligible">শুধু বাতিল না হওয়া পেমেন্ট রিফান্ড করা যায়।</string>
     <string name="refund_err_not_found">বর্তমান অ্যাকাউন্টে এই পেমেন্টটি পাওয়া যায়নি।</string>
     <string name="refund_err_failed">রিফান্ড সংরক্ষণ করা যায়নি এবং কিছুই পরিবর্তন হয়নি। আবার চেষ্টা করুন।</string>
+    <string name="student_deleted_label">মুছে ফেলা শিক্ষার্থী</string>
+
+    <!-- M5: fee validation -->
+    <string name="fee_err_required">ফির পরিমাণ লিখুন।</string>
+    <string name="fee_err_invalid">শূন্যের চেয়ে বড় সর্বোচ্চ ২ দশমিক ঘরের ফি দিন (যেমন ১৫০০ বা ১৫০০.৫০)।</string>
+    <string name="fee_err_too_large">ফি %1$s এর বেশি হতে পারবে না।</string>
 </resources>

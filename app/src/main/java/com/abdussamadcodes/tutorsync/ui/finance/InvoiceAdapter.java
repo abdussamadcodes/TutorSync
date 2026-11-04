@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -76,13 +77,16 @@ public class InvoiceAdapter extends RecyclerView.Adapter<InvoiceAdapter.ViewHold
             binding.tvInvoiceId.setText(invoice.getInvoiceIdDisplay());
 
             String studentName = context.getString(R.string.unknown_student);
+            boolean studentDeleted = false;
             for (Student s : students) {
                 if (s.getId().equals(invoice.getStudentId())) {
                     studentName = s.getFormattedDisplayName();
+                    studentDeleted = s.isDeleted();
                     break;
                 }
             }
             binding.tvStudentName.setText(studentName);
+            binding.tvDeletedStudentBadge.setVisibility(studentDeleted ? View.VISIBLE : View.GONE);
 
             String datesInfo = context.getString(R.string.invoice_card_dates_fmt,
                     invoice.getBillingPeriod(),

@@ -281,6 +281,23 @@ public class StudentRepository {
     }
 
     @NonNull
+    public List<Student> getAllStudentsForAccount(@NonNull String accountId) {
+        // Includes deleted students. Used only to show names on old invoices, never for pickers.
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        List<Student> students = new ArrayList<>();
+        try (Cursor cursor = db.query(StudentEntry.TABLE_NAME, null,
+                StudentEntry.COLUMN_ACCOUNT_ID + " = ?",
+                new String[]{accountId}, null, null, StudentEntry.COLUMN_STUDENT_ID_DISPLAY + " ASC")) {
+            while (cursor.moveToNext()) {
+                students.add(mapCursorToStudent(cursor));
+            }
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+        return students;
+    }
+
+    @NonNull
     public List<Student> getActiveStudentsForAccount(@NonNull String accountId) {
         SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
         List<Student> students = new ArrayList<>();
@@ -311,6 +328,8 @@ public class StudentRepository {
                 lastMod = cursor.getLong(upIdx);
             }
         }
+        int deletedIdx = cursor.getColumnIndex(StudentEntry.COLUMN_IS_DELETED);
+        boolean deleted = deletedIdx != -1 && !cursor.isNull(deletedIdx) && cursor.getInt(deletedIdx) == 1;
         return new Student(
                 cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ID)),
                 cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ACCOUNT_ID)),
@@ -322,7 +341,8 @@ public class StudentRepository {
                 cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_GUARDIAN_PHONE)),
                 cursor.getString(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_ADDRESS)),
                 cursor.getInt(cursor.getColumnIndexOrThrow(StudentEntry.COLUMN_IS_ACTIVE)) == 1,
-                lastMod
+                lastMod,
+                deleted
         );
     }
 }

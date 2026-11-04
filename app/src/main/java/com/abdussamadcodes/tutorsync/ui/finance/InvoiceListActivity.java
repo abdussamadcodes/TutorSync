@@ -154,7 +154,7 @@ public class InvoiceListActivity extends BaseActivity {
                 final int totalOutstandingMinor = outstandingSum;
                 final int overdueCount = overdueCounter;
                 final int totalReceivedMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
-                final List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
+                final List<Student> students = studentRepo.getAllStudentsForAccount(accountId);
 
                 AppExecutors.getInstance().mainThread().execute(() -> {
                     if (isFinishing() || isDestroyed() || binding == null) return;

@@ -16,6 +16,7 @@ public class Student {
     private final String address;
     private final boolean isActive;
     private final long updatedAt;
+    private final boolean isDeleted;
 
     public Student(@NonNull String id, @NonNull String accountId, @Nullable String studentIdDisplay, @NonNull String name,
                    @Nullable String grade, @Nullable String school, @Nullable String guardianName,
@@ -26,6 +27,13 @@ public class Student {
     public Student(@NonNull String id, @NonNull String accountId, @Nullable String studentIdDisplay, @NonNull String name,
                    @Nullable String grade, @Nullable String school, @Nullable String guardianName,
                    @Nullable String guardianPhone, @Nullable String address, boolean isActive, long updatedAt) {
+        this(id, accountId, studentIdDisplay, name, grade, school, guardianName, guardianPhone, address, isActive, updatedAt, false);
+    }
+
+    public Student(@NonNull String id, @NonNull String accountId, @Nullable String studentIdDisplay, @NonNull String name,
+                   @Nullable String grade, @Nullable String school, @Nullable String guardianName,
+                   @Nullable String guardianPhone, @Nullable String address, boolean isActive, long updatedAt,
+                   boolean isDeleted) {
         this.id = TutorSyncContract.ensureValidUuid(id);
         this.accountId = accountId;
         this.studentIdDisplay = studentIdDisplay;
@@ -37,6 +45,7 @@ public class Student {
         this.address = address;
         this.isActive = isActive;
         this.updatedAt = updatedAt > 0 ? updatedAt : System.currentTimeMillis();
+        this.isDeleted = isDeleted;
     }
 
     @NonNull public String getId() { return id; }
@@ -49,6 +58,8 @@ public class Student {
     @Nullable public String getGuardianPhone() { return guardianPhone; }
     @Nullable public String getAddress() { return address; }
     public boolean isActive() { return isActive; }
+    /** True for a student that was deleted (kept in the database so old invoices stay readable). */
+    public boolean isDeleted() { return isDeleted; }
     public long getUpdatedAt() { return updatedAt; }
     public long getLastModified() { return updatedAt; }
 

@@ -26,6 +26,7 @@ import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.model.Account;
 import com.abdussamadcodes.tutorsync.model.FeeAgreement;
 import com.abdussamadcodes.tutorsync.model.FinancialTransaction;
+import com.abdussamadcodes.tutorsync.util.MoneyInput;
 import com.abdussamadcodes.tutorsync.model.Invoice;
 import com.abdussamadcodes.tutorsync.model.RecurringSchedule;
 import com.abdussamadcodes.tutorsync.model.Student;
@@ -987,8 +988,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 chip.setClickable(true);
                 int feeVal = rs.getFeeAmountMinor();
                 if (feeVal <= 0 && existing != null) feeVal = existing.getAmountMinorUnits();
-                chip.setText(String.format(Locale.getDefault(), "%s (৳%.0f)",
-                        formatTimeMinutes(rs.getStartTimeMinutes()), feeVal / 100.0));
+                chip.setText(formatTimeMinutes(rs.getStartTimeMinutes()) + " (" + MoneyInput.formatDisplay(feeVal) + ")");
 
                 final int idx = i;
                 chip.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -1006,7 +1006,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                         } else {
                             toggleGroup.check(R.id.btnFeeMonthly);
                         }
-                        etAmount.setText(minor > 0 ? String.valueOf(minor / 100) : "");
+                        etAmount.setText(minor > 0 ? MoneyInput.formatForInput(minor) : "");
                     }
                 });
 
@@ -1023,7 +1023,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 } else {
                     toggleGroup.check(R.id.btnFeeMonthly);
                 }
-                etAmount.setText(String.valueOf(existing.getAmountMinorUnits() / 100));
+                etAmount.setText(MoneyInput.formatForInput(existing.getAmountMinorUnits()));
             } else {
                 toggleGroup.check(R.id.btnFeeMonthly);
             }
@@ -1035,11 +1035,14 @@ public class StudentTransactionsActivity extends BaseActivity {
                 etAmount.setError(getString(R.string.auth_err_empty));
                 return;
             }
-            int amountMinor;
-            try {
-                amountMinor = (int) Math.round(Double.parseDouble(amtStr) * 100);
-            } catch (NumberFormatException e) {
-                etAmount.setError(getString(R.string.invoice_err_invalid_amount));
+            // M5: > 0, max 2 decimals, not absurdly large, exact decimal arithmetic
+            int amountMinor = MoneyInput.parse(amtStr, MoneyInput.MAX_FEE_MINOR);
+            if (amountMinor == MoneyInput.TOO_LARGE) {
+                etAmount.setError(getString(R.string.fee_err_too_large, MoneyInput.formatDisplay(MoneyInput.MAX_FEE_MINOR)));
+                return;
+            }
+            if (amountMinor <= 0) {
+                etAmount.setError(getString(R.string.fee_err_invalid));
                 return;
             }
 
@@ -1127,8 +1130,7 @@ public class StudentTransactionsActivity extends BaseActivity {
                 .setView(layout)
                 .setPositiveButton(getString(R.string.action_save), (d, w) -> {
                     try {
-                        double bdt = Double.parseDouble(etAmount.getText().toString().trim());
-                        int amountMinor = (int) Math.round(bdt * 100);
+                        int amountMinor = MoneyInput.parse(etAmount.getText().toString(), MoneyInput.MAX_PAYMENT_MINOR);
                         if (amountMinor <= 0 || amountMinor > totalDueMinor) {
                             showMessage(contentContainer, getString(R.string.invoice_err_invalid_amount));
                             return;
