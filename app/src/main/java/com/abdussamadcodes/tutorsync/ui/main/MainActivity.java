@@ -16,6 +16,10 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import java.util.Arrays;
+import java.io.IOException;
+import java.io.FileInputStream;
+import java.io.File;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -54,6 +58,7 @@ import com.abdussamadcodes.tutorsync.ui.subject.SubjectFormActivity;
 import com.abdussamadcodes.tutorsync.ui.subject.SubjectListActivity;
 import com.abdussamadcodes.tutorsync.util.AppExecutors;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
+import com.abdussamadcodes.tutorsync.util.BackupCrypto;
 import com.abdussamadcodes.tutorsync.util.BackupRestoreManager;
 import com.abdussamadcodes.tutorsync.util.ImageUtils;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
@@ -120,6 +125,20 @@ public class MainActivity extends BaseActivity {
             registerForActivityResult(new ActivityResultContracts.CreateDocument("application/json"), uri -> {
                 if (uri != null) {
                     exportBackupToUri(uri);
+                }
+            });
+
+    // M8: password-protected backups are written to a file the tutor picks; the password waits here.
+    @Nullable private char[] pendingBackupPassword = null;
+    private final ActivityResultLauncher<String> encryptedExportLauncher =
+            registerForActivityResult(new ActivityResultContracts.CreateDocument("application/octet-stream"), uri -> {
+                char[] pw = pendingBackupPassword;
+                pendingBackupPassword = null;
+                if (pw == null) return;
+                if (uri != null) {
+                    exportEncryptedBackupToUri(uri, pw);
+                } else {
+                    Arrays.fill(pw, '\0');
                 }
             });
 
@@ -438,10 +457,14 @@ public class MainActivity extends BaseActivity {
 
         // 4. Local Backup & Restore
         binding.btnExportBackup.setOnClickListener(v ->
-                exportBackupLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".json")
+                BackupDialogs.askNewPassword(this,
+                        pw -> {
+                            pendingBackupPassword = pw;
+                            encryptedExportLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".tsbackup");
+                        },
+                        () -> exportBackupLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".json"))
         );
-        binding.btnImportBackup.setOnClickListener(v ->
-                importBackupLauncher.launch(new String[]{"application/json", "*/*"})
+        binding.btnImportBackup.setOnClickListener(v -> startRestoreFlow()
         );
 
         // 5. Sign Out
@@ -763,10 +786,80 @@ public class MainActivity extends BaseActivity {
         });
     }
 
-    private void importBackupFromUri(@NonNull Uri uri) {
+    // =========================================================================
+    // RESTORE FLOW (M6): choose source -> (password) -> preview + confirmation -> safety backup -> merge
+    // =========================================================================
+
+    private void startRestoreFlow() {
         final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
+        final List<File> safetyBackups = BackupRestoreManager.listSafetyBackups(getApplicationContext(), accountId);
+        if (safetyBackups.isEmpty()) {
+            importBackupLauncher.launch(new String[]{"*/*"});
+            return;
+        }
+        BackupDialogs.chooseRestoreSource(this, safetyBackups.get(0).lastModified(),
+                () -> importBackupLauncher.launch(new String[]{"*/*"}),
+                () -> beginParseBackup(null, safetyBackups.get(0), null));
+    }
 
+    private void importBackupFromUri(@NonNull Uri uri) {
+        beginParseBackup(uri, null, null);
+    }
+
+    /** Reads the backup in the background; nothing in the database is touched yet. */
+    private void beginParseBackup(@Nullable Uri uri, @Nullable File file, @Nullable char[] password) {
+        final String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) {
+            if (password != null) Arrays.fill(password, '\0');
+            return;
+        }
+        if (!isBackupTaskRunning.compareAndSet(false, true)) {
+            if (password != null) Arrays.fill(password, '\0');
+            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final Context appContext = getApplicationContext();
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            BackupRestoreManager.ParsedBackup parsed = null;
+            Exception error = null;
+            try (InputStream in = file != null
+                    ? new FileInputStream(file)
+                    : appContext.getContentResolver().openInputStream(uri)) {
+                if (in == null) {
+                    throw new IOException("Unable to open the backup file.");
+                }
+                parsed = BackupRestoreManager.parseBackup(in, password);
+            } catch (Exception e) {
+                error = e;
+            } finally {
+                if (password != null) Arrays.fill(password, '\0');
+                isBackupTaskRunning.set(false);
+            }
+
+            final BackupRestoreManager.ParsedBackup finalParsed = parsed;
+            final Exception finalError = error;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (finalError instanceof BackupCrypto.PasswordRequiredException) {
+                    BackupDialogs.askExistingPassword(this, false, pw -> beginParseBackup(uri, file, pw), null);
+                } else if (finalError instanceof BackupCrypto.WrongPasswordException) {
+                    BackupDialogs.askExistingPassword(this, true, pw -> beginParseBackup(uri, file, pw), null);
+                } else if (finalError != null) {
+                    Toast.makeText(this, getString(R.string.backup_restore_read_failed_fmt,
+                            finalError.getMessage() != null ? finalError.getMessage() : "Invalid backup"),
+                            Toast.LENGTH_LONG).show();
+                } else if (finalParsed != null) {
+                    BackupDialogs.confirmRestore(this, finalParsed, accountId,
+                            () -> performRestore(finalParsed, accountId));
+                }
+            });
+        });
+    }
+
+    /** Saves a safety backup first (restore is cancelled if that fails), then merges the backup. */
+    private void performRestore(@NonNull BackupRestoreManager.ParsedBackup backup, @NonNull String accountId) {
         if (!isBackupTaskRunning.compareAndSet(false, true)) {
             Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
             return;
@@ -775,45 +868,96 @@ public class MainActivity extends BaseActivity {
         final Context appContext = getApplicationContext();
         AppExecutors.getInstance().diskIO().execute(() -> {
             SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-            String toastMessage = null;
+            String message;
             boolean restoreSucceeded = false;
-            try (InputStream in = appContext.getContentResolver().openInputStream(uri)) {
-                if (in == null) {
-                    toastMessage = "Restore failed: Unable to open backup file.";
+            try {
+                boolean safetySaved = true;
+                try {
+                    BackupRestoreManager.createSafetyBackup(appContext, db, accountId);
+                } catch (Exception safetyError) {
+                    safetySaved = false;
+                }
+
+                if (!safetySaved) {
+                    message = getString(R.string.backup_safety_failed);
                 } else {
-                    BackupRestoreManager.ImportResult result =
-                            BackupRestoreManager.importAccountBackupFromStream(appContext, db, accountId, in);
-                    studentRepo.migrateLegacyStudentIds(accountId);
-                    invoiceRepo.migrateLegacyInvoiceIds(accountId);
-                    lastReconciledAccountId = accountId;
-                    restoreSucceeded = true;
-                    if (result.hasConflicts()) {
-                        toastMessage = String.format(Locale.US,
-                                "Backup restored (%d added, %d updated, %d unchanged, %d financial conflicts preserved)",
-                                result.insertedCount, result.updatedCount, result.skippedCount, result.conflictCount);
-                    } else {
-                        toastMessage = String.format(Locale.US,
-                                "Backup restored (%d added, %d updated, %d unchanged)",
-                                result.insertedCount, result.updatedCount, result.skippedCount);
+                    try {
+                        BackupRestoreManager.ImportResult result =
+                                BackupRestoreManager.importParsedBackup(appContext, db, accountId, backup);
+                        studentRepo.migrateLegacyStudentIds(accountId);
+                        invoiceRepo.migrateLegacyInvoiceIds(accountId);
+                        lastReconciledAccountId = accountId;
+                        restoreSucceeded = true;
+                        message = result.hasConflicts()
+                                ? getString(R.string.backup_restore_done_conflicts_fmt, result.insertedCount,
+                                        result.updatedCount, result.skippedCount, result.conflictCount)
+                                : getString(R.string.backup_restore_done_fmt, result.insertedCount,
+                                        result.updatedCount, result.skippedCount);
+                    } catch (Exception e) {
+                        // the merge runs in one transaction, so a failure leaves the data untouched
+                        message = getString(R.string.backup_restore_failed_fmt,
+                                e.getMessage() != null ? e.getMessage() : "Invalid backup");
                     }
                 }
-            } catch (Exception e) {
-                toastMessage = "Restore failed: " + (e.getMessage() != null ? e.getMessage() : "Invalid backup");
             } finally {
                 DatabaseManager.getInstance().closeDatabase();
                 isBackupTaskRunning.set(false);
             }
 
-            final String finalMsg = toastMessage;
+            final String finalMsg = message;
             final boolean finalSuccess = restoreSucceeded;
             AppExecutors.getInstance().mainThread().execute(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                if (finalMsg != null) {
-                    Toast.makeText(MainActivity.this, finalMsg, Toast.LENGTH_LONG).show();
-                }
+                Toast.makeText(MainActivity.this, finalMsg, Toast.LENGTH_LONG).show();
                 if (finalSuccess) {
                     refreshStatusLabels();
                     loadDashboardData();
+                }
+            });
+        });
+    }
+
+    /** M8: writes a password-protected, compressed backup. */
+    private void exportEncryptedBackupToUri(@NonNull Uri uri, @NonNull char[] password) {
+        final String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) {
+            Arrays.fill(password, '\0');
+            return;
+        }
+        if (!isBackupTaskRunning.compareAndSet(false, true)) {
+            Arrays.fill(password, '\0');
+            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final Context appContext = getApplicationContext();
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            String errorMsg = null;
+            boolean exported = false;
+            try (OutputStream out = appContext.getContentResolver().openOutputStream(uri)) {
+                if (out != null) {
+                    BackupRestoreManager.exportEncryptedBackupToStream(appContext, db, accountId, out, password);
+                    exported = true;
+                } else {
+                    errorMsg = "Unable to open destination file.";
+                }
+            } catch (Exception e) {
+                errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
+            } finally {
+                Arrays.fill(password, '\0');
+                DatabaseManager.getInstance().closeDatabase();
+                isBackupTaskRunning.set(false);
+            }
+
+            final boolean success = exported;
+            final String finalError = errorMsg;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (success) {
+                    Toast.makeText(MainActivity.this, R.string.backup_export_encrypted_ok, Toast.LENGTH_LONG).show();
+                } else if (finalError != null) {
+                    Toast.makeText(MainActivity.this, "Export failed: " + finalError, Toast.LENGTH_SHORT).show();
                 }
             });
         });

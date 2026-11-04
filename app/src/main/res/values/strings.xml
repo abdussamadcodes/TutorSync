@@ -256,7 +256,7 @@
 
     <!-- Local Backup & Restore -->
     <string name="settings_section_backup">Local Backup &amp; Restore</string>
-    <string name="backup_export_action">Export Account Backup (.json)</string>
+    <string name="backup_export_action">Export Account Backup</string>
     <string name="backup_import_action">Restore from Backup File</string>
     <string name="backup_export_success">Backup exported successfully!</string>
     <string name="backup_export_failed">Failed to export backup.</string>
@@ -393,4 +393,39 @@
     <string name="fee_err_required">Enter the fee amount.</string>
     <string name="fee_err_invalid">Enter a fee greater than zero with at most 2 decimals (for example 1500 or 1500.50).</string>
     <string name="fee_err_too_large">The fee cannot be more than %1$s.</string>
+
+    <!-- M6 / M8: backup & restore -->
+    <string name="backup_password_hint">Password</string>
+    <string name="backup_password_confirm_hint">Confirm password</string>
+    <string name="backup_export_password_title">Protect your backup</string>
+    <string name="backup_export_password_message">Choose a password for this backup file. You will need it to restore the backup, and it cannot be recovered if you forget it.</string>
+    <string name="backup_export_confirm_action">Export</string>
+    <string name="backup_export_without_password">No password</string>
+    <string name="backup_err_password_short">Use at least %1$d characters.</string>
+    <string name="backup_err_password_mismatch">The two passwords do not match.</string>
+    <string name="backup_plain_warning_title">Export without a password?</string>
+    <string name="backup_plain_warning_msg">Anyone who gets this file can read every student, fee and payment in it. Choose this only if you must open the file in an older version of the app.</string>
+    <string name="backup_plain_warning_action">Export anyway</string>
+    <string name="backup_export_encrypted_ok">Encrypted backup exported. Keep your password safe.</string>
+    <string name="backup_import_password_title">Backup password</string>
+    <string name="backup_import_password_message">This backup is password protected. Enter the password you chose when you exported it.</string>
+    <string name="backup_import_password_action">Open backup</string>
+    <string name="backup_err_wrong_password">Wrong password, or the file is damaged.</string>
+    <string name="backup_err_password_required">Enter the password.</string>
+    <string name="backup_source_title">Restore from</string>
+    <string name="backup_source_file">A backup file</string>
+    <string name="backup_source_safety">Latest automatic safety backup (%1$s)</string>
+    <string name="backup_unknown_date">Unknown</string>
+    <string name="backup_source_same_account">This account</string>
+    <string name="backup_source_other_account">A different account</string>
+    <string name="backup_confirm_restore_title">Restore this backup?</string>
+    <string name="backup_confirm_restore_details">Backup made: %1$s\nFrom: %2$s\n\nContains %3$d students, %4$d classes, %5$d invoices and %6$d transactions.</string>
+    <string name="backup_confirm_restore_other_account">This backup was made from a different account. Its students, classes and money records will be added to this account.</string>
+    <string name="backup_confirm_restore_merge">Restoring MERGES the backup into this account: new records are added, records that are newer in the backup replace older ones, and nothing is deleted. Your password, PIN and app-lock settings are not changed.\n\nBefore anything is changed, a safety backup of your current data is saved on this device.</string>
+    <string name="backup_confirm_restore_action">Restore</string>
+    <string name="backup_safety_failed">Restore cancelled. A safety backup of your current data could not be saved, so nothing was changed.</string>
+    <string name="backup_restore_done_fmt">Backup restored (%1$d added, %2$d updated, %3$d unchanged). A safety backup of your previous data was saved.</string>
+    <string name="backup_restore_done_conflicts_fmt">Backup restored (%1$d added, %2$d updated, %3$d unchanged, %4$d financial conflicts preserved). A safety backup of your previous data was saved.</string>
+    <string name="backup_restore_failed_fmt">Restore failed: %1$s. Your data was not changed.</string>
+    <string name="backup_restore_read_failed_fmt">Could not open the backup: %1$s</string>
 </resources>

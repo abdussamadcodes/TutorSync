@@ -274,7 +274,7 @@
 
     <!-- Local Backup & Restore -->
     <string name="settings_section_backup">লোকাল ব্যাকআপ ও রিস্টোর</string>
-    <string name="backup_export_action">ব্যাকআপ এক্সপোর্ট করুন (.json)</string>
+    <string name="backup_export_action">ব্যাকআপ এক্সপোর্ট করুন</string>
     <string name="backup_import_action">ব্যাকআপ ফাইল থেকে রিস্টোর করুন</string>
     <string name="backup_export_success">ব্যাকআপ সফলভাবে সেভ হয়েছে!</string>
     <string name="backup_export_failed">ব্যাকআপ সেভ করতে ব্যর্থ।</string>
@@ -395,4 +395,39 @@
     <string name="fee_err_required">ফির পরিমাণ লিখুন।</string>
     <string name="fee_err_invalid">শূন্যের চেয়ে বড় সর্বোচ্চ ২ দশমিক ঘরের ফি দিন (যেমন ১৫০০ বা ১৫০০.৫০)।</string>
     <string name="fee_err_too_large">ফি %1$s এর বেশি হতে পারবে না।</string>
+
+    <!-- M6 / M8: backup & restore -->
+    <string name="backup_password_hint">পাসওয়ার্ড</string>
+    <string name="backup_password_confirm_hint">পাসওয়ার্ড নিশ্চিত করুন</string>
+    <string name="backup_export_password_title">ব্যাকআপ সুরক্ষিত করুন</string>
+    <string name="backup_export_password_message">এই ব্যাকআপ ফাইলের জন্য একটি পাসওয়ার্ড দিন। ব্যাকআপ রিস্টোর করতে এটি লাগবে, আর ভুলে গেলে ফিরে পাওয়া যাবে না।</string>
+    <string name="backup_export_confirm_action">এক্সপোর্ট</string>
+    <string name="backup_export_without_password">পাসওয়ার্ড ছাড়া</string>
+    <string name="backup_err_password_short">কমপক্ষে %1$d অক্ষর দিন।</string>
+    <string name="backup_err_password_mismatch">দুটি পাসওয়ার্ড মিলছে না।</string>
+    <string name="backup_plain_warning_title">পাসওয়ার্ড ছাড়া এক্সপোর্ট করবেন?</string>
+    <string name="backup_plain_warning_msg">এই ফাইল যার হাতে যাবে সে সব শিক্ষার্থী, ফি ও পেমেন্টের তথ্য পড়তে পারবে। শুধু তখনই এটি বেছে নিন যখন অ্যাপের পুরনো সংস্করণে ফাইলটি খুলতে হবে।</string>
+    <string name="backup_plain_warning_action">তবুও এক্সপোর্ট করুন</string>
+    <string name="backup_export_encrypted_ok">এনক্রিপ্টেড ব্যাকআপ এক্সপোর্ট হয়েছে। পাসওয়ার্ড নিরাপদে রাখুন।</string>
+    <string name="backup_import_password_title">ব্যাকআপের পাসওয়ার্ড</string>
+    <string name="backup_import_password_message">এই ব্যাকআপ পাসওয়ার্ড দিয়ে সুরক্ষিত। এক্সপোর্টের সময় যে পাসওয়ার্ড দিয়েছিলেন সেটি লিখুন।</string>
+    <string name="backup_import_password_action">ব্যাকআপ খুলুন</string>
+    <string name="backup_err_wrong_password">পাসওয়ার্ড ভুল, অথবা ফাইলটি নষ্ট।</string>
+    <string name="backup_err_password_required">পাসওয়ার্ড লিখুন।</string>
+    <string name="backup_source_title">যেখান থেকে রিস্টোর করবেন</string>
+    <string name="backup_source_file">একটি ব্যাকআপ ফাইল</string>
+    <string name="backup_source_safety">সর্বশেষ স্বয়ংক্রিয় সেফটি ব্যাকআপ (%1$s)</string>
+    <string name="backup_unknown_date">অজানা</string>
+    <string name="backup_source_same_account">এই অ্যাকাউন্ট</string>
+    <string name="backup_source_other_account">অন্য একটি অ্যাকাউন্ট</string>
+    <string name="backup_confirm_restore_title">এই ব্যাকআপ রিস্টোর করবেন?</string>
+    <string name="backup_confirm_restore_details">ব্যাকআপ তৈরি: %1$s\nউৎস: %2$s\n\nএতে আছে %3$d জন শিক্ষার্থী, %4$d টি ক্লাস, %5$d টি ইনভয়েস ও %6$d টি লেনদেন।</string>
+    <string name="backup_confirm_restore_other_account">এই ব্যাকআপ অন্য একটি অ্যাকাউন্ট থেকে নেওয়া। এর শিক্ষার্থী, ক্লাস ও টাকার রেকর্ড এই অ্যাকাউন্টে যুক্ত হবে।</string>
+    <string name="backup_confirm_restore_merge">রিস্টোর মানে ব্যাকআপটি এই অ্যাকাউন্টের সাথে মিলিয়ে দেওয়া: নতুন রেকর্ড যুক্ত হবে, ব্যাকআপের নতুনতর রেকর্ড পুরনোগুলোর জায়গা নেবে, আর কিছুই মুছবে না। আপনার পাসওয়ার্ড, পিন ও অ্যাপ-লক সেটিং বদলাবে না।\n\nকিছু বদলানোর আগে আপনার বর্তমান তথ্যের একটি সেফটি ব্যাকআপ এই ডিভাইসে রাখা হবে।</string>
+    <string name="backup_confirm_restore_action">রিস্টোর করুন</string>
+    <string name="backup_safety_failed">রিস্টোর বাতিল হয়েছে। বর্তমান তথ্যের সেফটি ব্যাকআপ রাখা যায়নি, তাই কিছুই বদলায়নি।</string>
+    <string name="backup_restore_done_fmt">ব্যাকআপ রিস্টোর হয়েছে (%1$d যুক্ত, %2$d হালনাগাদ, %3$d অপরিবর্তিত)। আগের তথ্যের একটি সেফটি ব্যাকআপ রাখা হয়েছে।</string>
+    <string name="backup_restore_done_conflicts_fmt">ব্যাকআপ রিস্টোর হয়েছে (%1$d যুক্ত, %2$d হালনাগাদ, %3$d অপরিবর্তিত, %4$d আর্থিক দ্বন্দ্ব সংরক্ষিত)। আগের তথ্যের একটি সেফটি ব্যাকআপ রাখা হয়েছে।</string>
+    <string name="backup_restore_failed_fmt">রিস্টোর ব্যর্থ: %1$s। আপনার তথ্য বদলায়নি।</string>
+    <string name="backup_restore_read_failed_fmt">ব্যাকআপ খোলা যায়নি: %1$s</string>
 </resources>

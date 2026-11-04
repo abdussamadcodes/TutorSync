@@ -5,6 +5,9 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Base64;
+import android.util.JsonReader;
+import android.util.JsonToken;
+import android.util.JsonWriter;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -17,7 +20,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Date;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -169,35 +181,325 @@ public final class BackupRestoreManager {
         return root;
     }
 
+    /**
+     * Writes a plain (UNENCRYPTED) JSON backup. Rows are streamed one by one, so memory use does not
+     * grow with the size of the data. Kept for old app versions that cannot read encrypted backups.
+     */
     public static void exportAccountBackupToStream(
             @Nullable Context context,
             @NonNull SQLiteDatabase db,
             @NonNull String accountId,
             @NonNull OutputStream out) throws Exception {
-        JSONObject root = exportAccountBackup(context, db, accountId);
-        out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
-        out.flush();
+        writeBackupJson(context, db, accountId, out);
     }
+
+    /** M8: password-protected backup (AES-256-GCM, compressed, streamed). */
+    public static void exportEncryptedBackupToStream(
+            @Nullable Context context,
+            @NonNull SQLiteDatabase db,
+            @NonNull String accountId,
+            @NonNull OutputStream out,
+            @NonNull char[] password) throws Exception {
+        OutputStream enc = BackupCrypto.encryptWithPassword(out, password);
+        writeBackupJson(context, db, accountId, new GZIPOutputStream(enc, 16 * 1024));
+    }
+
+    /** Streams the backup as JSON and CLOSES the stream (which also finishes gzip/encryption). */
+    private static void writeBackupJson(
+            @Nullable Context context,
+            @NonNull SQLiteDatabase db,
+            @NonNull String accountId,
+            @NonNull OutputStream out) throws Exception {
+        if (accountId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Account ID cannot be empty.");
+        }
+        try (JsonWriter w = new JsonWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
+            w.beginObject();
+            w.name("backup_version").value((long) CURRENT_BACKUP_VERSION);
+            w.name("exported_at").value(System.currentTimeMillis());
+            w.name("source_account_id").value(accountId);
+
+            // Non-security profile metadata only (never password_hash or salt)
+            try (Cursor c = db.query(AccountEntry.TABLE_NAME, null,
+                    AccountEntry.COLUMN_ID + " = ?", new String[]{accountId}, null, null, null)) {
+                if (c.moveToFirst()) {
+                    w.name("profile").beginObject();
+                    writeCursorRow(w, c, AccountEntry.COLUMN_PASSWORD_HASH, AccountEntry.COLUMN_SALT);
+                    String picPath = getColumnStringOrEmpty(c, AccountEntry.COLUMN_PROFILE_PIC_PATH);
+                    if (!picPath.isEmpty()) {
+                        File picFile = new File(picPath);
+                        if (picFile.exists()) {
+                            byte[] bytes = readFileBytes(picFile);
+                            if (bytes != null) {
+                                w.name("profile_pic_base64").value(Base64.encodeToString(bytes, Base64.NO_WRAP));
+                            }
+                        }
+                    }
+                    w.endObject();
+                }
+            }
+
+            w.name("tables").beginObject();
+            for (String table : SYNC_TABLE_ORDER) {
+                w.name(table).beginArray();
+                Cursor cursor;
+                if (StudentSubjectEntry.TABLE_NAME.equals(table)) {
+                    cursor = db.rawQuery(
+                            "SELECT ss.* FROM " + StudentSubjectEntry.TABLE_NAME + " ss " +
+                                    "INNER JOIN " + StudentEntry.TABLE_NAME + " s " +
+                                    "ON ss." + StudentSubjectEntry.COLUMN_STUDENT_ID + " = s." + StudentEntry.COLUMN_ID +
+                                    " AND ss." + StudentSubjectEntry.COLUMN_ACCOUNT_ID + " = s." + StudentEntry.COLUMN_ACCOUNT_ID +
+                                    " WHERE s." + StudentEntry.COLUMN_ACCOUNT_ID + " = ?",
+                            new String[]{accountId});
+                } else {
+                    cursor = db.query(table, null, "account_id = ?", new String[]{accountId}, null, null, null);
+                }
+                try {
+                    while (cursor.moveToNext()) {
+                        w.beginObject();
+                        writeCursorRow(w, cursor);
+                        w.endObject();
+                    }
+                } finally {
+                    cursor.close();
+                }
+                w.endArray();
+            }
+            w.endObject();
+            w.endObject();
+        }
+    }
+
+    private static void writeCursorRow(@NonNull JsonWriter w, @NonNull Cursor c, String... skipColumns) throws IOException {
+        int count = c.getColumnCount();
+        for (int i = 0; i < count; i++) {
+            String col = c.getColumnName(i);
+            boolean skip = false;
+            for (String sk : skipColumns) {
+                if (col.equals(sk)) { skip = true; break; }
+            }
+            if (skip) continue;
+            int type = c.getType(i);
+            w.name(col);
+            if (type == Cursor.FIELD_TYPE_NULL) {
+                w.nullValue();
+            } else if (type == Cursor.FIELD_TYPE_INTEGER) {
+                w.value(c.getLong(i));
+            } else if (type == Cursor.FIELD_TYPE_FLOAT) {
+                w.value(c.getDouble(i));
+            } else {
+                w.value(c.getString(i));
+            }
+        }
+    }
+
+    // =========================================================================
+    // SAFETY BACKUPS (M6): automatic, device-encrypted copy taken before every restore
+    // =========================================================================
+
+    private static final int MAX_SAFETY_BACKUPS_PER_ACCOUNT = 5;
+
+    @NonNull
+    private static File safetyBackupDir(@NonNull Context context) {
+        return new File(context.getNoBackupFilesDir(), "safety_backups");
+    }
+
+    /**
+     * Saves the current data of the account into the app's private (not cloud-backed-up) storage,
+     * encrypted with a device-bound Keystore key. Throws if anything goes wrong, so the caller can
+     * cancel the restore.
+     */
+    @NonNull
+    public static File createSafetyBackup(@NonNull Context context, @NonNull SQLiteDatabase db,
+                                          @NonNull String accountId) throws Exception {
+        File dir = safetyBackupDir(context);
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IOException("Could not create the safety backup folder.");
+        }
+        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        File finalFile = new File(dir, "safety_" + accountId + "_" + stamp + ".tsbackup");
+        File tmp = new File(dir, finalFile.getName() + ".tmp");
+        try (OutputStream fileOut = new FileOutputStream(tmp)) {
+            OutputStream enc = BackupCrypto.encryptWithKeystore(fileOut);
+            writeBackupJson(context, db, accountId, new GZIPOutputStream(enc, 16 * 1024));
+        } catch (Exception e) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            throw e;
+        }
+        if (!tmp.renameTo(finalFile)) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            throw new IOException("Could not finish the safety backup.");
+        }
+        pruneSafetyBackups(context, accountId);
+        return finalFile;
+    }
+
+    /** Safety backups of this account only, newest first. */
+    @NonNull
+    public static List<File> listSafetyBackups(@NonNull Context context, @NonNull String accountId) {
+        File[] files = safetyBackupDir(context).listFiles((d, name) ->
+                name.startsWith("safety_" + accountId + "_") && name.endsWith(".tsbackup"));
+        List<File> list = new ArrayList<>();
+        if (files != null) {
+            list.addAll(Arrays.asList(files));
+            Collections.sort(list, (x, y) -> Long.compare(y.lastModified(), x.lastModified()));
+        }
+        return list;
+    }
+
+    private static void pruneSafetyBackups(@NonNull Context context, @NonNull String accountId) {
+        List<File> all = listSafetyBackups(context, accountId);
+        for (int i = MAX_SAFETY_BACKUPS_PER_ACCOUNT; i < all.size(); i++) {
+            //noinspection ResultOfMethodCallIgnored
+            all.get(i).delete();
+        }
+    }
+
+    // =========================================================================
+    // PARSING (streaming) + PREVIEW (M6/M8)
+    // =========================================================================
+
+    /** A backup that was read and checked, ready to be previewed and then restored. */
+    public static final class ParsedBackup {
+        @NonNull public final JSONObject root;
+        public final boolean wasEncrypted;
+        public final long exportedAt;
+        @NonNull public final String sourceAccountId;
+        public final int students;
+        public final int classes;
+        public final int invoices;
+        public final int transactions;
+
+        ParsedBackup(@NonNull JSONObject root, boolean wasEncrypted) {
+            this.root = root;
+            this.wasEncrypted = wasEncrypted;
+            this.exportedAt = root.optLong("exported_at", 0L);
+            String src = root.optString("source_account_id", "");
+            if (src.isEmpty()) {
+                JSONObject profile = root.optJSONObject("profile");
+                if (profile != null) src = profile.optString(AccountEntry.COLUMN_ID, "");
+            }
+            this.sourceAccountId = src;
+            this.students = tableRowCount(root, StudentEntry.TABLE_NAME);
+            this.classes = tableRowCount(root, OccurrenceEntry.TABLE_NAME);
+            this.invoices = tableRowCount(root, InvoiceEntry.TABLE_NAME);
+            this.transactions = tableRowCount(root, TransactionEntry.TABLE_NAME);
+        }
+
+        public boolean isFromAccount(@NonNull String accountId) {
+            return !sourceAccountId.isEmpty() && sourceAccountId.equals(accountId);
+        }
+    }
+
+    private static int tableRowCount(@NonNull JSONObject root, @NonNull String table) {
+        JSONObject tables = root.optJSONObject("tables");
+        JSONArray arr = tables != null ? tables.optJSONArray(table) : root.optJSONArray(table);
+        return arr == null ? 0 : arr.length();
+    }
+
+    /**
+     * Reads a backup file (encrypted or the old plain JSON) straight into a JSON tree without making
+     * intermediate copies of the whole file. Does not touch the database.
+     *
+     * @param password needed only for password-protected backups (null otherwise)
+     * @throws BackupCrypto.PasswordRequiredException when the backup is encrypted and no password is given
+     * @throws BackupCrypto.WrongPasswordException    when the password is wrong
+     */
+    @NonNull
+    public static ParsedBackup parseBackup(@NonNull InputStream rawIn, @Nullable char[] password) throws Exception {
+        BufferedInputStream in = new BufferedInputStream(rawIn, 16 * 1024);
+        boolean encrypted = BackupCrypto.isEncrypted(in);
+        JSONObject root;
+        try {
+            InputStream source = in;
+            if (encrypted) {
+                source = new GZIPInputStream(BackupCrypto.decrypt(in, password), 16 * 1024);
+            }
+            try (JsonReader reader = new JsonReader(new InputStreamReader(source, StandardCharsets.UTF_8))) {
+                reader.setLenient(true);
+                if (reader.peek() != JsonToken.BEGIN_OBJECT) {
+                    throw new IllegalArgumentException("This file is not a valid TutorSync backup.");
+                }
+                root = (JSONObject) readJsonValue(reader);
+            }
+        } catch (BackupCrypto.WrongPasswordException | BackupCrypto.PasswordRequiredException e) {
+            throw e;   // the caller asks for / re-asks the password
+        } catch (JSONException | IllegalStateException | java.util.zip.ZipException | android.util.MalformedJsonException e) {
+            throw new IllegalArgumentException("This file is not a valid TutorSync backup, or it is damaged.", e);
+        }
+        validateBackupVersion(root);
+        return new ParsedBackup(root, encrypted);
+    }
+
+    private static Object readJsonValue(@NonNull JsonReader r) throws IOException, JSONException {
+        switch (r.peek()) {
+            case BEGIN_OBJECT: {
+                JSONObject o = new JSONObject();
+                r.beginObject();
+                while (r.hasNext()) {
+                    String name = r.nextName();
+                    o.put(name, readJsonValue(r));
+                }
+                r.endObject();
+                return o;
+            }
+            case BEGIN_ARRAY: {
+                JSONArray a = new JSONArray();
+                r.beginArray();
+                while (r.hasNext()) {
+                    a.put(readJsonValue(r));
+                }
+                r.endArray();
+                return a;
+            }
+            case STRING:
+                return r.nextString();
+            case NUMBER: {
+                String n = r.nextString();
+                try {
+                    return Long.parseLong(n);
+                } catch (NumberFormatException e) {
+                    return Double.parseDouble(n);
+                }
+            }
+            case BOOLEAN:
+                return r.nextBoolean();
+            case NULL:
+                r.nextNull();
+                return JSONObject.NULL;
+            default:
+                throw new IOException("Unexpected data in the backup file.");
+        }
+    }
+
+    /** Restores a backup that was already read with {@link #parseBackup}. Same merge rules as before. */
+    @NonNull
+    public static ImportResult importParsedBackup(
+            @Nullable Context context,
+            @NonNull SQLiteDatabase db,
+            @NonNull String targetAccountId,
+            @NonNull ParsedBackup backup) throws Exception {
+        return importAccountBackupFromRoot(context, db, targetAccountId, backup.root);
+    }
+
 
     // =========================================================================
     // IMPORT WITH VERSION VALIDATION, PRE-COMMIT VALIDATION & CONFLICT RESOLUTION
     // =========================================================================
 
-    @NonNull
     public static ImportResult importAccountBackupFromStream(
             @Nullable Context context,
             @NonNull SQLiteDatabase db,
             @NonNull String targetAccountId,
             @NonNull InputStream in) throws Exception {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-            bos.write(buf, 0, n);
-        }
-        String jsonStr = new String(bos.toByteArray(), StandardCharsets.UTF_8);
-        return importAccountBackupFromJson(context, db, targetAccountId, jsonStr);
+        // Old plain-JSON backups and new encrypted ones both work; a password-protected backup
+        // throws PasswordRequiredException (use parseBackup + importParsedBackup instead).
+        ParsedBackup parsed = parseBackup(in, null);
+        return importAccountBackupFromRoot(context, db, targetAccountId, parsed.root);
     }
+
 
     @NonNull
     public static ImportResult importAccountBackupFromJson(
@@ -218,6 +520,20 @@ public final class BackupRestoreManager {
             root = new JSONObject(jsonString);
         } catch (JSONException e) {
             throw new IllegalArgumentException("Invalid JSON backup format: " + e.getMessage(), e);
+        }
+
+        return importAccountBackupFromRoot(context, db, targetAccountId, root);
+    }
+
+    @NonNull
+    public static ImportResult importAccountBackupFromRoot(
+            @Nullable Context context,
+            @NonNull SQLiteDatabase db,
+            @NonNull String targetAccountId,
+            @NonNull JSONObject root) throws Exception {
+
+        if (targetAccountId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Target account ID cannot be empty.");
         }
 
         // Validate backup format version before reading tables or starting a transaction
