@@ -135,7 +135,9 @@ public class OccurrenceRepository {
                     OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " +
                     TutorSyncContract.AttendanceEntry.COLUMN_OCCURRENCE_ID + " FROM " +
                     TutorSyncContract.AttendanceEntry.TABLE_NAME + " WHERE " +
-                    TutorSyncContract.AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?)";
+                    TutorSyncContract.AttendanceEntry.COLUMN_ACCOUNT_ID + " = ?) AND " +
+                    // M4: makeup classes are never deleted by a bulk schedule clean-up
+                    OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID + " IS NULL";
 
             db.delete(OccurrenceEntry.TABLE_NAME, where,
                     new String[]{accountId, scheduleId, String.valueOf(cal.getTimeInMillis()), accountId});

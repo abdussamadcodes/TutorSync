@@ -40,6 +40,10 @@ public class AttendanceRepository {
         }
     }
 
+    /**
+     * Billing model and fee that applied to a class on its date.
+     * (Kept for existing callers; see the overload with subjectId.)
+     */
     @NonNull
     public static String[] resolveBillingForOccurrence(
             @NonNull SQLiteDatabase db,
@@ -49,46 +53,43 @@ public class AttendanceRepository {
             @Nullable String scheduleGroupId,
             int startTimeMinutes,
             long occDateMillis) {
+        return resolveBillingForOccurrence(db, accountId, studentId, null, scheduleId,
+                scheduleGroupId, startTimeMinutes, occDateMillis);
+    }
+
+    /**
+     * M3: the billing model and fee that applied to a class ON ITS DATE.
+     *
+     * 1. the fee-history row in force on the class date (or the closest earlier one);
+     * 2. when the class is older than every history row, the EARLIEST known row - never the
+     *    latest fee, so changing a fee today cannot re-price old classes;
+     * 3. only when the group has no history at all (legacy data): the schedule row, then the
+     *    student's schedule at the same time (same subject when known), then the legacy fee agreement.
+     */
+    @NonNull
+    public static String[] resolveBillingForOccurrence(
+            @NonNull SQLiteDatabase db,
+            @NonNull String accountId,
+            @Nullable String studentId,
+            @Nullable String subjectId,
+            @Nullable String scheduleId,
+            @Nullable String scheduleGroupId,
+            int startTimeMinutes,
+            long occDateMillis) {
 
         String billingModel = null;
         int feeMinor = 0;
-        long endOfDayMillis = occDateMillis + 86_399_999L;
 
-        // 1. Check schedule_fee_history at end of occurrence day
+        // 1 + 2. fee history of the schedule group
         if (scheduleGroupId != null && !scheduleGroupId.isEmpty()) {
-            String sel = ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                    ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
-                    ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " <= ? AND (" +
-                    ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL OR " +
-                    ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " >= ?)";
-            String[] args = new String[]{accountId, scheduleGroupId, String.valueOf(endOfDayMillis), String.valueOf(occDateMillis)};
-
-            try (Cursor hc = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
-                    new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR},
-                    sel, args, null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
-                if (hc.moveToFirst()) {
-                    billingModel = hc.getString(0);
-                    feeMinor = hc.getInt(1);
-                }
-            }
-
-            // 2. Fallback to latest schedule_fee_history for this group
-            if (billingModel == null || feeMinor <= 0) {
-                String sel2 = ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                        ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?";
-                String[] args2 = new String[]{accountId, scheduleGroupId};
-                try (Cursor hc2 = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
-                        new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR},
-                        sel2, args2, null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
-                    if (hc2.moveToFirst()) {
-                        billingModel = hc2.getString(0);
-                        feeMinor = hc2.getInt(1);
-                    }
-                }
+            String[] hist = lookupFeeHistoryForDate(db, accountId, scheduleGroupId, occDateMillis);
+            if (hist != null) {
+                billingModel = hist[0];
+                feeMinor = Integer.parseInt(hist[1]);
             }
         }
 
-        // 3. Fallback to recurring_schedules by scheduleId
+        // 3a. recurring_schedules by scheduleId
         if ((billingModel == null || feeMinor <= 0) && scheduleId != null && !scheduleId.isEmpty()) {
             try (Cursor sc = db.query(ScheduleEntry.TABLE_NAME,
                     new String[]{ScheduleEntry.COLUMN_BILLING_MODEL, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR},
@@ -101,15 +102,21 @@ public class AttendanceRepository {
             }
         }
 
-        // 4. Fallback to recurring_schedules by studentId + startTimeMinutes
+        // 3b. recurring_schedules of the same student at the same time (same subject when known)
         if ((billingModel == null || feeMinor <= 0) && studentId != null && !studentId.isEmpty()) {
+            String sel = ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                    ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " +
+                    ScheduleEntry.COLUMN_START_TIME_MINUTES + " = ?";
+            String[] args;
+            if (subjectId != null && !subjectId.isEmpty()) {
+                sel += " AND " + ScheduleEntry.COLUMN_SUBJECT_ID + " = ?";
+                args = new String[]{accountId, studentId, String.valueOf(startTimeMinutes), subjectId};
+            } else {
+                args = new String[]{accountId, studentId, String.valueOf(startTimeMinutes)};
+            }
             try (Cursor sc2 = db.query(ScheduleEntry.TABLE_NAME,
                     new String[]{ScheduleEntry.COLUMN_BILLING_MODEL, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR},
-                    ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                            ScheduleEntry.COLUMN_STUDENT_ID + " = ? AND " +
-                            ScheduleEntry.COLUMN_START_TIME_MINUTES + " = ?",
-                    new String[]{accountId, studentId, String.valueOf(startTimeMinutes)},
-                    null, null, ScheduleEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
+                    sel, args, null, null, ScheduleEntry.COLUMN_LAST_MODIFIED + " DESC", "1")) {
                 if (sc2.moveToFirst()) {
                     billingModel = sc2.getString(0);
                     feeMinor = sc2.getInt(1);
@@ -117,7 +124,7 @@ public class AttendanceRepository {
             }
         }
 
-        // 5. Fallback to fee_agreements for student
+        // 3c. legacy fee agreement of the student
         if ((billingModel == null || feeMinor <= 0) && studentId != null && !studentId.isEmpty()) {
             try (Cursor fc = db.query(FeeAgreementEntry.TABLE_NAME,
                     new String[]{FeeAgreementEntry.COLUMN_FEE_TYPE, FeeAgreementEntry.COLUMN_AMOUNT_MINOR},
@@ -132,6 +139,64 @@ public class AttendanceRepository {
 
         if (billingModel == null || billingModel.isEmpty()) billingModel = "MONTHLY";
         return new String[]{billingModel, String.valueOf(Math.max(0, feeMinor))};
+    }
+
+    /**
+     * Fee-history row for a class date: the row in force on that day (or the closest earlier row);
+     * if the date is older than every row, the earliest row. Returns {model, fee} or null when the
+     * group has no usable history.
+     */
+    @Nullable
+    static String[] lookupFeeHistoryForDate(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                            @NonNull String scheduleGroupId, long occDateMillis) {
+        long endOfDayMillis = occDateMillis + 86_399_999L;
+        String[] cols = new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR};
+
+        try (Cursor hc = db.query(ScheduleFeeHistoryEntry.TABLE_NAME, cols,
+                ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " <= ?",
+                new String[]{accountId, scheduleGroupId, String.valueOf(endOfDayMillis)},
+                null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
+            if (hc.moveToFirst() && hc.getInt(1) > 0) {
+                return new String[]{hc.getString(0), String.valueOf(hc.getInt(1))};
+            }
+        }
+
+        try (Cursor ec = db.query(ScheduleFeeHistoryEntry.TABLE_NAME, cols,
+                ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?",
+                new String[]{accountId, scheduleGroupId},
+                null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " ASC", "1")) {
+            if (ec.moveToFirst() && ec.getInt(1) > 0) {
+                return new String[]{ec.getString(0), String.valueOf(ec.getInt(1))};
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Like {@link #lookupFeeHistoryForDate} but ONLY when a history row really covers that day.
+     * Used before an old billing decision is changed: no hard evidence, no change.
+     */
+    @Nullable
+    static String[] lookupCoveringFeeHistory(@NonNull SQLiteDatabase db, @NonNull String accountId,
+                                             @NonNull String scheduleGroupId, long occDateMillis) {
+        long endOfDayMillis = occDateMillis + 86_399_999L;
+        try (Cursor hc = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
+                new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR},
+                ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                        ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " <= ? AND (" +
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL OR " +
+                        ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " >= ?)",
+                new String[]{accountId, scheduleGroupId, String.valueOf(endOfDayMillis), String.valueOf(occDateMillis)},
+                null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
+            if (hc.moveToFirst() && hc.getInt(1) > 0) {
+                return new String[]{hc.getString(0), String.valueOf(hc.getInt(1))};
+            }
+        }
+        return null;
     }
 
     // Result codes of recordAttendanceWithBilling()
@@ -224,7 +289,7 @@ public class AttendanceRepository {
             }
 
             // ---- billing decision ----
-            String[] resolved = resolveBillingForOccurrence(db, accountId, studentId, scheduleId, scheduleGroupId, startMin, occDate);
+            String[] resolved = resolveBillingForOccurrence(db, accountId, studentId, subjectId, scheduleId, scheduleGroupId, startMin, occDate);
             String billingModel = resolved[0];
             int resolvedFee = Integer.parseInt(resolved[1]);
 
@@ -606,7 +671,7 @@ public class AttendanceRepository {
                 "o." + OccurrenceEntry.COLUMN_SCHEDULE_ID + ", o." + OccurrenceEntry.COLUMN_SCHEDULE_GROUP_ID + ", " +
                 "o." + OccurrenceEntry.COLUMN_START_TIME_MINUTES + ", o." + OccurrenceEntry.COLUMN_DATE + ", " +
                 "a." + AttendanceEntry.COLUMN_STATUS + ", a." + AttendanceEntry.COLUMN_CHARGE_DECISION + ", " +
-                "a." + AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR + " " +
+                "a." + AttendanceEntry.COLUMN_APPLICABLE_FEE_MINOR + ", o." + OccurrenceEntry.COLUMN_SUBJECT_ID + " " +
                 "FROM " + AttendanceEntry.TABLE_NAME + " a " +
                 "INNER JOIN " + OccurrenceEntry.TABLE_NAME + " o " +
                 "ON a." + AttendanceEntry.COLUMN_OCCURRENCE_ID + " = o." + OccurrenceEntry.COLUMN_ID + " " +
@@ -629,9 +694,10 @@ public class AttendanceRepository {
                 String status = c.getString(6);
                 String decision = c.getString(7);
                 int feeMinor = c.getInt(8);
+                String subjId = c.getString(9);
 
                 if (AttendanceRecord.DECISION_CHARGE.equals(decision) && feeMinor <= 0) {
-                    String[] resolved = resolveBillingForOccurrence(db, accountId, stuId, schedId, groupId, startMin, occDate);
+                    String[] resolved = resolveBillingForOccurrence(db, accountId, stuId, subjId, schedId, groupId, startMin, occDate);
                     int resolvedFee = Integer.parseInt(resolved[1]);
                     if ("PER_CLASS".equals(resolved[0]) && resolvedFee > 0) {
                         ContentValues cv = new ContentValues();
@@ -643,7 +709,12 @@ public class AttendanceRepository {
                                 new String[]{accountId, attId});
                     }
                 } else if (AttendanceRecord.STATUS_PRESENT.equals(status) && AttendanceRecord.DECISION_INCLUDED_MONTHLY.equals(decision)) {
-                    String[] resolved = resolveBillingForOccurrence(db, accountId, stuId, schedId, groupId, startMin, occDate);
+                    // M3: an old "included in monthly" decision is changed ONLY when the fee history
+                    // clearly shows that a per-class fee was in force on that class date. A guess
+                    // from today's fee model must never turn old monthly classes into charges.
+                    if (groupId == null || groupId.isEmpty()) continue;
+                    String[] resolved = lookupCoveringFeeHistory(db, accountId, groupId, occDate);
+                    if (resolved == null) continue;
                     int resolvedFee = Integer.parseInt(resolved[1]);
                     if ("PER_CLASS".equals(resolved[0]) && resolvedFee > 0) {
                         ContentValues cv = new ContentValues();

@@ -161,30 +161,122 @@ public class ScheduleRepository {
             int newFeeAmountMinor,
             int anchorDay,
             long now) {
-        ContentValues closeHist = new ContentValues();
-        closeHist.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO, now - 1);
-        closeHist.put(ScheduleFeeHistoryEntry.COLUMN_UPDATED_AT, now);
-        closeHist.put(ScheduleFeeHistoryEntry.COLUMN_LAST_MODIFIED, now);
-        db.update(ScheduleFeeHistoryEntry.TABLE_NAME, closeHist,
+
+        // The fee-history row that is in force right now (if any).
+        boolean hasOpen = false;
+        String openModel = null;
+        int openFee = 0;
+        int openAnchor = 0;
+        try (Cursor oc = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
+                new String[]{ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR,
+                        ScheduleFeeHistoryEntry.COLUMN_ANCHOR_DAY},
                 ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
                         ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
                         ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL",
-                new String[]{accountId, scheduleGroupId});
+                new String[]{accountId, scheduleGroupId},
+                null, null, ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM + " DESC", "1")) {
+            if (oc.moveToFirst()) {
+                hasOpen = true;
+                openModel = oc.getString(0);
+                openFee = oc.getInt(1);
+                openAnchor = oc.getInt(2);
+            }
+        }
 
-        ContentValues newHist = new ContentValues();
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_ID, UUID.randomUUID().toString());
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID, accountId);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_STUDENT_ID, studentId);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID, scheduleGroupId);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, newBillingModel);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR, newFeeAmountMinor);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_ANCHOR_DAY, anchorDay);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, now);
-        newHist.putNull(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_CREATED_AT, now);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_UPDATED_AT, now);
-        newHist.put(ScheduleFeeHistoryEntry.COLUMN_LAST_MODIFIED, now);
-        db.insertOrThrow(ScheduleFeeHistoryEntry.TABLE_NAME, null, newHist);
+        boolean hasAnyHistory = hasOpen;
+        if (!hasAnyHistory) {
+            try (Cursor ac = db.query(ScheduleFeeHistoryEntry.TABLE_NAME,
+                    new String[]{ScheduleFeeHistoryEntry.COLUMN_ID},
+                    ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?",
+                    new String[]{accountId, scheduleGroupId}, null, null, null, "1")) {
+                hasAnyHistory = ac.moveToFirst();
+            }
+        }
+
+        boolean unchanged = hasOpen
+                && newBillingModel.equals(openModel)
+                && newFeeAmountMinor == openFee
+                && anchorDay == openAnchor;
+
+        // M3: legacy group without any history. Before the new fee is recorded, remember the fee that
+        // was valid until now, so older classes keep THEIR fee instead of silently getting the new one.
+        if (!hasAnyHistory) {
+            String oldModel = null;
+            int oldFee = 0;
+            int oldAnchor = anchorDay;
+            long oldStart = 0L;
+            try (Cursor sc = db.query(ScheduleEntry.TABLE_NAME,
+                    new String[]{ScheduleEntry.COLUMN_BILLING_MODEL, ScheduleEntry.COLUMN_FEE_AMOUNT_MINOR,
+                            ScheduleEntry.COLUMN_ANCHOR_DAY},
+                    ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?",
+                    new String[]{accountId, scheduleGroupId},
+                    null, null, ScheduleEntry.COLUMN_CREATED_AT + " ASC", "1")) {
+                if (sc.moveToFirst()) {
+                    oldModel = sc.getString(0);
+                    oldFee = sc.getInt(1);
+                    oldAnchor = sc.getInt(2);
+                }
+            }
+            try (Cursor mc = db.rawQuery("SELECT MIN(" + ScheduleEntry.COLUMN_START_DATE + ") FROM " + ScheduleEntry.TABLE_NAME +
+                            " WHERE " + ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?",
+                    new String[]{accountId, scheduleGroupId})) {
+                if (mc.moveToFirst() && !mc.isNull(0)) oldStart = Math.max(0L, mc.getLong(0));
+            }
+
+            if (oldModel != null && oldFee > 0) {
+                boolean sameAsNew = oldModel.equals(newBillingModel) && oldFee == newFeeAmountMinor && oldAnchor == anchorDay;
+                ContentValues base = new ContentValues();
+                base.put(ScheduleFeeHistoryEntry.COLUMN_ID, UUID.randomUUID().toString());
+                base.put(ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID, accountId);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_STUDENT_ID, studentId);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID, scheduleGroupId);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, oldModel);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR, oldFee);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_ANCHOR_DAY, oldAnchor);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, oldStart);
+                if (sameAsNew) {
+                    base.putNull(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO);   // still in force: nothing else to record
+                    unchanged = true;
+                } else {
+                    base.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO, Math.max(oldStart, now - 1));
+                }
+                base.put(ScheduleFeeHistoryEntry.COLUMN_CREATED_AT, now);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_UPDATED_AT, now);
+                base.put(ScheduleFeeHistoryEntry.COLUMN_LAST_MODIFIED, now);
+                db.insertOrThrow(ScheduleFeeHistoryEntry.TABLE_NAME, null, base);
+            }
+        }
+
+        // Only a REAL change (model, fee or anchor day) closes the old row and opens a new one.
+        if (!unchanged) {
+            ContentValues closeHist = new ContentValues();
+            closeHist.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO, now - 1);
+            closeHist.put(ScheduleFeeHistoryEntry.COLUMN_UPDATED_AT, now);
+            closeHist.put(ScheduleFeeHistoryEntry.COLUMN_LAST_MODIFIED, now);
+            db.update(ScheduleFeeHistoryEntry.TABLE_NAME, closeHist,
+                    ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
+                            ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID + " = ? AND " +
+                            ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO + " IS NULL",
+                    new String[]{accountId, scheduleGroupId});
+
+            ContentValues newHist = new ContentValues();
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_ID, UUID.randomUUID().toString());
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_ACCOUNT_ID, accountId);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_STUDENT_ID, studentId);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_SCHEDULE_GROUP_ID, scheduleGroupId);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_BILLING_MODEL, newBillingModel);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_FEE_AMOUNT_MINOR, newFeeAmountMinor);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_ANCHOR_DAY, anchorDay);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_FROM, now);
+            newHist.putNull(ScheduleFeeHistoryEntry.COLUMN_EFFECTIVE_TO);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_CREATED_AT, now);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_UPDATED_AT, now);
+            newHist.put(ScheduleFeeHistoryEntry.COLUMN_LAST_MODIFIED, now);
+            db.insertOrThrow(ScheduleFeeHistoryEntry.TABLE_NAME, null, newHist);
+
+            InvoiceRepository.logAudit(db, accountId, studentId, "SCHEDULE_FEE", scheduleGroupId, "FEE_UPDATED",
+                    String.format(Locale.US, "Updated schedule fee to %s ৳%.2f", newBillingModel, newFeeAmountMinor / 100.0));
+        }
 
         ContentValues sv = new ContentValues();
         sv.put(ScheduleEntry.COLUMN_BILLING_MODEL, newBillingModel);
@@ -195,9 +287,6 @@ public class ScheduleRepository {
         db.update(ScheduleEntry.TABLE_NAME, sv,
                 ScheduleEntry.COLUMN_ACCOUNT_ID + " = ? AND " + ScheduleEntry.COLUMN_SCHEDULE_GROUP_ID + " = ?",
                 new String[]{accountId, scheduleGroupId});
-
-        InvoiceRepository.logAudit(db, accountId, studentId, "SCHEDULE_FEE", scheduleGroupId, "FEE_UPDATED",
-                String.format(Locale.US, "Updated schedule fee to %s ৳%.2f", newBillingModel, newFeeAmountMinor / 100.0));
     }
 
     /**
@@ -796,7 +885,10 @@ public class ScheduleRepository {
                 LessonEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) OR " +
                 OccurrenceEntry.COLUMN_ID + " IN (SELECT " + InvoiceItemEntry.COLUMN_OCCURRENCE_ID +
                 " FROM " + InvoiceItemEntry.TABLE_NAME + " WHERE " + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL))";
+                InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) OR " +
+                // M4: makeup classes are detached from the schedule (so the schedule can be edited or
+                // deleted) but kept
+                OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID + " IS NOT NULL)";
 
         db.update(OccurrenceEntry.TABLE_NAME, occValues, where,
                 new String[]{accountId, scheduleId, String.valueOf(startOfTodayMillis), accountId, accountId, accountId});
@@ -817,7 +909,9 @@ public class ScheduleRepository {
                 LessonEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) AND " +
                 OccurrenceEntry.COLUMN_ID + " NOT IN (SELECT " + InvoiceItemEntry.COLUMN_OCCURRENCE_ID +
                 " FROM " + InvoiceItemEntry.TABLE_NAME + " WHERE " + InvoiceItemEntry.COLUMN_ACCOUNT_ID + " = ? AND " +
-                InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL)";
+                InvoiceItemEntry.COLUMN_OCCURRENCE_ID + " IS NOT NULL) AND " +
+                // M4: a makeup class (it points back to the class it replaces) is never deleted here
+                OccurrenceEntry.COLUMN_RESCHEDULED_FROM_ID + " IS NULL";
 
         db.delete(OccurrenceEntry.TABLE_NAME, where,
                 new String[]{accountId, scheduleId, String.valueOf(startOfTodayMillis), accountId, accountId, accountId});
