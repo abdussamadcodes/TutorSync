@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    TutorSync size tokens. 8dp grid (4dp half-step). No raw dp/sp in layouts: use these.
+-->
 <resources>
+    <!-- Spacing -->
     <dimen name="space_xxs">4dp</dimen>
     <dimen name="space_xs">8dp</dimen>
     <dimen name="space_sm">12dp</dimen>
@@ -8,14 +12,73 @@
     <dimen name="space_xl">32dp</dimen>
     <dimen name="space_xxl">48dp</dimen>
 
-    <dimen name="screen_padding_horizontal">20dp</dimen>
+    <!-- Screen layout -->
+    <dimen name="screen_padding_horizontal">16dp</dimen>
     <dimen name="screen_padding_vertical">24dp</dimen>
     <dimen name="content_max_width">520dp</dimen>
-    <dimen name="card_corner_radius">16dp</dimen>
+
+    <!-- Corner radii -->
+    <dimen name="radius_sm">8dp</dimen>
+    <dimen name="radius_md">12dp</dimen>
+    <dimen name="radius_lg">16dp</dimen>
+    <dimen name="radius_xl">24dp</dimen>
+    <dimen name="card_corner_radius">12dp</dimen>
     <dimen name="button_corner_radius">12dp</dimen>
+
+    <!-- Strokes and elevation: outlines instead of shadows -->
     <dimen name="card_elevation_default">0dp</dimen>
     <dimen name="card_stroke_width">1dp</dimen>
     <dimen name="card_stroke_width_selected">2dp</dimen>
+    <dimen name="elevation_raised">2dp</dimen>
+
+    <!-- Touch targets, icons, avatars -->
     <dimen name="min_touch_target">48dp</dimen>
+    <dimen name="icon_sm">16dp</dimen>
+    <dimen name="icon_md">24dp</dimen>
+    <dimen name="icon_lg">32dp</dimen>
+    <dimen name="icon_xl">48dp</dimen>
+    <dimen name="avatar_sm">32dp</dimen>
+    <dimen name="avatar_md">40dp</dimen>
+    <dimen name="avatar_lg">56dp</dimen>
+    <dimen name="avatar_xl">88dp</dimen>
     <dimen name="logo_container_size">72dp</dimen>
+
+    <!-- Controls -->
+    <dimen name="button_height">48dp</dimen>
+    <dimen name="button_height_primary">56dp</dimen>
+    <dimen name="chip_height">32dp</dimen>
+    <dimen name="chip_height_status">24dp</dimen>
+    <dimen name="chip_day_size">44dp</dimen>
+    <dimen name="progress_height">8dp</dimen>
+    <dimen name="progress_height_thin">4dp</dimen>
+    <dimen name="status_stripe_width">4dp</dimen>
+    <dimen name="list_row_min_height">56dp</dimen>
+
+    <!-- Text sizes (sp) -->
+    <dimen name="text_display">32sp</dimen>
+    <dimen name="text_headline_md">24sp</dimen>
+    <dimen name="text_headline_sm">20sp</dimen>
+    <dimen name="text_title_lg">18sp</dimen>
+    <dimen name="text_title_md">16sp</dimen>
+    <dimen name="text_title_sm">14sp</dimen>
+    <dimen name="text_body_lg">16sp</dimen>
+    <dimen name="text_body_md">14sp</dimen>
+    <dimen name="text_body_sm">12sp</dimen>
+    <dimen name="text_label_lg">14sp</dimen>
+    <dimen name="text_label_md">12sp</dimen>
+    <dimen name="text_label_sm">11sp</dimen>
+
+    <!-- Line heights (sp). About 1.5x the size so Bangla matras and conjuncts are never clipped. -->
+    <dimen name="lh_display">44sp</dimen>
+    <dimen name="lh_headline_md">34sp</dimen>
+    <dimen name="lh_headline_sm">30sp</dimen>
+    <dimen name="lh_title_lg">28sp</dimen>
+    <dimen name="lh_title_md">26sp</dimen>
+    <dimen name="lh_title_sm">22sp</dimen>
+    <dimen name="lh_body_lg">26sp</dimen>
+    <dimen name="lh_body_md">22sp</dimen>
+    <dimen name="lh_body_sm">20sp</dimen>
+    <dimen name="lh_label_lg">22sp</dimen>
+    <dimen name="lh_label_md">18sp</dimen>
+    <dimen name="lh_label_sm">18sp</dimen>
 </resources>

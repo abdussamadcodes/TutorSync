@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    TutorSync component styles. Build once, use everywhere.
+    Cards:    Card (outlined list card) | Card.Flat | Card.Tonal | Card.Hero | Card.Alert | Card.Selectable
+    Buttons:  Button (default) | Button.Primary | Button.Secondary | Button.Outlined | Button.Text
+              Button.Destructive | Button.DestructiveText | Button.Day (weekday toggle)
+    Chips:    Chip.Filter | Chip.Status.{Primary,Success,Warning,Error,Info,Neutral}
+    Others:   TextInput, Toolbar, BottomNav, Snackbar, Progress.Linear(.Hero), Divider, FAB, dialogs, bottom sheet
+    Status mapping (same everywhere): Paid=Success, Partial=Warning, Unpaid=Error, Overdue=Error,
+    Present=Success, Absent=Error, Cancelled=Neutral, Makeup=Info, Invoiced=Primary.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ===================== Cards ===================== -->
+
+    <!-- Default list card: surface, 1dp subtle outline, 12dp radius, no shadow -->
+    <style name="Widget.TutorSync.Card" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/card_elevation_default</item>
+        <item name="strokeWidth">@dimen/card_stroke_width</item>
+        <item name="strokeColor">?attr/colorOutlineVariant</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
+    </style>
+
+    <!-- Quiet grouping surface: no outline -->
+    <style name="Widget.TutorSync.Card.Flat" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/card_elevation_default</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardBackgroundColor">?attr/colorSurfaceContainerLow</item>
+    </style>
+
+    <!-- Stat tile: teal tint -->
+    <style name="Widget.TutorSync.Card.Tonal" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/card_elevation_default</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardBackgroundColor">?attr/colorPrimaryContainer</item>
+    </style>
+
+    <!-- Hero money card: deep teal, larger radius. Text on it uses ts_on_hero / ts_on_hero_muted -->
+    <style name="Widget.TutorSync.Card.Hero" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">@dimen/radius_lg</item>
+        <item name="cardElevation">@dimen/card_elevation_default</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardBackgroundColor">@color/ts_hero</item>
+    </style>
+
+    <!-- Money due / attention: amber tint -->
+    <style name="Widget.TutorSync.Card.Alert" parent="Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/card_elevation_default</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardBackgroundColor">?attr/colorTertiaryContainer</item>
+    </style>
+
+    <!-- Multi-select rows: checked = teal outline + overlay + check icon -->
+    <style name="Widget.TutorSync.Card.Selectable">
+        <item name="android:checkable">true</item>
+        <item name="checkedIconTint">?attr/colorPrimary</item>
+        <item name="checkedIconSize">@dimen/icon_md</item>
+    </style>
+
+    <!-- ===================== Buttons ===================== -->
+
+    <!-- Default filled button, 48dp -->
+    <style name="Widget.TutorSync.Button" parent="Widget.Material3.Button">
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.Button</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <!-- Main action of a screen, 56dp -->
+    <style name="Widget.TutorSync.Button.Primary">
+        <item name="android:minHeight">@dimen/button_height_primary</item>
+    </style>
+
+    <!-- Secondary action: teal tonal -->
+    <style name="Widget.TutorSync.Button.Secondary" parent="Widget.Material3.Button.TonalButton">
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.Button</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <style name="Widget.TutorSync.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.Button</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="strokeColor">?attr/colorOutline</item>
+    </style>
+
+    <style name="Widget.TutorSync.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.Button</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <!-- Destructive filled (red) -->
+    <style name="Widget.TutorSync.Button.Destructive">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.TutorSync.Button.Destructive</item>
+    </style>
+
+    <!-- Destructive text button (dialog "Delete", inline "Remove") -->
+    <style name="Widget.TutorSync.Button.DestructiveText" parent="Widget.TutorSync.Button.Text">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.TutorSync.Button.DestructiveText</item>
+    </style>
+
+    <!-- Weekday toggle: use 7 of these inside a MaterialButtonToggleGroup (singleSelection=false).
+         Selected = solid teal with on-primary label; unselected = surface with grey outline. -->
+    <style name="Widget.TutorSync.Button.Day" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">@dimen/chip_day_size</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingEnd">0dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.LabelMedium</item>
+        <item name="android:textColor">@color/ts_day_toggle_text</item>
+        <item name="android:maxLines">1</item>
+        <item name="backgroundTint">@color/ts_day_toggle_bg</item>
+        <item name="strokeColor">@color/ts_day_toggle_stroke</item>
+        <item name="android:checkable">true</item>
+    </style>
+
+    <!-- Button colour overlays -->
+    <style name="ThemeOverlay.TutorSync.Button.Destructive" parent="ThemeOverlay.Material3.Button">
+        <item name="colorContainer">?attr/colorError</item>
+        <item name="colorOnContainer">?attr/colorOnError</item>
+    </style>
+
+    <style name="ThemeOverlay.TutorSync.Button.DestructiveText" parent="ThemeOverlay.Material3.Button.TextButton">
+        <item name="colorOnContainer">?attr/colorError</item>
+    </style>
+
+    <!-- ===================== Chips ===================== -->
+
+    <!-- Filter chip: selected = teal tint + check icon; unselected = outlined -->
+    <style name="Widget.TutorSync.Chip.Filter" parent="Widget.Material3.Chip.Filter">
+        <item name="chipMinHeight">@dimen/chip_height</item>
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.LabelMedium</item>
+    </style>
+
+    <!-- Read-only status chip: compact, no outline, single line. Pick a tone. -->
+    <style name="Widget.TutorSync.Chip.Status" parent="Widget.Material3.Chip.Assist">
+        <item name="android:clickable">false</item>
+        <item name="android:focusable">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.LabelMedium</item>
+        <item name="chipMinHeight">@dimen/chip_height_status</item>
+        <item name="chipStrokeWidth">0dp</item>
+        <item name="chipIconVisible">false</item>
+        <item name="chipIconSize">@dimen/icon_sm</item>
+        <item name="ensureMinTouchTargetSize">false</item>
+        <item name="chipStartPadding">@dimen/space_xxs</item>
+        <item name="chipEndPadding">@dimen/space_xxs</item>
+        <item name="textStartPadding">@dimen/space_xxs</item>
+        <item name="textEndPadding">@dimen/space_xxs</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.TutorSync.Small</item>
+    </style>
+
+    <style name="Widget.TutorSync.Chip.Status.Primary">
+        <item name="chipBackgroundColor">@color/ts_primary_container</item>
+        <item name="android:textColor">@color/ts_on_primary_container</item>
+        <item name="chipIconTint">@color/ts_on_primary_container</item>
+    </style>
+
+    <style name="Widget.TutorSync.Chip.Status.Success">
+        <item name="chipBackgroundColor">@color/ts_success_container</item>
+        <item name="android:textColor">@color/ts_on_success_container</item>
+        <item name="chipIconTint">@color/ts_on_success_container</item>
+    </style>
+
+    <style name="Widget.TutorSync.Chip.Status.Warning">
+        <item name="chipBackgroundColor">@color/ts_warning_container</item>
+        <item name="android:textColor">@color/ts_on_warning_container</item>
+        <item name="chipIconTint">@color/ts_on_warning_container</item>
+    </style>
+
+    <style name="Widget.TutorSync.Chip.Status.Error">
+        <item name="chipBackgroundColor">@color/ts_error_container</item>
+        <item name="android:textColor">@color/ts_on_error_container</item>
+        <item name="chipIconTint">@color/ts_on_error_container</item>
+    </style>
+
+    <style name="Widget.TutorSync.Chip.Status.Info">
+        <item name="chipBackgroundColor">@color/ts_info_container</item>
+        <item name="android:textColor">@color/ts_on_info_container</item>
+        <item name="chipIconTint">@color/ts_on_info_container</item>
+    </style>
+
+    <style name="Widget.TutorSync.Chip.Status.Neutral">
+        <item name="chipBackgroundColor">@color/ts_neutral_container</item>
+        <item name="android:textColor">@color/ts_on_neutral_container</item>
+        <item name="chipIconTint">@color/ts_on_neutral_container</item>
+    </style>
+
+    <!-- ===================== Inputs ===================== -->
+
+    <style name="Widget.TutorSync.TextInput" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxCornerRadiusTopStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/radius_md</item>
+        <item name="boxStrokeWidth">1dp</item>
+        <item name="boxStrokeWidthFocused">2dp</item>
+        <item name="helperTextTextAppearance">@style/TextAppearance.TutorSync.BodySmall</item>
+        <item name="errorTextAppearance">@style/TextAppearance.TutorSync.BodySmall</item>
+    </style>
+
+    <!-- ===================== Bars ===================== -->
+
+    <style name="Widget.TutorSync.Toolbar" parent="Widget.Material3.Toolbar">
+        <item name="titleTextAppearance">@style/TextAppearance.TutorSync.TitleLarge</item>
+        <item name="subtitleTextAppearance">@style/TextAppearance.TutorSync.BodySmall</item>
+        <item name="titleCentered">false</item>
+        <item name="navigationIconTint">?attr/colorOnSurface</item>
+    </style>
+
+    <!-- Bottom navigation: labels always visible, 12sp labels, teal tint indicator -->
+    <style name="Widget.TutorSync.BottomNav" parent="Widget.Material3.BottomNavigationView">
+        <item name="labelVisibilityMode">labeled</item>
+        <item name="itemTextAppearanceActive">@style/TextAppearance.TutorSync.LabelMedium</item>
+        <item name="itemTextAppearanceInactive">@style/TextAppearance.TutorSync.LabelMedium</item>
+    </style>
+
+    <style name="Widget.TutorSync.Snackbar" parent="Widget.Material3.Snackbar">
+        <item name="shapeAppearance">@style/ShapeAppearance.TutorSync.Medium</item>
+    </style>
+
+    <!-- ===================== Progress, divider, FAB ===================== -->
+
+    <style name="Widget.TutorSync.Progress.Linear" parent="Widget.Material3.LinearProgressIndicator">
+        <item name="trackThickness">@dimen/progress_height</item>
+        <item name="trackCornerRadius">@dimen/progress_height_thin</item>
+        <item name="trackColor">?attr/colorSurfaceContainerHighest</item>
+        <item name="indicatorColor">?attr/colorPrimary</item>
+        <item name="indicatorTrackGapSize">0dp</item>
+        <item name="trackStopIndicatorSize">0dp</item>
+    </style>
+
+    <!-- On the hero card: pale track, amber fill -->
+    <style name="Widget.TutorSync.Progress.Linear.Hero">
+        <item name="trackColor">@color/ts_hero_track</item>
+        <item name="indicatorColor">@color/ts_hero_accent</item>
+    </style>
+
+    <style name="Widget.TutorSync.Divider" parent="Widget.Material3.MaterialDivider">
+        <item name="dividerColor">?attr/colorOutlineVariant</item>
+    </style>
+
+    <style name="Widget.TutorSync.FAB" parent="Widget.Material3.FloatingActionButton.Primary">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.TutorSync.Medium</item>
+    </style>
+
+    <style name="Widget.TutorSync.ExtendedFAB" parent="Widget.Material3.ExtendedFloatingActionButton.Icon.Primary">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.TutorSync.Medium</item>
+    </style>
+
+    <!-- ===================== Dialogs and bottom sheet ===================== -->
+
+    <style name="MaterialAlertDialog.TutorSync" parent="MaterialAlertDialog.Material3">
+        <item name="shapeAppearance">@style/ShapeAppearance.TutorSync.Large</item>
+    </style>
+
+    <style name="MaterialAlertDialog.TutorSync.Title.Text" parent="MaterialAlertDialog.Material3.Title.Text">
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.TitleLarge</item>
+    </style>
+
+    <style name="MaterialAlertDialog.TutorSync.Body.Text" parent="MaterialAlertDialog.Material3.Body.Text">
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.BodyMedium</item>
+    </style>
+
+    <!-- Dialog action buttons use the standard dialog text-button look -->
+    <style name="Widget.TutorSync.Button.Dialog" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textAppearance">@style/TextAppearance.TutorSync.Button</item>
+    </style>
+
+    <style name="Widget.TutorSync.Button.Dialog.Destructive">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.TutorSync.Button.DestructiveText</item>
+    </style>
+
+    <style name="ThemeOverlay.TutorSync.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="alertDialogStyle">@style/MaterialAlertDialog.TutorSync</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/MaterialAlertDialog.TutorSync.Title.Text</item>
+        <item name="materialAlertDialogBodyTextStyle">@style/MaterialAlertDialog.TutorSync.Body.Text</item>
+        <item name="buttonBarButtonStyle">@style/Widget.TutorSync.Button.Dialog</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.TutorSync.Button.Dialog</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.TutorSync.Button.Dialog</item>
+    </style>
+
+    <!-- Use for delete / remove confirmations:
+         new MaterialAlertDialogBuilder(ctx, R.style.ThemeOverlay_TutorSync_MaterialAlertDialog_Destructive) -->
+    <style name="ThemeOverlay.TutorSync.MaterialAlertDialog.Destructive">
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.TutorSync.Button.Dialog.Destructive</item>
+    </style>
+
+    <style name="Widget.TutorSync.BottomSheet" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.TutorSync.Sheet</item>
+        <item name="backgroundTint">?attr/colorSurface</item>
+    </style>
+
+    <style name="ThemeOverlay.TutorSync.BottomSheetDialog" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.TutorSync.BottomSheet</item>
+    </style>
+</resources>

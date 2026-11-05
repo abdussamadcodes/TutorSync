@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    TutorSync color tokens - DARK theme.
+    Same names in values/ and values-night/. No hex in layouts: use these tokens or ?attr/ theme colors.
+    Every text/background pair is 4.5:1 or better; outline vs surface is 3:1 or better.
+-->
+<resources>
+
+    <!-- Brand: deep teal (primary) + teal tonal secondary. Amber is the tertiary role = money / due accents. -->
+    <color name="ts_primary">#7ED6D4</color>
+    <color name="ts_on_primary">#003739</color>
+    <color name="ts_primary_container">#00504F</color>
+    <color name="ts_on_primary_container">#BDF2F0</color>
+    <color name="ts_secondary">#8FDCDA</color>
+    <color name="ts_on_secondary">#003738</color>
+    <color name="ts_secondary_container">#1F5253</color>
+    <color name="ts_on_secondary_container">#CDEFEE</color>
+    <color name="ts_tertiary">#F3BF53</color>
+    <color name="ts_on_tertiary">#452B00</color>
+    <color name="ts_tertiary_container">#634000</color>
+    <color name="ts_on_tertiary_container">#FFE6B0</color>
+
+    <!-- Neutrals: slate-teal surfaces; outline = 3:1+ for borders, outline_variant = subtle card borders -->
+    <color name="ts_background">#0E1618</color>
+    <color name="ts_on_background">#DDE6E7</color>
+    <color name="ts_surface">#131C1E</color>
+    <color name="ts_on_surface">#DDE6E7</color>
+    <color name="ts_surface_variant">#2B3A3D</color>
+    <color name="ts_on_surface_variant">#B4C4C7</color>
+    <color name="ts_surface_lowest">#0A1214</color>
+    <color name="ts_surface_low">#172123</color>
+    <color name="ts_surface_container">#1B2628</color>
+    <color name="ts_surface_high">#253133</color>
+    <color name="ts_surface_highest">#303C3E</color>
+    <color name="ts_surface_dim">#0E1618</color>
+    <color name="ts_surface_bright">#344143</color>
+    <color name="ts_outline">#8A9B9F</color>
+    <color name="ts_outline_variant">#38484B</color>
+    <color name="ts_inverse_surface">#DDE6E7</color>
+    <color name="ts_inverse_on_surface">#223234</color>
+    <color name="ts_inverse_primary">#0B5F63</color>
+
+    <!-- Semantic: error (Unpaid, Absent) -->
+    <color name="ts_error">#FFB4AB</color>
+    <color name="ts_on_error">#690005</color>
+    <color name="ts_error_container">#5C1A16</color>
+    <color name="ts_on_error_container">#FFDAD6</color>
+
+    <!-- Semantic: success (Paid, Present) -->
+    <color name="ts_success">#7FDB9E</color>
+    <color name="ts_on_success">#00391C</color>
+    <color name="ts_success_container">#14482B</color>
+    <color name="ts_on_success_container">#C4F2D3</color>
+
+    <!-- Semantic: warning (Partial, Due soon) -->
+    <color name="ts_warning">#F3BF53</color>
+    <color name="ts_on_warning">#452B00</color>
+    <color name="ts_warning_container">#5A3B00</color>
+    <color name="ts_on_warning_container">#FFE6B0</color>
+
+    <!-- Semantic: info (Makeup) -->
+    <color name="ts_info">#A5CBF6</color>
+    <color name="ts_on_info">#06305A</color>
+    <color name="ts_info_container">#1B4372</color>
+    <color name="ts_on_info_container">#D7E7FB</color>
+
+    <!-- Semantic: neutral (Cancelled, Void) -->
+    <color name="ts_neutral">#B7C4C7</color>
+    <color name="ts_on_neutral">#233033</color>
+    <color name="ts_neutral_container">#2E3B3E</color>
+    <color name="ts_on_neutral_container">#DDE6E7</color>
+
+    <!-- Hero card (dashboard money summary) -->
+    <color name="ts_hero">#0F4A4D</color>
+    <color name="ts_on_hero">#E8F8F7</color>
+    <color name="ts_on_hero_muted">#A8D2D1</color>
+    <color name="ts_hero_accent">#F3BF53</color>
+    <color name="ts_hero_track">#2F6A6C</color>
+
+    <!-- Scrim -->
+    <color name="ts_scrim">#000000</color>
+
+    <!-- Light status/navigation bar icons on dark theme -->
+    <bool name="ts_light_system_bars">false</bool>
+</resources>

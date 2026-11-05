@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    TutorSync type scale. Plus Jakarta Sans for Latin text and numerals; Bangla glyphs (and the taka sign)
+    fall back to the system Bengali font, so line heights are generous (about 1.5x) and letterSpacing is 0
+    (letter spacing can break Bangla conjuncts). Money uses tabular numerals so amounts line up.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Scale: mapped to the theme textAppearance* attributes, so ?attr/textAppearanceBodyMedium etc. use these -->
+    <style name="TextAppearance.TutorSync.DisplaySmall" parent="TextAppearance.Material3.DisplaySmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="android:textSize">@dimen/text_display</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_display</item>
+        <item name="lineHeight">@dimen/lh_display</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.HeadlineMedium" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="android:textSize">@dimen/text_headline_md</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_headline_md</item>
+        <item name="lineHeight">@dimen/lh_headline_md</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.HeadlineSmall" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_headline_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_headline_sm</item>
+        <item name="lineHeight">@dimen/lh_headline_sm</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_title_lg</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_title_lg</item>
+        <item name="lineHeight">@dimen/lh_title_lg</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_title_md</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_title_md</item>
+        <item name="lineHeight">@dimen/lh_title_md</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_title_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_title_sm</item>
+        <item name="lineHeight">@dimen/lh_title_sm</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="android:textSize">@dimen/text_body_lg</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_body_lg</item>
+        <item name="lineHeight">@dimen/lh_body_lg</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="android:textSize">@dimen/text_body_md</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_body_md</item>
+        <item name="lineHeight">@dimen/lh_body_md</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="android:textSize">@dimen/text_body_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_body_sm</item>
+        <item name="lineHeight">@dimen/lh_body_sm</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_label_lg</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_label_lg</item>
+        <item name="lineHeight">@dimen/lh_label_lg</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_medium</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_medium</item>
+        <item name="android:textSize">@dimen/text_label_md</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_label_md</item>
+        <item name="lineHeight">@dimen/lh_label_md</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_medium</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_medium</item>
+        <item name="android:textSize">@dimen/text_label_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_label_sm</item>
+        <item name="lineHeight">@dimen/lh_label_sm</item>
+    </style>
+
+    <!-- Purpose styles (use these in layouts) -->
+    <style name="TextAppearance.TutorSync.MoneyHero" parent="TextAppearance.Material3.DisplaySmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="android:textSize">@dimen/text_display</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_display</item>
+        <item name="lineHeight">@dimen/lh_display</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.MoneyLarge" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_bold</item>
+        <item name="android:textSize">@dimen/text_headline_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_headline_sm</item>
+        <item name="lineHeight">@dimen/lh_headline_sm</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.Money" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_title_md</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_title_md</item>
+        <item name="lineHeight">@dimen/lh_title_md</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.MoneySmall" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_body_md</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_body_md</item>
+        <item name="lineHeight">@dimen/lh_body_md</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.Caption" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_medium</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_medium</item>
+        <item name="android:textSize">@dimen/text_label_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_label_sm</item>
+        <item name="lineHeight">@dimen/lh_label_sm</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.Meta" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_regular</item>
+        <item name="android:textSize">@dimen/text_body_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_body_sm</item>
+        <item name="lineHeight">@dimen/lh_body_sm</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.SectionHeader" parent="TextAppearance.Material3.TitleSmall">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_title_sm</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_title_sm</item>
+        <item name="lineHeight">@dimen/lh_title_sm</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.TutorSync.Button" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="fontFamily">@font/plus_jakarta_sans_semibold</item>
+        <item name="android:textSize">@dimen/text_label_lg</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineHeight" tools:targetApi="p">@dimen/lh_label_lg</item>
+        <item name="lineHeight">@dimen/lh_label_lg</item>
+    </style>
+
+</resources>
