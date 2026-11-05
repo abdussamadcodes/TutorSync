@@ -430,4 +430,21 @@
     <string name="backup_restore_done_conflicts_fmt">ব্যাকআপ রিস্টোর হয়েছে (%1$d যুক্ত, %2$d হালনাগাদ, %3$d অপরিবর্তিত, %4$d আর্থিক দ্বন্দ্ব সংরক্ষিত)। আগের তথ্যের একটি সেফটি ব্যাকআপ রাখা হয়েছে।</string>
     <string name="backup_restore_failed_fmt">রিস্টোর ব্যর্থ: %1$s। আপনার তথ্য বদলায়নি।</string>
     <string name="backup_restore_read_failed_fmt">ব্যাকআপ খোলা যায়নি: %1$s</string>
+
+    <!-- M9: app lock -->
+    <string name="app_lock_wrong_pin_attempts_left">পিন ভুল। সাময়িক লক হওয়ার আগে আর %1$d বার চেষ্টা করা যাবে।</string>
+    <string name="app_lock_locked_out">অনেকবার ভুল পিন দেওয়া হয়েছে। %1$s পরে আবার চেষ্টা করুন।</string>
+
+    <!-- M7: PDF -->
+    <string name="pdf_preparing">পিডিএফ তৈরি হচ্ছে…</string>
+    <string name="pdf_ready_title">পিডিএফ তৈরি</string>
+    <string name="pdf_action_preview">প্রিভিউ</string>
+    <string name="pdf_action_share">শেয়ার</string>
+    <string name="pdf_action_save_downloads">ডাউনলোডে সংরক্ষণ করুন</string>
+    <string name="pdf_close">বন্ধ করুন</string>
+    <string name="pdf_saved_downloads">Downloads/TutorSync এ সংরক্ষিত হয়েছে</string>
+    <string name="pdf_save_failed">পিডিএফ ডাউনলোডে সংরক্ষণ করা যায়নি। বদলে শেয়ার করে কোনো ফাইল অ্যাপ বেছে নিন।</string>
+    <string name="pdf_err_title">পিডিএফ তৈরি হয়নি</string>
+    <string name="pdf_err_failed">পিডিএফ তৈরি করা যায়নি। আবার চেষ্টা করুন।</string>
+    <string name="pdf_err_share">পিডিএফ খোলা বা শেয়ার করা যায়নি। আবার চেষ্টা করুন।</string>
 </resources>

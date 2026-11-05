@@ -21,6 +21,7 @@ import com.abdussamadcodes.tutorsync.security.AppLockManager;
 import com.abdussamadcodes.tutorsync.security.BiometricAuthHelper;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
+import com.abdussamadcodes.tutorsync.util.AppExecutors;
 
 public class PinLockActivity extends BaseActivity {
     private ActivityPinLockBinding binding;
@@ -28,6 +29,21 @@ public class PinLockActivity extends BaseActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private boolean biometricAvailable = false;
     private boolean hasAutoPromptedBiometric = false;
+    private boolean verifying = false;     // a PIN check is running in the background
+    private boolean lockedOut = false;     // too many wrong attempts: input disabled
+
+    private final Runnable lockoutTicker = new Runnable() {
+        @Override
+        public void run() {
+            long remaining = sessionManager.getPinLockoutRemainingMs();
+            if (remaining <= 0L) {
+                endLockout();
+            } else {
+                binding.tvPinStatus.setText(getString(R.string.app_lock_locked_out, formatRemaining(remaining)));
+                mainHandler.postDelayed(this, 500L);
+            }
+        }
+    };
 
     private final Runnable checkAndPromptBiometricRunnable = new Runnable() {
         @Override
@@ -74,35 +90,104 @@ public class PinLockActivity extends BaseActivity {
         binding.etPin.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                binding.etPin.setError(null);
+                if (!lockedOut) binding.tvPinStatus.setText("");
             }
             @Override
             public void afterTextChanged(Editable s) {
-                String input = s.toString();
-                if (input.length() >= 4) {
-                    if (sessionManager.verifyPin(input)) {
-                        unlockAndFinish();
-                    } else if (input.length() == 6) {
-                        binding.etPin.setError(getString(R.string.app_lock_incorrect_pin));
-                    }
+                // Submit automatically only when the PIN has its full length. (Checking after every
+                // digit would count every typed digit as a wrong attempt.)
+                int pinLength = sessionManager.getSavedPinLength();
+                int target = pinLength > 0 ? pinLength : 6;
+                if (s.length() == target) {
+                    submitPin(s.toString());
                 }
             }
         });
 
         binding.etPin.setOnEditorActionListener((v, actionId, event) -> {
             String input = binding.etPin.getText().toString();
-            if (sessionManager.verifyPin(input)) {
-                unlockAndFinish();
+            if (input.length() < 4) {
+                binding.tvPinStatus.setText(R.string.app_lock_pin_length_err);
             } else {
-                binding.etPin.setError(getString(R.string.app_lock_incorrect_pin));
+                submitPin(input);
             }
             return true;
         });
+
+        showLockoutIfActive();
+    }
+
+    /** Checks the PIN in the background (the hash is deliberately slow) and applies attempt limits. */
+    private void submitPin(@NonNull String input) {
+        if (verifying || lockedOut || input.length() < 4) return;
+        verifying = true;
+        binding.etPin.setEnabled(false);
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            SessionManager.PinAttempt attempt = sessionManager.attemptPin(input);
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                verifying = false;
+                if (isFinishing() || isDestroyed()) return;
+                binding.etPin.setEnabled(true);
+                switch (attempt.status) {
+                    case OK:
+                        unlockAndFinish();
+                        break;
+                    case LOCKED_OUT:
+                        binding.etPin.setText("");
+                        startLockout();
+                        break;
+                    case WRONG:
+                        binding.etPin.setText("");
+                        if (attempt.lockoutRemainingMs > 0L) {
+                            startLockout();
+                        } else if (attempt.attemptsLeft > 0 && attempt.attemptsLeft <= 2) {
+                            binding.tvPinStatus.setText(getString(
+                                    R.string.app_lock_wrong_pin_attempts_left, attempt.attemptsLeft));
+                            focusPinInput();
+                        } else {
+                            binding.tvPinStatus.setText(R.string.app_lock_incorrect_pin);
+                            focusPinInput();
+                        }
+                        break;
+                    default:
+                        binding.tvPinStatus.setText(R.string.app_lock_incorrect_pin);
+                        break;
+                }
+            });
+        });
+    }
+
+    private void showLockoutIfActive() {
+        if (sessionManager.getPinLockoutRemainingMs() > 0L) {
+            startLockout();
+        }
+    }
+
+    private void startLockout() {
+        lockedOut = true;
+        binding.etPin.setEnabled(false);
+        mainHandler.removeCallbacks(lockoutTicker);
+        mainHandler.post(lockoutTicker);
+    }
+
+    private void endLockout() {
+        lockedOut = false;
+        mainHandler.removeCallbacks(lockoutTicker);
+        binding.tvPinStatus.setText("");
+        binding.etPin.setEnabled(true);
+        focusPinInput();
+    }
+
+    @NonNull
+    private static String formatRemaining(long ms) {
+        long totalSeconds = (ms + 999L) / 1000L;
+        return String.format(java.util.Locale.US, "%d:%02d", totalSeconds / 60L, totalSeconds % 60L);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        if (!lockedOut) showLockoutIfActive();
         if (biometricAvailable && !hasAutoPromptedBiometric) {
             mainHandler.removeCallbacks(checkAndPromptBiometricRunnable);
             mainHandler.post(checkAndPromptBiometricRunnable);
@@ -121,6 +206,7 @@ public class PinLockActivity extends BaseActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        binding.etPin.setText("");
         mainHandler.removeCallbacks(checkAndPromptBiometricRunnable);
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);

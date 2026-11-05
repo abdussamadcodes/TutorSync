@@ -1171,13 +1171,11 @@ public class StudentTransactionsActivity extends BaseActivity {
                 .setTitle(txn.getTxnIdDisplay() + " (" + formatCurrency(txn.getAmountMinor()) + ")")
                 .setItems(items, (d, which) -> {
                     if (which == 0) {
-                        try {
-                            File pdf = FinancialPdfGenerator.generatePaymentReceiptPdf(
-                                    this, getActiveTutorName(), currentStudent, txn);
-                            FinancialPdfGenerator.sharePdf(this, pdf, getString(R.string.invoice_share_receipt_pdf));
-                        } catch (Exception e) {
-                            showMessage(contentContainer, e.getMessage());
-                        }
+                        // M7: built in the background; the tutor then previews, shares or saves it
+                        final String tutorName = getActiveTutorName();
+                        final Object studentArg = currentStudent;
+                        PdfActions.generateAndShowOptions(this, R.string.invoice_share_receipt_pdf,
+                                appCtx -> FinancialPdfGenerator.generatePaymentReceiptPdf(appCtx, tutorName, studentArg, txn));
                     } else if (which == 1 && isPayment) {
                         showRefundDialog(txn);
                     }

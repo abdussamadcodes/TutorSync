@@ -105,9 +105,6 @@ public final class FinancialPdfGenerator {
         if (data == null) return null;
 
         File pdf = renderInvoiceDocument(context, data);
-        if (pdf != null) {
-            savePdfToDownloads(context, pdf);
-        }
         return pdf;
     }
 
@@ -145,9 +142,6 @@ public final class FinancialPdfGenerator {
         if (data == null) return null;
 
         File pdf = renderReceiptDocument(context, data);
-        if (pdf != null) {
-            savePdfToDownloads(context, pdf);
-        }
         return pdf;
     }
 
@@ -173,9 +167,6 @@ public final class FinancialPdfGenerator {
         if (data == null) return null;
 
         File pdf = renderStudentStatementDocument(context, data);
-        if (pdf != null) {
-            savePdfToDownloads(context, pdf);
-        }
         return pdf;
     }
 
@@ -230,9 +221,6 @@ public final class FinancialPdfGenerator {
         FinancialReportData data = loadFinancialReportData(context, billingPeriodFilter);
         if (data == null) return null;
         File pdf = renderFinancialReportDocument(context, data);
-        if (pdf != null) {
-            savePdfToDownloads(context, pdf);
-        }
         return pdf;
     }
 
@@ -252,12 +240,19 @@ public final class FinancialPdfGenerator {
 
                 try (OutputStream out = context.getContentResolver().openOutputStream(itemUri);
                      FileInputStream in = new FileInputStream(pdfFile)) {
-                    if (out == null) return null;
+                    if (out == null) {
+                        context.getContentResolver().delete(itemUri, null, null);
+                        return null;
+                    }
                     byte[] buffer = new byte[8192];
                     int len;
                     while ((len = in.read(buffer)) > 0) {
                         out.write(buffer, 0, len);
                     }
+                } catch (Exception copyError) {
+                    // do not leave an empty "pending" file behind in Downloads
+                    context.getContentResolver().delete(itemUri, null, null);
+                    throw copyError;
                 }
 
                 values.clear();
@@ -295,7 +290,10 @@ public final class FinancialPdfGenerator {
         }
         try {
             Uri uri = resolveShareableUri(context, pdfFile);
-            if (uri == null) return;
+            if (uri == null) {
+                Toast.makeText(context, com.abdussamadcodes.tutorsync.R.string.pdf_err_share, Toast.LENGTH_LONG).show();
+                return;
+            }
 
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType("application/pdf");
@@ -312,7 +310,10 @@ public final class FinancialPdfGenerator {
         if (pdfFile == null || !pdfFile.exists()) return;
         try {
             Uri uri = resolveShareableUri(context, pdfFile);
-            if (uri == null) return;
+            if (uri == null) {
+                Toast.makeText(context, com.abdussamadcodes.tutorsync.R.string.pdf_err_share, Toast.LENGTH_LONG).show();
+                return;
+            }
 
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(uri, "application/pdf");
@@ -332,7 +333,7 @@ public final class FinancialPdfGenerator {
                     pdfFile
             );
         } catch (Exception e) {
-            return savePdfToDownloads(context, pdfFile);
+            return null;   // M7: never copy into the public Downloads folder just to share
         }
     }
 
@@ -2032,9 +2033,22 @@ public final class FinancialPdfGenerator {
 
     @NonNull
     private static File getOutputPdfFile(@NonNull Context context, @NonNull String fileName) {
-        File dir = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "TutorSync_PDFs");
+        // M7: private cache folder (already exposed by the FileProvider as "documents/"), so sharing and
+        // previewing work without copying anything into the public Downloads folder.
+        File dir = new File(context.getCacheDir(), "documents");
         if (!dir.exists()) {
             dir.mkdirs();
+        }
+        // housekeeping: temporary PDFs older than one day are removed
+        File[] old = dir.listFiles();
+        if (old != null) {
+            long cutoff = System.currentTimeMillis() - 24L * 60L * 60L * 1000L;
+            for (File f : old) {
+                if (f.isFile() && f.lastModified() < cutoff) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            }
         }
         return new File(dir, fileName);
     }

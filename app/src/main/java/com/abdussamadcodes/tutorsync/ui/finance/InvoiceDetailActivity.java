@@ -262,13 +262,11 @@ public class InvoiceDetailActivity extends BaseActivity {
                 .setTitle(txn.getTxnIdDisplay())
                 .setItems(options, (d, which) -> {
                     if (which == 0 && currentStudent != null) {
-                        try {
-                            File file = FinancialPdfGenerator.generatePaymentReceiptPdf(
-                                    this, getActiveTutorName(), currentStudent, txn);
-                            FinancialPdfGenerator.sharePdf(this, file, getString(R.string.invoice_share_receipt_pdf));
-                        } catch (Exception e) {
-                            showMessage(rootContent, e.getMessage());
-                        }
+                        // M7: built in the background; the tutor then previews, shares or saves it
+                        final String tutorName = getActiveTutorName();
+                        final Object studentArg = currentStudent;
+                        PdfActions.generateAndShowOptions(this, R.string.invoice_share_receipt_pdf,
+                                appCtx -> FinancialPdfGenerator.generatePaymentReceiptPdf(appCtx, tutorName, studentArg, txn));
                     } else if (which == 1 && FinancialTransaction.TYPE_PAYMENT.equals(txn.getType())) {
                         // M1: amount + reason + confirmation + clear failure messages
                         RefundDialogHelper.show(this, txnRepo, currentInvoice.getAccountId(), txn, () -> {
@@ -282,13 +280,15 @@ public class InvoiceDetailActivity extends BaseActivity {
 
     private void exportInvoicePdf() {
         if (currentStudent == null) return;
-        try {
-            File pdf = FinancialPdfGenerator.generateInvoicePdf(
-                    this, getActiveTutorName(), currentStudent, currentInvoice, currentItems, currentTransactions);
-            FinancialPdfGenerator.sharePdf(this, pdf, getString(R.string.invoice_export_pdf));
-        } catch (Exception e) {
-            showMessage(rootContent, e.getMessage());
-        }
+        // M7: built in the background; copies are passed so a screen refresh cannot change them mid-way
+        final String tutorName = getActiveTutorName();
+        final Object studentArg = currentStudent;
+        final Object invoiceArg = currentInvoice;
+        final java.util.List<?> itemsArg = new java.util.ArrayList<>(currentItems);
+        final java.util.List<?> transactionsArg = new java.util.ArrayList<>(currentTransactions);
+        PdfActions.generateAndShowOptions(this, R.string.invoice_export_pdf,
+                appCtx -> FinancialPdfGenerator.generateInvoicePdf(
+                        appCtx, tutorName, studentArg, invoiceArg, itemsArg, transactionsArg));
     }
 
     private void addHeader(String text) {

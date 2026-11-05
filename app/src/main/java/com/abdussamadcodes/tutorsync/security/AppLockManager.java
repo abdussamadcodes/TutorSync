@@ -47,6 +47,10 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
 
     private boolean isSessionUnlocked;
     private boolean isLockScreenShowing = false;
+    // M9: the (slow) device-unlock probe runs only when the app comes back to the foreground
+    private int startedActivities = 0;
+    private boolean needsForegroundDeviceCheck = false;
+    private long backgroundedAtRealtime = 0L;
     private WeakReference<Activity> topActivityRef = new WeakReference<>(null);
 
     private AppLockManager(@NonNull Application application) {
@@ -190,17 +194,35 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
             return true; // Device rebooted
         }
 
-        int elapsedSeconds = (int) (elapsedMs / 1000L);
+        int elapsedSeconds = (int) Math.min(Integer.MAX_VALUE, elapsedMs / 1000L);
         if (elapsedSeconds < 3) {
             return false;
         }
 
         KeyguardManager km = (KeyguardManager) application.getSystemService(Context.KEYGUARD_SERVICE);
         if (km == null || !km.isDeviceSecure()) {
-            return false;
+            return false; // no device lock screen to detect; screen-off events still lock the app
         }
 
-        int probeTimeoutSeconds = Math.max(1, elapsedSeconds - 2);
+        Boolean unlockedSince = probeDeviceUnlockSince(Math.max(1, elapsedSeconds - 2));
+        if (unlockedSince != null) {
+            return unlockedSince;
+        }
+
+        // The probe could not give an answer (keystore problem). Do NOT silently stay unlocked:
+        // lock when the app was in the background for more than 30 seconds.
+        return backgroundedAtRealtime > 0L
+                && SystemClock.elapsedRealtime() - backgroundedAtRealtime > 30_000L;
+    }
+
+    /**
+     * Asks the Android Keystore whether the user authenticated on the device (lock screen or
+     * biometric) within the last {@code probeTimeoutSeconds}.
+     *
+     * @return TRUE = yes, the phone was unlocked since; FALSE = no; null = could not be determined
+     */
+    @Nullable
+    private Boolean probeDeviceUnlockSince(int probeTimeoutSeconds) {
         try {
             KeyGenerator keyGenerator = KeyGenerator.getInstance(
                     KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER);
@@ -219,19 +241,25 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
                 //noinspection deprecation
                 builder.setUserAuthenticationValidityDurationSeconds(probeTimeoutSeconds);
             }
+            keyGenerator.init(builder.build());
 
             SecretKey secretKey = keyGenerator.generateKey();
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS7Padding");
             cipher.init(Cipher.ENCRYPT_MODE, secretKey);
 
-            // Cipher.init succeeded, which means a device unlock occurred within probeTimeoutSeconds
-            // (more recently than lastAppUnlockRealtime).
-            return true;
+            // Cipher.init succeeded: the user authenticated within probeTimeoutSeconds, i.e. the
+            // device was unlocked more recently than the last TutorSync unlock.
+            return Boolean.TRUE;
         } catch (UserNotAuthenticatedException e) {
-            // No device unlock occurred within probeTimeoutSeconds; phone remained unlocked.
-            return false;
+            return Boolean.FALSE;   // no device unlock since: the phone stayed unlocked
+        } catch (java.security.InvalidKeyException e) {
+            String msg = e.getMessage();
+            if (msg != null && msg.toLowerCase(java.util.Locale.US).contains("authenticat")) {
+                return Boolean.FALSE;
+            }
+            return null;
         } catch (Throwable t) {
-            return false;
+            return null;
         } finally {
             try {
                 KeyStore ks = KeyStore.getInstance(KEYSTORE_PROVIDER);
@@ -271,6 +299,10 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
         if (isDeviceCurrentlyLocked(activity)) {
             lockSession();
         } else if (isSessionUnlocked && sessionManager.isSessionUnlockedForCurrentBoot()) {
+            if (!needsForegroundDeviceCheck) {
+                return; // moving between screens inside the app: nothing new to check
+            }
+            needsForegroundDeviceCheck = false;
             if (hasDeviceUnlockedSinceAppUnlock()) {
                 lockSession();
             } else {
@@ -291,6 +323,9 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
 
     @Override
     public void onActivityStarted(@NonNull Activity activity) {
+        if (startedActivities++ == 0) {
+            needsForegroundDeviceCheck = true;   // the app just came back to the foreground
+        }
         if (!isExemptActivity(activity)) {
             topActivityRef = new WeakReference<>(activity);
             if (isDeviceCurrentlyLocked(activity)) {
@@ -329,6 +364,10 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
 
     @Override
     public void onActivityStopped(@NonNull Activity activity) {
+        startedActivities = Math.max(0, startedActivities - 1);
+        if (startedActivities == 0) {
+            backgroundedAtRealtime = SystemClock.elapsedRealtime();
+        }
         if (isDeviceCurrentlyLocked(activity)) {
             lockSession();
         }

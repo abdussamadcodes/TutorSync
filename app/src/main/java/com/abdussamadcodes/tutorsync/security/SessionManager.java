@@ -14,7 +14,27 @@ public class SessionManager {
     private static final String KEY_SESSION_UNLOCKED = "session_unlocked";
     private static final String KEY_UNLOCKED_BOOT_COUNT = "unlocked_boot_count";
     private static final String KEY_LAST_APP_UNLOCK_REALTIME = "last_app_unlock_realtime";
-    public static final String PIN_SALT_BASE64 = "VHV0b3JTeW5jUGluU2FsdA==";
+    private static final String KEY_PIN_FAILS = "pin_fails_";
+    private static final String KEY_PIN_LOCK_END_RT = "pin_lock_end_rt_";
+    private static final String KEY_PIN_LOCK_BOOT = "pin_lock_boot_";
+    private static final String KEY_PIN_LOCK_END_WALL = "pin_lock_end_wall_";
+
+    /** Result of one PIN attempt on the lock screen. */
+    public enum PinStatus { OK, WRONG, LOCKED_OUT, NO_PIN }
+
+    public static final class PinAttempt {
+        @NonNull public final PinStatus status;
+        /** Wrong attempts still allowed before the first temporary lock (only while WRONG). */
+        public final int attemptsLeft;
+        /** Time the lock screen refuses further attempts (LOCKED_OUT, or WRONG that triggered a lock). */
+        public final long lockoutRemainingMs;
+
+        PinAttempt(@NonNull PinStatus status, int attemptsLeft, long lockoutRemainingMs) {
+            this.status = status;
+            this.attemptsLeft = attemptsLeft;
+            this.lockoutRemainingMs = lockoutRemainingMs;
+        }
+    }
 
     private final Context appContext;
     private final SharedPreferences prefs;
@@ -56,6 +76,11 @@ public class SessionManager {
         if (accountId.isEmpty()) return;
 
         SharedPreferences.Editor editor = prefs.edit();
+        // a new / removed PIN always starts with a clean attempt counter
+        editor.remove(KEY_PIN_FAILS + accountId)
+                .remove(KEY_PIN_LOCK_END_RT + accountId)
+                .remove(KEY_PIN_LOCK_BOOT + accountId)
+                .remove(KEY_PIN_LOCK_END_WALL + accountId);
         if (hashedPin == null || hashedPin.isEmpty()) {
             editor.remove("pin_" + accountId);
             editor.remove("bio_" + accountId);
@@ -100,15 +125,78 @@ public class SessionManager {
         return prefs.getBoolean("bio_" + accountId, false);
     }
 
-    public boolean verifyPin(@NonNull String rawPin) {
-        String savedHash = getSavedPinHash();
-        if (savedHash.isEmpty()) return false;
-        try {
-            String candidateHash = PasswordHasher.hashPassword(rawPin, PIN_SALT_BASE64);
-            return savedHash.equals(candidateHash);
-        } catch (Exception e) {
-            return false;
+    /** Saves a new PIN (salted, slow hash). Throws if the hash cannot be computed. */
+    public void setPin(@NonNull String rawPin, boolean useBiometric) throws java.security.GeneralSecurityException {
+        savePinSetup(PinHasher.hash(rawPin), useBiometric);
+    }
+
+    /** Length of the saved PIN (4-6), or 0 when it is not known (PIN saved by an older app version). */
+    public int getSavedPinLength() {
+        return PinHasher.storedLength(getSavedPinHash());
+    }
+
+    /** Milliseconds until the lock screen accepts PIN attempts again (0 = not locked out). */
+    public long getPinLockoutRemainingMs() {
+        String accountId = getActiveAccountId();
+        if (accountId.isEmpty()) return 0L;
+        long endRealtime = prefs.getLong(KEY_PIN_LOCK_END_RT + accountId, 0L);
+        long endWall = prefs.getLong(KEY_PIN_LOCK_END_WALL + accountId, 0L);
+        if (endRealtime == 0L && endWall == 0L) return 0L;
+
+        long remaining;
+        if (prefs.getInt(KEY_PIN_LOCK_BOOT + accountId, -1) == getCurrentBootCount()) {
+            remaining = endRealtime - SystemClock.elapsedRealtime();
+        } else {
+            // after a reboot elapsedRealtime starts again from 0, so use the wall clock
+            remaining = endWall - System.currentTimeMillis();
         }
+        // never longer than the maximum lockout, even if the clock was changed
+        return Math.max(0L, Math.min(remaining, PinLockoutPolicy.MAX_LOCKOUT_MS));
+    }
+
+    /**
+     * One PIN attempt with attempt limiting. Does a slow hash, so call it OFF the main thread.
+     * A PIN saved by an older app version is verified and silently re-saved in the new format.
+     */
+    @NonNull
+    public PinAttempt attemptPin(@NonNull String rawPin) {
+        String accountId = getActiveAccountId();
+        if (accountId.isEmpty() || !hasPinSetup()) {
+            return new PinAttempt(PinStatus.NO_PIN, 0, 0L);
+        }
+        long locked = getPinLockoutRemainingMs();
+        if (locked > 0L) {
+            return new PinAttempt(PinStatus.LOCKED_OUT, 0, locked);
+        }
+
+        String stored = getSavedPinHash();
+        if (PinHasher.verify(rawPin, stored)) {
+            SharedPreferences.Editor editor = prefs.edit()
+                    .remove(KEY_PIN_FAILS + accountId)
+                    .remove(KEY_PIN_LOCK_END_RT + accountId)
+                    .remove(KEY_PIN_LOCK_BOOT + accountId)
+                    .remove(KEY_PIN_LOCK_END_WALL + accountId);
+            if (PinHasher.needsUpgrade(stored)) {
+                try {
+                    editor.putString("pin_" + accountId, PinHasher.hash(rawPin));
+                } catch (Exception ignored) {
+                    // keep the old hash; it still works
+                }
+            }
+            editor.commit();
+            return new PinAttempt(PinStatus.OK, 0, 0L);
+        }
+
+        int fails = prefs.getInt(KEY_PIN_FAILS + accountId, 0) + 1;
+        long lockMs = PinLockoutPolicy.lockoutDurationMs(fails);
+        SharedPreferences.Editor editor = prefs.edit().putInt(KEY_PIN_FAILS + accountId, fails);
+        if (lockMs > 0L) {
+            editor.putLong(KEY_PIN_LOCK_END_RT + accountId, SystemClock.elapsedRealtime() + lockMs)
+                    .putInt(KEY_PIN_LOCK_BOOT + accountId, getCurrentBootCount())
+                    .putLong(KEY_PIN_LOCK_END_WALL + accountId, System.currentTimeMillis() + lockMs);
+        }
+        editor.commit();
+        return new PinAttempt(PinStatus.WRONG, PinLockoutPolicy.attemptsBeforeLockout(fails), lockMs);
     }
 
     public void setSessionUnlockedState(boolean unlocked) {

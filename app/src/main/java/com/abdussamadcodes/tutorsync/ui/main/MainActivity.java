@@ -715,8 +715,8 @@ public class MainActivity extends BaseActivity {
                         return;
                     }
                     try {
-                        String hashedPin = PasswordHasher.hashPassword(rawPin, SessionManager.PIN_SALT_BASE64);
-                        sessionManager.savePinSetup(hashedPin, cbBio.isChecked() && bioReady);
+                        // M9: salted, slow hash; the attempt counter is reset
+                        sessionManager.setPin(rawPin, cbBio.isChecked() && bioReady);
                         AppLockManager.getInstance().markUnlocked();
                         refreshStatusLabels();
                     } catch (Exception e) {

@@ -44,10 +44,24 @@
         android:letterSpacing="0.5"
         android:maxLength="6"
         android:textSize="24sp"
-        app:layout_constraintBottom_toTopOf="@+id/btnBiometric"
+        app:layout_constraintBottom_toTopOf="@+id/tvPinStatus"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/tvPinTitle" />
+
+    <TextView
+        android:id="@+id/tvPinStatus"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_md"
+        android:gravity="center"
+        android:minHeight="20dp"
+        android:textColor="?attr/colorError"
+        android:textSize="14sp"
+        app:layout_constraintBottom_toTopOf="@+id/btnBiometric"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/etPin" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnBiometric"
@@ -60,6 +74,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/etPin" />
+        app:layout_constraintTop_toBottomOf="@+id/tvPinStatus" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
