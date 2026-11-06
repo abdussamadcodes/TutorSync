@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bangla does not inflect nouns for number, so one and other are the same. -->
+<resources>
+    <plurals name="plural_classes">
+        <item quantity="one">%1$sটি ক্লাস</item>
+        <item quantity="other">%1$sটি ক্লাস</item>
+    </plurals>
+    <plurals name="plural_students">
+        <item quantity="one">%1$s জন শিক্ষার্থী</item>
+        <item quantity="other">%1$s জন শিক্ষার্থী</item>
+    </plurals>
+    <plurals name="plural_subjects">
+        <item quantity="one">%1$sটি বিষয়</item>
+        <item quantity="other">%1$sটি বিষয়</item>
+    </plurals>
+    <plurals name="plural_schedules">
+        <item quantity="one">%1$sটি সময়সূচি</item>
+        <item quantity="other">%1$sটি সময়সূচি</item>
+    </plurals>
+    <plurals name="plural_invoices">
+        <item quantity="one">%1$sটি ইনভয়েস</item>
+        <item quantity="other">%1$sটি ইনভয়েস</item>
+    </plurals>
+    <plurals name="plural_payments">
+        <item quantity="one">%1$sটি পেমেন্ট</item>
+        <item quantity="other">%1$sটি পেমেন্ট</item>
+    </plurals>
+    <plurals name="plural_days">
+        <item quantity="one">%1$s দিন</item>
+        <item quantity="other">%1$s দিন</item>
+    </plurals>
+    <plurals name="plural_selected">
+        <item quantity="one">%1$sটি নির্বাচিত</item>
+        <item quantity="other">%1$sটি নির্বাচিত</item>
+    </plurals>
+    <plurals name="plural_to_record">
+        <item quantity="one">%1$sটি রেকর্ড বাকি</item>
+        <item quantity="other">%1$sটি রেকর্ড বাকি</item>
+    </plurals>
+    <plurals name="plural_overdue">
+        <item quantity="one">%1$sটি মেয়াদোত্তীর্ণ</item>
+        <item quantity="other">%1$sটি মেয়াদোত্তীর্ণ</item>
+    </plurals>
+</resources>

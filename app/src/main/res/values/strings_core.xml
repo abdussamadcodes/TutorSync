@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Core strings shared by every screen (Phase 1b). Bangla: values-bn/strings_core.xml.
+    Prefixes: common_ (actions/messages), status_ (chip labels), fmt_ (AppFormat patterns and names).
+-->
+<resources>
+
+    <!-- Common actions -->
+    <string name="common_save">Save</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_edit">Edit</string>
+    <string name="common_done">Done</string>
+    <string name="common_close">Close</string>
+    <string name="common_back">Back</string>
+    <string name="common_retry">Try again</string>
+    <string name="common_ok">OK</string>
+    <string name="common_add">Add</string>
+    <string name="common_search">Search</string>
+    <string name="common_clear">Clear</string>
+    <string name="common_undo">Undo</string>
+    <string name="common_discard">Discard</string>
+    <string name="common_keep_editing">Keep editing</string>
+    <string name="common_loading">Loading…</string>
+    <string name="common_optional">Optional</string>
+    <string name="common_required">Required</string>
+
+    <!-- Common messages -->
+    <string name="common_unsaved_title">Discard changes?</string>
+    <string name="common_unsaved_message">You have unsaved changes. If you leave now, they will be lost.</string>
+    <string name="common_error_generic">Something went wrong. Please try again.</string>
+    <string name="common_saved">Saved</string>
+    <string name="common_deleted">Deleted</string>
+
+    <!-- Status labels (same colour everywhere: see styles.xml) -->
+    <string name="status_paid">Paid</string>
+    <string name="status_partial">Partial</string>
+    <string name="status_unpaid">Unpaid</string>
+    <string name="status_overdue">Overdue</string>
+    <string name="status_due">Due</string>
+    <string name="status_invoiced">Invoiced</string>
+    <string name="status_present">Present</string>
+    <string name="status_absent">Absent</string>
+    <string name="status_cancelled">Cancelled</string>
+    <string name="status_makeup">Makeup</string>
+    <string name="status_makeup_scheduled">Makeup scheduled</string>
+    <string name="status_needs_recording">Needs recording</string>
+    <string name="status_recorded">Recorded</string>
+    <string name="status_active">Active</string>
+    <string name="status_inactive">Inactive</string>
+
+    <!-- Format patterns (word order differs by language) -->
+    <string name="fmt_date">%1$s %2$s %3$s</string>            <!-- 5 Nov 2026 : day, month, year -->
+    <string name="fmt_month_year">%1$s %2$s</string>           <!-- Nov 2026 : month, year -->
+    <string name="fmt_weekday_date">%1$s, %2$s</string>        <!-- Thu, 5 Nov 2026 -->
+    <string name="fmt_date_time">%1$s, %2$s</string>           <!-- 5 Nov 2026, 4:00 PM -->
+    <string name="fmt_time">%1$s %2$s</string>                 <!-- 4:00 PM : clock, period -->
+    <string name="fmt_duration_min">%1$s min</string>
+    <string name="fmt_per_month">%1$s/month</string>
+    <string name="fmt_per_class">%1$s/class</string>
+    <string name="fmt_list_separator">, </string>
+
+    <!-- Names. Weekdays are Calendar order: Sunday first. -->
+    <string-array name="fmt_months_short">
+        <item>Jan</item><item>Feb</item><item>Mar</item><item>Apr</item><item>May</item><item>Jun</item>
+        <item>Jul</item><item>Aug</item><item>Sep</item><item>Oct</item><item>Nov</item><item>Dec</item>
+    </string-array>
+    <string-array name="fmt_months_full">
+        <item>January</item><item>February</item><item>March</item><item>April</item><item>May</item><item>June</item>
+        <item>July</item><item>August</item><item>September</item><item>October</item><item>November</item><item>December</item>
+    </string-array>
+    <string-array name="fmt_days_short">
+        <item>Sun</item><item>Mon</item><item>Tue</item><item>Wed</item><item>Thu</item><item>Fri</item><item>Sat</item>
+    </string-array>
+    <string-array name="fmt_days_full">
+        <item>Sunday</item><item>Monday</item><item>Tuesday</item><item>Wednesday</item>
+        <item>Thursday</item><item>Friday</item><item>Saturday</item>
+    </string-array>
+    <!-- 7 day periods: 00-03, 04-05, 06-11, 12-15, 16-17, 18-19, 20-23 -->
+    <string-array name="fmt_time_periods">
+        <item>AM</item><item>AM</item><item>AM</item><item>PM</item><item>PM</item><item>PM</item><item>PM</item>
+    </string-array>
+</resources>

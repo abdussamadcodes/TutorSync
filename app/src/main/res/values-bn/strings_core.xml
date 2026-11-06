@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Common actions -->
+    <string name="common_save">সংরক্ষণ করুন</string>
+    <string name="common_cancel">বাতিল</string>
+    <string name="common_delete">মুছুন</string>
+    <string name="common_edit">সম্পাদনা</string>
+    <string name="common_done">সম্পন্ন</string>
+    <string name="common_close">বন্ধ করুন</string>
+    <string name="common_back">পেছনে যান</string>
+    <string name="common_retry">আবার চেষ্টা করুন</string>
+    <string name="common_ok">ঠিক আছে</string>
+    <string name="common_add">যোগ করুন</string>
+    <string name="common_search">খুঁজুন</string>
+    <string name="common_clear">মুছে ফেলুন</string>
+    <string name="common_undo">ফিরিয়ে আনুন</string>
+    <string name="common_discard">বাতিল করুন</string>
+    <string name="common_keep_editing">সম্পাদনা চালিয়ে যান</string>
+    <string name="common_loading">লোড হচ্ছে…</string>
+    <string name="common_optional">ঐচ্ছিক</string>
+    <string name="common_required">আবশ্যক</string>
+
+    <!-- Common messages -->
+    <string name="common_unsaved_title">পরিবর্তন বাতিল করবেন?</string>
+    <string name="common_unsaved_message">আপনার কিছু পরিবর্তন সংরক্ষণ করা হয়নি। এখন বের হলে সেগুলো হারিয়ে যাবে।</string>
+    <string name="common_error_generic">কিছু একটা ভুল হয়েছে। আবার চেষ্টা করুন।</string>
+    <string name="common_saved">সংরক্ষিত হয়েছে</string>
+    <string name="common_deleted">মুছে ফেলা হয়েছে</string>
+
+    <!-- Status labels -->
+    <string name="status_paid">পরিশোধিত</string>
+    <string name="status_partial">আংশিক</string>
+    <string name="status_unpaid">অপরিশোধিত</string>
+    <string name="status_overdue">মেয়াদোত্তীর্ণ</string>
+    <string name="status_due">বকেয়া</string>
+    <string name="status_invoiced">ইনভয়েস করা হয়েছে</string>
+    <string name="status_present">উপস্থিত</string>
+    <string name="status_absent">অনুপস্থিত</string>
+    <string name="status_cancelled">বাতিল</string>
+    <string name="status_makeup">মেকআপ</string>
+    <string name="status_makeup_scheduled">মেকআপ নির্ধারিত</string>
+    <string name="status_needs_recording">রেকর্ড বাকি</string>
+    <string name="status_recorded">রেকর্ড করা হয়েছে</string>
+    <string name="status_active">সক্রিয়</string>
+    <string name="status_inactive">নিষ্ক্রিয়</string>
+
+    <!-- Format patterns -->
+    <string name="fmt_date">%1$s %2$s %3$s</string>
+    <string name="fmt_month_year">%1$s %2$s</string>
+    <string name="fmt_weekday_date">%1$s, %2$s</string>
+    <string name="fmt_date_time">%1$s, %2$s</string>
+    <!-- Bangla puts the period first: বিকাল ৪:০০ -->
+    <string name="fmt_time">%2$s %1$s</string>
+    <string name="fmt_duration_min">%1$s মিনিট</string>
+    <string name="fmt_per_month">%1$s/মাস</string>
+    <string name="fmt_per_class">%1$s/ক্লাস</string>
+    <string name="fmt_list_separator">, </string>
+
+    <!-- Names (Sunday first) -->
+    <string-array name="fmt_months_short">
+        <item>জানু</item><item>ফেব</item><item>মার্চ</item><item>এপ্রিল</item><item>মে</item><item>জুন</item>
+        <item>জুলাই</item><item>আগস্ট</item><item>সেপ্টে</item><item>অক্টো</item><item>নভে</item><item>ডিসে</item>
+    </string-array>
+    <string-array name="fmt_months_full">
+        <item>জানুয়ারি</item><item>ফেব্রুয়ারি</item><item>মার্চ</item><item>এপ্রিল</item><item>মে</item><item>জুন</item>
+        <item>জুলাই</item><item>আগস্ট</item><item>সেপ্টেম্বর</item><item>অক্টোবর</item><item>নভেম্বর</item><item>ডিসেম্বর</item>
+    </string-array>
+    <string-array name="fmt_days_short">
+        <item>রবি</item><item>সোম</item><item>মঙ্গল</item><item>বুধ</item><item>বৃহ</item><item>শুক্র</item><item>শনি</item>
+    </string-array>
+    <string-array name="fmt_days_full">
+        <item>রবিবার</item><item>সোমবার</item><item>মঙ্গলবার</item><item>বুধবার</item>
+        <item>বৃহস্পতিবার</item><item>শুক্রবার</item><item>শনিবার</item>
+    </string-array>
+    <!-- রাত, ভোর, সকাল, দুপুর, বিকাল, সন্ধ্যা, রাত -->
+    <string-array name="fmt_time_periods">
+        <item>রাত</item><item>ভোর</item><item>সকাল</item><item>দুপুর</item><item>বিকাল</item><item>সন্ধ্যা</item><item>রাত</item>
+    </string-array>
+</resources>

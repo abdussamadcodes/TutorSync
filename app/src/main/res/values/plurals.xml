@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plurals. Pass the localized number (AppFormat.count) as %1$s. Fixes "1 classes". -->
+<resources>
+    <plurals name="plural_classes">
+        <item quantity="one">%1$s class</item>
+        <item quantity="other">%1$s classes</item>
+    </plurals>
+    <plurals name="plural_students">
+        <item quantity="one">%1$s student</item>
+        <item quantity="other">%1$s students</item>
+    </plurals>
+    <plurals name="plural_subjects">
+        <item quantity="one">%1$s subject</item>
+        <item quantity="other">%1$s subjects</item>
+    </plurals>
+    <plurals name="plural_schedules">
+        <item quantity="one">%1$s schedule</item>
+        <item quantity="other">%1$s schedules</item>
+    </plurals>
+    <plurals name="plural_invoices">
+        <item quantity="one">%1$s invoice</item>
+        <item quantity="other">%1$s invoices</item>
+    </plurals>
+    <plurals name="plural_payments">
+        <item quantity="one">%1$s payment</item>
+        <item quantity="other">%1$s payments</item>
+    </plurals>
+    <plurals name="plural_days">
+        <item quantity="one">%1$s day</item>
+        <item quantity="other">%1$s days</item>
+    </plurals>
+    <plurals name="plural_selected">
+        <item quantity="one">%1$s selected</item>
+        <item quantity="other">%1$s selected</item>
+    </plurals>
+    <plurals name="plural_to_record">
+        <item quantity="one">%1$s to record</item>
+        <item quantity="other">%1$s to record</item>
+    </plurals>
+    <plurals name="plural_overdue">
+        <item quantity="one">%1$s overdue</item>
+        <item quantity="other">%1$s overdue</item>
+    </plurals>
+</resources>
