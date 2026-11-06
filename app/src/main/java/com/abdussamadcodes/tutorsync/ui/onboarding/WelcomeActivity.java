@@ -3,22 +3,36 @@ package com.abdussamadcodes.tutorsync.ui.onboarding;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.TypedValue;
 import android.view.View;
-import androidx.annotation.AttrRes;
+
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.splashscreen.SplashScreen;
+
 import com.abdussamadcodes.tutorsync.R;
 import com.abdussamadcodes.tutorsync.databinding.ActivityWelcomeBinding;
+import com.abdussamadcodes.tutorsync.security.SessionManager;
+import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.main.MainActivity;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
-import com.google.android.material.card.MaterialCardView;
 
 public class WelcomeActivity extends BaseActivity {
+
     public static final String EXTRA_REOPEN_FOR_LANGUAGE_CHANGE = "com.abdussamadcodes.tutorsync.EXTRA_REOPEN_FOR_LANGUAGE_CHANGE";
+    private static final String STATE_SETUP_STEP = "state_setup_step";
+    private static final int STEP_LANGUAGE = 1;
+    private static final int STEP_THEME = 2;
+
+    /** Keeps the active setup step intact across live locale/theme Activity recreations. */
+    private static int sCurrentStep = STEP_LANGUAGE;
+
     private ActivityWelcomeBinding binding;
+    private AppPreferences appPreferences;
+    private SessionManager sessionManager;
+    private int currentStep = STEP_LANGUAGE;
     private boolean isReopenedFromInsideApp = false;
 
     @NonNull
@@ -30,99 +44,179 @@ public class WelcomeActivity extends BaseActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
+
+        appPreferences = new AppPreferences(this);
+        sessionManager = new SessionManager(this);
         isReopenedFromInsideApp = getIntent().getBooleanExtra(EXTRA_REOPEN_FOR_LANGUAGE_CHANGE, false);
 
         if (appPreferences.isOnboardingCompleted() && !isReopenedFromInsideApp) {
-            navigateToMainAndFinish();
+            routeAfterOnboarding();
             return;
         }
 
+        if (savedInstanceState != null) {
+            currentStep = savedInstanceState.getInt(STATE_SETUP_STEP, sCurrentStep);
+        } else {
+            currentStep = sCurrentStep;
+        }
+        sCurrentStep = currentStep;
+
         binding = ActivityWelcomeBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-        applySystemBarInsets(binding.welcomeScrollRoot);
+        applySystemBarInsets(binding.welcomeRoot);
 
-        if (isReopenedFromInsideApp) {
-            binding.btnContinue.setText(R.string.action_save_and_close);
-        }
-        bindCurrentSelections();
         setupListeners();
+        setupBackNavigation();
+        renderSelectionStates();
+        renderStep(false);
     }
 
-    private void bindCurrentSelections() {
-        String currentLang = appPreferences.getLanguageCode();
-        boolean isBangla = AppPreferences.LANG_BANGLA.equals(currentLang);
-        updateCardSelectionState(binding.cardLanguageEnglish, binding.ivCheckEnglish, !isBangla);
-        updateCardSelectionState(binding.cardLanguageBangla, binding.ivCheckBangla, isBangla);
-
-        String currentTheme = appPreferences.getThemeMode();
-        if (AppPreferences.THEME_LIGHT.equals(currentTheme)) {
-            binding.toggleGroupTheme.check(R.id.btnThemeLight);
-        } else if (AppPreferences.THEME_DARK.equals(currentTheme)) {
-            binding.toggleGroupTheme.check(R.id.btnThemeDark);
-        } else {
-            binding.toggleGroupTheme.check(R.id.btnThemeSystem);
-        }
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt(STATE_SETUP_STEP, currentStep);
     }
 
     private void setupListeners() {
-        binding.cardLanguageEnglish.setOnClickListener(v -> onLanguageChosen(AppPreferences.LANG_ENGLISH));
-        binding.cardLanguageBangla.setOnClickListener(v -> onLanguageChosen(AppPreferences.LANG_BANGLA));
+        binding.cardLangEnglish.setOnClickListener(v -> selectLanguage(AppPreferences.LANG_ENGLISH));
+        binding.cardLangBangla.setOnClickListener(v -> selectLanguage(AppPreferences.LANG_BANGLA));
 
-        binding.toggleGroupTheme.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (!isChecked) return;
-            String targetTheme = AppPreferences.THEME_SYSTEM;
-            if (checkedId == R.id.btnThemeLight) targetTheme = AppPreferences.THEME_LIGHT;
-            else if (checkedId == R.id.btnThemeDark) targetTheme = AppPreferences.THEME_DARK;
+        binding.cardThemeSystem.setOnClickListener(v -> selectTheme(AppPreferences.THEME_SYSTEM));
+        binding.cardThemeLight.setOnClickListener(v -> selectTheme(AppPreferences.THEME_LIGHT));
+        binding.cardThemeDark.setOnClickListener(v -> selectTheme(AppPreferences.THEME_DARK));
 
-            if (!targetTheme.equals(appPreferences.getThemeMode())) {
-                appPreferences.setThemeMode(targetTheme);
-                LocaleThemeHelper.applyThemeMode(targetTheme);
+        binding.btnStepBack.setOnClickListener(v -> {
+            if (currentStep == STEP_THEME) {
+                currentStep = STEP_LANGUAGE;
+                sCurrentStep = STEP_LANGUAGE;
+                renderStep(true);
             }
         });
 
-        binding.btnContinue.setOnClickListener(v -> {
-            appPreferences.setOnboardingCompleted(true);
-            if (isReopenedFromInsideApp) {
-                // Simply finish so we return directly to the existing MainActivity on the Settings tab
-                finish();
+        binding.btnPrimaryAction.setOnClickListener(v -> {
+            if (currentStep == STEP_LANGUAGE) {
+                currentStep = STEP_THEME;
+                sCurrentStep = STEP_THEME;
+                renderStep(true);
             } else {
-                navigateToMainAndFinish();
+                completeOnboarding();
             }
         });
     }
 
-    private void onLanguageChosen(@NonNull String languageCode) {
-        String currentLang = appPreferences.getLanguageCode();
-        appPreferences.setLanguageCode(languageCode);
-        bindCurrentSelections();
-        if (!languageCode.equals(currentLang)) {
-            LocaleThemeHelper.applyLanguage(languageCode);
+    private void setupBackNavigation() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (currentStep == STEP_THEME) {
+                    currentStep = STEP_LANGUAGE;
+                    sCurrentStep = STEP_LANGUAGE;
+                    renderStep(true);
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
+    }
+
+    private void selectLanguage(@NonNull String langCode) {
+        String current = appPreferences.getLanguageCode();
+        sCurrentStep = currentStep;
+        appPreferences.setLanguageCode(langCode);
+        renderSelectionStates();
+        if (!current.equals(langCode)) {
+            LocaleThemeHelper.applySavedLocaleAndTheme(this);
         }
     }
 
-    private void updateCardSelectionState(@NonNull MaterialCardView card, @NonNull View checkIcon, boolean isSelected) {
-        int strokeWidthPx = getResources().getDimensionPixelSize(isSelected ? R.dimen.card_stroke_width_selected : R.dimen.card_stroke_width);
-        int strokeColor = resolveThemeColor(isSelected ? com.google.android.material.R.attr.colorPrimary : com.google.android.material.R.attr.colorOutlineVariant);
-        card.setStrokeWidth(strokeWidthPx);
-        card.setStrokeColor(strokeColor);
-        checkIcon.setVisibility(isSelected ? View.VISIBLE : View.INVISIBLE);
+    private void selectTheme(@NonNull String themeMode) {
+        String current = appPreferences.getThemeMode();
+        sCurrentStep = currentStep;
+        appPreferences.setThemeMode(themeMode);
+        renderSelectionStates();
+        if (!current.equals(themeMode)) {
+            LocaleThemeHelper.applySavedLocaleAndTheme(this);
+        }
     }
 
-    private int resolveThemeColor(@AttrRes int attrRes) {
-        TypedValue typedValue = new TypedValue();
-        getTheme().resolveAttribute(attrRes, typedValue, true);
-        return typedValue.data;
+    private void renderSelectionStates() {
+        boolean isBangla = AppPreferences.LANG_BANGLA.equals(appPreferences.getLanguageCode());
+        binding.cardLangEnglish.setChecked(!isBangla);
+        binding.cardLangEnglish.setSelected(!isBangla);
+        binding.ivCheckEnglish.setVisibility(!isBangla ? View.VISIBLE : View.INVISIBLE);
+
+        binding.cardLangBangla.setChecked(isBangla);
+        binding.cardLangBangla.setSelected(isBangla);
+        binding.ivCheckBangla.setVisibility(isBangla ? View.VISIBLE : View.INVISIBLE);
+
+        String theme = appPreferences.getThemeMode();
+        boolean isSystem = AppPreferences.THEME_SYSTEM.equals(theme);
+        boolean isLight = AppPreferences.THEME_LIGHT.equals(theme);
+        boolean isDark = AppPreferences.THEME_DARK.equals(theme);
+
+        binding.cardThemeSystem.setChecked(isSystem);
+        binding.cardThemeSystem.setSelected(isSystem);
+        binding.ivCheckThemeSystem.setVisibility(isSystem ? View.VISIBLE : View.INVISIBLE);
+
+        binding.cardThemeLight.setChecked(isLight);
+        binding.cardThemeLight.setSelected(isLight);
+        binding.ivCheckThemeLight.setVisibility(isLight ? View.VISIBLE : View.INVISIBLE);
+
+        binding.cardThemeDark.setChecked(isDark);
+        binding.cardThemeDark.setSelected(isDark);
+        binding.ivCheckThemeDark.setVisibility(isDark ? View.VISIBLE : View.INVISIBLE);
     }
 
-    private void navigateToMainAndFinish() {
-        startActivity(new Intent(this, MainActivity.class));
-        finish();
-        if (android.os.Build.VERSION.SDK_INT >= 34) {
-            overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out);
+    private void renderStep(boolean animate) {
+        boolean isStep1 = (currentStep == STEP_LANGUAGE);
+
+        binding.tvStepBadge.setText(isStep1 ? R.string.setup_step_1_of_2 : R.string.setup_step_2_of_2);
+        binding.setupProgress.setProgressCompat(isStep1 ? 50 : 100, animate);
+        binding.btnStepBack.setVisibility(isStep1 ? View.GONE : View.VISIBLE);
+
+        binding.tvStepTitle.setText(isStep1 ? R.string.setup_lang_title : R.string.setup_theme_title);
+        binding.tvStepSubtitle.setText(isStep1 ? R.string.setup_lang_subtitle : R.string.setup_theme_subtitle);
+
+        int actionTextRes;
+        if (isStep1) {
+            actionTextRes = R.string.setup_action_continue;
         } else {
-            //noinspection deprecation
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+            actionTextRes = isReopenedFromInsideApp ? R.string.action_save_and_close : R.string.setup_action_get_started;
         }
+        binding.btnPrimaryAction.setText(actionTextRes);
+
+        View incoming = isStep1 ? binding.stepContainerLanguage : binding.stepContainerTheme;
+        View outgoing = isStep1 ? binding.stepContainerTheme : binding.stepContainerLanguage;
+
+        outgoing.setVisibility(View.GONE);
+        if (animate) {
+            incoming.setAlpha(0f);
+            incoming.setVisibility(View.VISIBLE);
+            incoming.animate().alpha(1f).setDuration(180L).start();
+        } else {
+            incoming.setAlpha(1f);
+            incoming.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void completeOnboarding() {
+        sCurrentStep = STEP_LANGUAGE;
+        appPreferences.setOnboardingCompleted(true);
+        if (isReopenedFromInsideApp) {
+            finish();
+        } else {
+            routeAfterOnboarding();
+        }
+    }
+
+    private void routeAfterOnboarding() {
+        Class<?> destination = sessionManager.hasActiveSession()
+                ? MainActivity.class
+                : SignInActivity.class;
+        startActivity(new Intent(this, destination));
+        finish();
     }
 }

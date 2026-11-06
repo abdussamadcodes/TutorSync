@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 2-Step Setup (WelcomeActivity) -->
+    <string name="setup_step_1_of_2">ধাপ ১ / ২</string>
+    <string name="setup_step_2_of_2">ধাপ ২ / ২</string>
+    <string name="setup_lang_title">আপনার ভাষা নির্বাচন করুন</string>
+    <string name="setup_lang_subtitle">মেনু, তারিখ এবং টাকার হিসাবের জন্য ভাষা বেছে নিন। পরবর্তীতে সেটিংস থেকে যেকোনো সময় পরিবর্তন করতে পারবেন।</string>
+    <string name="setup_lang_en_badge">EN</string>
+    <string name="setup_lang_en_title">English</string>
+    <string name="setup_lang_en_desc">ইংরেজি ভাষায় টিউটরসিঙ্ক ব্যবহার করুন (৳8,000)</string>
+    <string name="setup_lang_bn_badge">বাং</string>
+    <string name="setup_lang_bn_title">বাংলা</string>
+    <string name="setup_lang_bn_desc">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন (৳৮,০০০)</string>
+
+    <string name="setup_theme_title">থিম মোড নির্বাচন করুন</string>
+    <string name="setup_theme_subtitle">দিনে বা রাতে ব্যবহারের জন্য আরামদায়ক ডিসপ্লে মোড বেছে নিন।</string>
+    <string name="setup_theme_system_title">সিস্টেম ডিফল্ট</string>
+    <string name="setup_theme_system_desc">ফোনের লাইট বা ডার্ক সেটিংসের সাথে স্বয়ংক্রিয়ভাবে মিলবে</string>
+    <string name="setup_theme_light_title">লাইট মোড</string>
+    <string name="setup_theme_light_desc">দিনের আলোতে স্পষ্ট ও পরিষ্কার ডিসপ্লে</string>
+    <string name="setup_theme_dark_title">ডার্ক মোড</string>
+    <string name="setup_theme_dark_desc">রাতের বেলা চোখের আরামের জন্য ডার্ক সারফেস</string>
+    <string name="setup_preview_sample">৳২,৫০০ · পরিশোধিত</string>
+    <string name="setup_action_back">পেছনে</string>
+    <string name="setup_action_continue">পরবর্তী</string>
+    <string name="setup_action_get_started">শুরু করুন</string>
+
+    <!-- Shared Auth (SignInActivity & SignUpActivity) -->
+    <string name="auth2_brand_tagline">প্রাইভেট টিউটরদের জন্য অফলাইন শিক্ষার্থী, রুটিন ও ফি ম্যানেজার</string>
+    <string name="auth2_sign_in_heading">আপনার অ্যাকাউন্টে সাইন ইন করুন</string>
+    <string name="auth2_sign_in_subheading">চালিয়ে যেতে আপনার লোকাল টিউটর অ্যাকাউন্টের তথ্য দিন।</string>
+    <string name="auth2_sign_up_heading">নতুন টিউটর অ্যাকাউন্ট খুলুন</string>
+    <string name="auth2_sign_up_subheading">আপনার সকল তথ্য ১০০% অফলাইনে এই ফোনেই সুরক্ষিত থাকে।</string>
+
+    <string name="auth2_label_full_name">পূর্ণ নাম *</string>
+    <string name="auth2_helper_full_name">শিক্ষার্থীদের ইনভয়েস ও বিবরণীতে দেখানো হবে</string>
+    <string name="auth2_label_username">ইউজারনেম *</string>
+    <string name="auth2_helper_username">শুধুমাত্র ইংরেজি অক্ষর এবং সংখ্যা (স্পেস ছাড়া)</string>
+    <string name="auth2_label_password">পাসওয়ার্ড *</string>
+    <string name="auth2_label_confirm_password">পাসওয়ার্ড নিশ্চিত করুন *</string>
+
+    <string name="auth2_action_signing_in">সাইন ইন হচ্ছে…</string>
+    <string name="auth2_action_creating_account">অ্যাকাউন্ট তৈরি হচ্ছে…</string>
+    <string name="auth2_forgot_password_action">পাসওয়ার্ড ভুলে গেছেন?</string>
+    <string name="auth2_forgot_password_title">অফলাইন অ্যাকাউন্ট নিরাপত্তা</string>
+    <string name="auth2_forgot_password_body">টিউটরসিঙ্ক সম্পূর্ণ অফলাইন অ্যাপ এবং আপনার পাসওয়ার্ড কখনো কোনো সার্ভারে পাঠানো হয় না।\n\nআপনার কাছে যদি এনক্রিপ্টেড ব্যাকআপ ফাইল থাকে এবং তার পাসওয়ার্ড মনে থাকে, তবে নতুন অ্যাকাউন্ট খুলে সেটিংস → ডেটা ও ব্যাকআপ থেকে তথ্য পুনরুদ্ধার করতে পারবেন।</string>
+    <string name="auth2_forgot_password_ok">বুঝেছি</string>
+
+    <!-- Password Checklist & Strength -->
+    <string name="auth2_pw_rules_title">পাসওয়ার্ডের শর্তাবলি</string>
+    <string name="auth2_pw_rule_length">কমপক্ষে ৮টি অক্ষর</string>
+    <string name="auth2_pw_rule_upper_lower">বড় ও ছোট হাতের অক্ষর (A–z)</string>
+    <string name="auth2_pw_rule_digit">কমপক্ষে একটি সংখ্যা (0–9)</string>
+    <string name="auth2_pw_rule_special">কমপক্ষে একটি বিশেষ চিহ্ন (!@#$…)</string>
+    <string name="auth2_pw_strength_weak">শক্তি: দুর্বল</string>
+    <string name="auth2_pw_strength_fair">শক্তি: মোটামুটি</string>
+    <string name="auth2_pw_strength_good">শক্তি: ভালো</string>
+    <string name="auth2_pw_strength_strong">শক্তি: শক্তিশালী</string>
+    <string name="auth2_pw_match_ok">পাসওয়ার্ড মিলেছে</string>
+    <string name="auth2_pw_match_err">পাসওয়ার্ড দুটি এখনো মেলেনি</string>
+
+    <string name="auth2_err_full_name_required">অনুগ্রহ করে আপনার পূর্ণ নাম লিখুন</string>
+    <string name="auth2_err_username_required">অনুগ্রহ করে ইউজারনেম লিখুন</string>
+    <string name="auth2_err_password_required">অনুগ্রহ করে পাসওয়ার্ড লিখুন</string>
+</resources>

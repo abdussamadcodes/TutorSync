@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 2-Step Setup (WelcomeActivity) -->
+    <string name="setup_step_1_of_2">Step 1 of 2</string>
+    <string name="setup_step_2_of_2">Step 2 of 2</string>
+    <string name="setup_lang_title">Choose your language</string>
+    <string name="setup_lang_subtitle">Select the language for menus, dates, and currency formatting. You can change this anytime in Settings.</string>
+    <string name="setup_lang_en_badge">EN</string>
+    <string name="setup_lang_en_title">English</string>
+    <string name="setup_lang_en_desc">Use TutorSync in English (৳8,000)</string>
+    <string name="setup_lang_bn_badge">বাং</string>
+    <string name="setup_lang_bn_title">বাংলা</string>
+    <string name="setup_lang_bn_desc">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন (৳৮,০০০)</string>
+
+    <string name="setup_theme_title">Choose your appearance</string>
+    <string name="setup_theme_subtitle">Pick a display mode that feels comfortable for teaching and billing day or night.</string>
+    <string name="setup_theme_system_title">System Default</string>
+    <string name="setup_theme_system_desc">Automatically follows your phone\'s light or dark setting</string>
+    <string name="setup_theme_light_title">Light Mode</string>
+    <string name="setup_theme_light_desc">Crisp daylight surfaces with deep teal accents</string>
+    <string name="setup_theme_dark_title">Dark Mode</string>
+    <string name="setup_theme_dark_desc">Calm slate-teal surfaces easy on the eyes at night</string>
+    <string name="setup_preview_sample">৳2,500 · Paid</string>
+    <string name="setup_action_back">Back</string>
+    <string name="setup_action_continue">Continue</string>
+    <string name="setup_action_get_started">Get Started</string>
+
+    <!-- Shared Auth (SignInActivity & SignUpActivity) -->
+    <string name="auth2_brand_tagline">Offline student, schedule &amp; fee manager for private tutors</string>
+    <string name="auth2_sign_in_heading">Sign in to your workspace</string>
+    <string name="auth2_sign_in_subheading">Enter your local tutor account credentials to continue.</string>
+    <string name="auth2_sign_up_heading">Create your tutor account</string>
+    <string name="auth2_sign_up_subheading">Your data stays 100% offline and encrypted on this device.</string>
+
+    <string name="auth2_label_full_name">Full name *</string>
+    <string name="auth2_helper_full_name">Shown on student invoices and statements</string>
+    <string name="auth2_label_username">Username *</string>
+    <string name="auth2_helper_username">Letters and numbers only (no spaces)</string>
+    <string name="auth2_label_password">Password *</string>
+    <string name="auth2_label_confirm_password">Confirm password *</string>
+
+    <string name="auth2_action_signing_in">Signing in…</string>
+    <string name="auth2_action_creating_account">Creating account…</string>
+    <string name="auth2_forgot_password_action">Forgot password?</string>
+    <string name="auth2_forgot_password_title">Offline Account Security</string>
+    <string name="auth2_forgot_password_body">TutorSync is 100% offline and never sends your password to a server.\n\nIf you have an encrypted backup file and remember its backup password, you can create a new account and restore your data from Settings → Data &amp; Backup.</string>
+    <string name="auth2_forgot_password_ok">Got it</string>
+
+    <!-- Password Checklist & Strength -->
+    <string name="auth2_pw_rules_title">Password requirements</string>
+    <string name="auth2_pw_rule_length">At least 8 characters</string>
+    <string name="auth2_pw_rule_upper_lower">Uppercase &amp; lowercase letters (A–z)</string>
+    <string name="auth2_pw_rule_digit">At least one number (0–9)</string>
+    <string name="auth2_pw_rule_special">At least one symbol (!@#$…)</string>
+    <string name="auth2_pw_strength_weak">Strength: Weak</string>
+    <string name="auth2_pw_strength_fair">Strength: Fair</string>
+    <string name="auth2_pw_strength_good">Strength: Good</string>
+    <string name="auth2_pw_strength_strong">Strength: Strong</string>
+    <string name="auth2_pw_match_ok">Passwords match</string>
+    <string name="auth2_pw_match_err">Passwords do not match yet</string>
+
+    <string name="auth2_err_full_name_required">Please enter your full name</string>
+    <string name="auth2_err_username_required">Please enter your username</string>
+    <string name="auth2_err_password_required">Please enter your password</string>
+</resources>

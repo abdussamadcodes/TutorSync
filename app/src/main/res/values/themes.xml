@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    TutorSync theme. One theme for light and dark: all colours come from ts_* tokens that
-    values-night/colors.xml redefines, so no per-theme duplication here.
--->
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Fade between screens (kept from the previous theme) -->
+    <!-- Fade between screens -->
     <style name="WindowAnimationFade" parent="@android:style/Animation.Activity">
         <item name="android:activityOpenEnterAnimation">@android:anim/fade_in</item>
         <item name="android:activityOpenExitAnimation">@android:anim/fade_out</item>
@@ -14,32 +10,29 @@
     </style>
 
     <style name="Base.Theme.TutorSync" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowAnimationStyle">@style/WindowAnimationFade</item>
-
-        <!-- Brand -->
+        <!-- Brand colors -->
         <item name="colorPrimary">@color/ts_primary</item>
         <item name="colorOnPrimary">@color/ts_on_primary</item>
         <item name="colorPrimaryContainer">@color/ts_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/ts_on_primary_container</item>
-        <item name="colorPrimaryInverse">@color/ts_inverse_primary</item>
+
         <item name="colorSecondary">@color/ts_secondary</item>
         <item name="colorOnSecondary">@color/ts_on_secondary</item>
         <item name="colorSecondaryContainer">@color/ts_secondary_container</item>
         <item name="colorOnSecondaryContainer">@color/ts_on_secondary_container</item>
+
         <item name="colorTertiary">@color/ts_tertiary</item>
         <item name="colorOnTertiary">@color/ts_on_tertiary</item>
         <item name="colorTertiaryContainer">@color/ts_tertiary_container</item>
         <item name="colorOnTertiaryContainer">@color/ts_on_tertiary_container</item>
 
-        <!-- Surfaces -->
+        <!-- Surfaces & backgrounds -->
         <item name="android:colorBackground">@color/ts_background</item>
         <item name="colorOnBackground">@color/ts_on_background</item>
         <item name="colorSurface">@color/ts_surface</item>
         <item name="colorOnSurface">@color/ts_on_surface</item>
         <item name="colorSurfaceVariant">@color/ts_surface_variant</item>
         <item name="colorOnSurfaceVariant">@color/ts_on_surface_variant</item>
-        <item name="colorSurfaceInverse">@color/ts_inverse_surface</item>
-        <item name="colorOnSurfaceInverse">@color/ts_inverse_on_surface</item>
         <item name="colorSurfaceContainerLowest">@color/ts_surface_lowest</item>
         <item name="colorSurfaceContainerLow">@color/ts_surface_low</item>
         <item name="colorSurfaceContainer">@color/ts_surface_container</item>
@@ -47,6 +40,11 @@
         <item name="colorSurfaceContainerHighest">@color/ts_surface_highest</item>
         <item name="colorSurfaceDim">@color/ts_surface_dim</item>
         <item name="colorSurfaceBright">@color/ts_surface_bright</item>
+        <item name="colorSurfaceInverse">@color/ts_inverse_surface</item>
+        <item name="colorOnSurfaceInverse">@color/ts_inverse_on_surface</item>
+        <item name="colorPrimaryInverse">@color/ts_inverse_primary</item>
+
+        <!-- Outlines & borders -->
         <item name="colorOutline">@color/ts_outline</item>
         <item name="colorOutlineVariant">@color/ts_outline_variant</item>
 
@@ -56,13 +54,18 @@
         <item name="colorErrorContainer">@color/ts_error_container</item>
         <item name="colorOnErrorContainer">@color/ts_on_error_container</item>
 
-        <!-- System bars and window -->
-        <item name="android:windowBackground">@color/ts_background</item>
+        <!-- Scrim -->
+        <item name="scrimBackground">@color/ts_scrim</item>
+
+        <!-- System bars -->
         <item name="android:statusBarColor">@color/ts_background</item>
         <item name="android:navigationBarColor">@color/ts_background</item>
         <item name="android:windowLightStatusBar">@bool/ts_light_system_bars</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/ts_light_system_bars</item>
-        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">@bool/ts_light_system_bars</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@style/WindowAnimationFade</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
 
         <!-- Font -->
         <item name="android:fontFamily">@font/plus_jakarta_sans</item>
@@ -107,4 +110,12 @@
     </style>
 
     <style name="Theme.TutorSync" parent="Base.Theme.TutorSync" />
+
+    <!-- Branded Splash Screen theme (AndroidX core-splashscreen) -->
+    <style name="Theme.TutorSync.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ts_hero</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_brand_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.TutorSync</item>
+    </style>
+
 </resources>
