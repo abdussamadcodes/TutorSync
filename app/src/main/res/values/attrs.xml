@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Attributes for TutorSync custom views. Prefixed "ts" so they never clash with Material. -->
+<resources>
+    <attr name="tsTitle" format="string" />
+    <attr name="tsMessage" format="string" />
+    <attr name="tsActionText" format="string" />
+    <attr name="tsLabel" format="string" />
+    <attr name="tsValue" format="string" />
+    <attr name="tsIcon" format="reference" />
+    <attr name="tsTone" format="enum">
+        <enum name="surface" value="0" />
+        <enum name="tonal" value="1" />
+        <enum name="alert" value="2" />
+        <enum name="error" value="3" />
+        <enum name="success" value="4" />
+        <enum name="hero" value="5" />
+    </attr>
+
+    <declare-styleable name="EmptyStateView">
+        <attr name="tsIcon" />
+        <attr name="tsTitle" />
+        <attr name="tsMessage" />
+        <attr name="tsActionText" />
+    </declare-styleable>
+
+    <declare-styleable name="StatCardView">
+        <attr name="tsLabel" />
+        <attr name="tsValue" />
+        <attr name="tsIcon" />
+        <attr name="tsTone" />
+    </declare-styleable>
+
+    <declare-styleable name="SectionHeaderView">
+        <attr name="tsTitle" />
+        <attr name="tsActionText" />
+    </declare-styleable>
+
+    <declare-styleable name="FormSectionView">
+        <attr name="tsTitle" />
+        <attr name="tsMessage" />
+        <attr name="tsIcon" />
+    </declare-styleable>
+</resources>

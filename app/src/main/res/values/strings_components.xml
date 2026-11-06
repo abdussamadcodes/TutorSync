@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings used by shared components (Phase 1c). Bangla: values-bn/strings_components.xml -->
+<resources>
+    <string name="status_tutor_absent">Tutor absent</string>
+    <!-- Screen-reader text for a stat tile: "Received, ৳500" -->
+    <string name="stat_card_description">%1$s, %2$s</string>
+</resources>
