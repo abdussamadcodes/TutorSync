@@ -229,7 +229,6 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/space_sm"
             android:text="@string/auth2_forgot_password_action" />
-
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnToggleAuth"
             style="@style/Widget.TutorSync.Button.Text"
