@@ -130,6 +130,7 @@ public final class BackupDialogs {
     }
 
     /** Lets the tutor choose between a backup file and the latest automatic safety backup. */
+    /** Lets the tutor choose between a backup file and the latest automatic safety backup. */
     public static void chooseRestoreSource(@NonNull Activity activity,
                                            long latestSafetyBackupTime,
                                            @NonNull Runnable onPickFile,
@@ -140,10 +141,17 @@ public final class BackupDialogs {
                 activity.getString(R.string.backup_source_file),
                 activity.getString(R.string.backup_source_safety, when)
         };
+
+        // Track the selected index (default to 0)
+        final int[] selectedIndex = {0};
+
         new MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.backup_source_title)
-                .setItems(items, (d, which) -> {
-                    if (which == 0) onPickFile.run();
+                .setSingleChoiceItems(items, 0, (d, which) -> {
+                    selectedIndex[0] = which;
+                })
+                .setPositiveButton("OK", (d, which) -> {
+                    if (selectedIndex[0] == 0) onPickFile.run();
                     else onUseSafetyBackup.run();
                 })
                 .setNegativeButton(R.string.action_cancel, null)

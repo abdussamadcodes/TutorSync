@@ -847,18 +847,28 @@ public class MainActivity extends BaseActivity {
     // 5. CLOUD & LOCAL BACKUP UI SELECTION & ENGINE
     // =========================================================================
 
+// =========================================================================
+    // 5. CLOUD & LOCAL BACKUP UI SELECTION & ENGINE
+    // =========================================================================
+
     private void showBackupDestinationDialog() {
         String[] options = {"Local Device Storage", "Google Drive Cloud"};
+        final int[] selectedIndex = {0};
+
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Backup Destination")
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
+                .setSingleChoiceItems(options, 0, (dialog, which) -> selectedIndex[0] = which)
+                .setPositiveButton("OK", (dialog, which) -> {
+                    if (selectedIndex[0] == 0) {
+                        String timeStamp = new java.text.SimpleDateFormat("yyyy-MMM-dd_hh-mm-a", java.util.Locale.US).format(new java.util.Date());
+                        String baseName = "TutorSync_Backup_" + timeStamp;
+
                         BackupDialogs.askNewPassword(this,
                                 pw -> {
                                     pendingBackupPassword = pw;
-                                    encryptedExportLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".tsbackup");
+                                    encryptedExportLauncher.launch(baseName + ".tsbackup");
                                 },
-                                () -> exportBackupLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".json"));
+                                () -> exportBackupLauncher.launch(baseName + ".json"));
                     } else {
                         pendingDriveAction = ACTION_DRIVE_BACKUP;
                         GoogleSignInAccount account = GoogleAuthHelper.getSignedInDriveAccount(this);
@@ -869,15 +879,19 @@ public class MainActivity extends BaseActivity {
                         }
                     }
                 })
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private void showRestoreSourceDialog() {
         String[] options = {"Local Device Storage", "Google Drive Cloud"};
+        final int[] selectedIndex = {0};
+
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Restore Source")
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
+                .setSingleChoiceItems(options, 0, (dialog, which) -> selectedIndex[0] = which)
+                .setPositiveButton("OK", (dialog, which) -> {
+                    if (selectedIndex[0] == 0) {
                         startRestoreFlow();
                     } else {
                         pendingDriveAction = ACTION_DRIVE_RESTORE;
@@ -889,6 +903,7 @@ public class MainActivity extends BaseActivity {
                         }
                     }
                 })
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -920,9 +935,12 @@ public class MainActivity extends BaseActivity {
                 db = DatabaseManager.getInstance().openDatabase();
                 GoogleDriveBackupHelper driveHelper = new GoogleDriveBackupHelper(appContext, account);
 
+                // Add Readable Date and Time to the file name
+                String timeStamp = new java.text.SimpleDateFormat("yyyy-MMM-dd_hh-mm-a", java.util.Locale.US).format(new java.util.Date());
                 String extension = isEncrypted ? ".tsbackup" : ".json";
                 String mimeType = isEncrypted ? "application/octet-stream" : "application/json";
-                tempFile = new File(appContext.getCacheDir(), "tutorsync_drive_" + System.currentTimeMillis() + extension);
+
+                tempFile = new File(appContext.getCacheDir(), "TutorSync_Drive_" + timeStamp + extension);
 
                 try (OutputStream out = new FileOutputStream(tempFile)) {
                     if (isEncrypted) {
@@ -932,6 +950,7 @@ public class MainActivity extends BaseActivity {
                     }
                 }
 
+                // This method safely uploads first, then deletes old backups
                 driveHelper.uploadBackup(tempFile, mimeType);
                 success = true;
 
@@ -991,12 +1010,17 @@ public class MainActivity extends BaseActivity {
                 String[] items = new String[finalFiles.size()];
                 for (int i = 0; i < finalFiles.size(); i++) {
                     com.google.api.services.drive.model.File f = finalFiles.get(i);
-                    items[i] = f.getName() + " (" + (f.getSize() != null ? f.getSize() / 1024 : 0) + " KB)";
+                    // Clean up the name for the UI dialog list
+                    String cleanName = f.getName().replace(".tsbackup", "").replace(".json", "").replace("_", " ");
+                    items[i] = cleanName + " (" + (f.getSize() != null ? f.getSize() / 1024 : 0) + " KB)";
                 }
+
+                final int[] selectedIndex = {0};
 
                 new MaterialAlertDialogBuilder(this)
                         .setTitle("Select Cloud Backup")
-                        .setItems(items, (dialog, which) -> downloadAndParseDriveBackup(account, finalFiles.get(which)))
+                        .setSingleChoiceItems(items, 0, (dialog, which) -> selectedIndex[0] = which)
+                        .setPositiveButton("Restore", (dialog, which) -> downloadAndParseDriveBackup(account, finalFiles.get(selectedIndex[0])))
                         .setNegativeButton("Cancel", null)
                         .show();
             });
