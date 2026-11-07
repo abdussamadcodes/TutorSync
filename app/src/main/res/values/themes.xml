@@ -28,6 +28,7 @@
 
         <!-- Surfaces & backgrounds -->
         <item name="android:colorBackground">@color/ts_background</item>
+        <item name="android:windowBackground">@color/ts_background</item>
         <item name="colorOnBackground">@color/ts_on_background</item>
         <item name="colorSurface">@color/ts_surface</item>
         <item name="colorOnSurface">@color/ts_on_surface</item>

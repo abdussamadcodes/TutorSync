@@ -7,10 +7,10 @@
     <string name="setup_lang_subtitle">মেনু, তারিখ এবং টাকার হিসাবের জন্য ভাষা বেছে নিন। পরবর্তীতে সেটিংস থেকে যেকোনো সময় পরিবর্তন করতে পারবেন।</string>
     <string name="setup_lang_en_badge">EN</string>
     <string name="setup_lang_en_title">English</string>
-    <string name="setup_lang_en_desc">ইংরেজি ভাষায় টিউটরসিঙ্ক ব্যবহার করুন (৳8,000)</string>
+    <string name="setup_lang_en_desc">ইংরেজি ভাষায় টিউটরসিঙ্ক ব্যবহার করুন</string>
     <string name="setup_lang_bn_badge">বাং</string>
     <string name="setup_lang_bn_title">বাংলা</string>
-    <string name="setup_lang_bn_desc">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন (৳৮,০০০)</string>
+    <string name="setup_lang_bn_desc">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন</string>
 
     <string name="setup_theme_title">থিম মোড নির্বাচন করুন</string>
     <string name="setup_theme_subtitle">দিনে বা রাতে ব্যবহারের জন্য আরামদায়ক ডিসপ্লে মোড বেছে নিন।</string>

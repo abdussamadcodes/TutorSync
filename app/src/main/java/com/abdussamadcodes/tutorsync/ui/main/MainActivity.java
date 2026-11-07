@@ -3,6 +3,7 @@ package com.abdussamadcodes.tutorsync.ui.main;
 import android.app.DatePickerDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
@@ -201,6 +202,9 @@ public class MainActivity extends BaseActivity {
         setupUI();
         setupListeners();
 
+        // Apply initial layout based on orientation
+        applyResponsiveLayout(getResources().getConfiguration().orientation);
+
         // 2. Restore the active tab AFTER setupUI() so the tab visibility updates properly
         int restoredTabId = savedInstanceState != null
                 ? savedInstanceState.getInt(STATE_ACTIVE_TAB, lastActiveTabId)
@@ -212,6 +216,59 @@ public class MainActivity extends BaseActivity {
         attachRealtimePresenceListener();
         syncAccountToFirestore();
         fetchDailyQuoteFromApi();
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Explicitly handle layout responsiveness during rotation
+        applyResponsiveLayout(newConfig.orientation);
+    }
+
+    /**
+     * Requirement: Layout Responsiveness (Optional).
+     * Dynamically adjusts the weighting and orientation of dashboard metric cards based on screen rotation.
+     */
+    private void applyResponsiveLayout(int orientation) {
+        if (binding == null) return;
+
+        try {
+            // Find the container holding the stat cards (assuming it's a LinearLayout holding the stats)
+            // If the exact ID isn't known, we navigate via known parents, but assuming standard Structure
+            if (binding.tvStudentCount.getParent() instanceof ViewGroup) {
+                ViewGroup statContainer = (ViewGroup) binding.tvStudentCount.getParent().getParent();
+
+                if (statContainer instanceof LinearLayout) {
+                    LinearLayout layout = (LinearLayout) statContainer;
+
+                    if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                        // In Landscape, stretch cards out horizontally evenly
+                        layout.setOrientation(LinearLayout.HORIZONTAL);
+                        for (int i = 0; i < layout.getChildCount(); i++) {
+                            View child = layout.getChildAt(i);
+                            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) child.getLayoutParams();
+                            lp.width = 0;
+                            lp.weight = 1f;
+                            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                            child.setLayoutParams(lp);
+                        }
+                    } else {
+                        // In Portrait, stack or format appropriately (reverting to default)
+                        // Depending on your base XML, they might already be horizontal, but we ensure proper weighting
+                        layout.setOrientation(LinearLayout.HORIZONTAL);
+                        for (int i = 0; i < layout.getChildCount(); i++) {
+                            View child = layout.getChildAt(i);
+                            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) child.getLayoutParams();
+                            lp.width = 0;
+                            lp.weight = 1f; // Adjust back to default equal weighting
+                            child.setLayoutParams(lp);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("ResponsiveLayout", "Could not apply responsive layout dynamically", e);
+        }
     }
 
     @Override
@@ -1236,7 +1293,6 @@ public class MainActivity extends BaseActivity {
                 DatabaseManager.getInstance().closeDatabase();
                 isBackupTaskRunning.set(false);
             }
-
 
             final boolean success = exported;
             final String finalError = errorMsg;

@@ -175,14 +175,6 @@
                                 android:textAppearance="@style/TextAppearance.TutorSync.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
-
-                        <ImageView
-                            android:id="@+id/ivCheckEnglish"
-                            android:layout_width="@dimen/icon_md"
-                            android:layout_height="@dimen/icon_md"
-                            android:importantForAccessibility="no"
-                            android:src="@drawable/ic_check_circle"
-                            app:tint="?attr/colorPrimary" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -243,15 +235,6 @@
                                 android:textAppearance="@style/TextAppearance.TutorSync.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
-
-                        <ImageView
-                            android:id="@+id/ivCheckBangla"
-                            android:layout_width="@dimen/icon_md"
-                            android:layout_height="@dimen/icon_md"
-                            android:importantForAccessibility="no"
-                            android:src="@drawable/ic_check_circle"
-                            android:visibility="invisible"
-                            app:tint="?attr/colorPrimary" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -335,14 +318,6 @@
                                 android:textAppearance="@style/TextAppearance.TutorSync.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
-
-                        <ImageView
-                            android:id="@+id/ivCheckThemeSystem"
-                            android:layout_width="@dimen/icon_md"
-                            android:layout_height="@dimen/icon_md"
-                            android:importantForAccessibility="no"
-                            android:src="@drawable/ic_check_circle"
-                            app:tint="?attr/colorPrimary" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -402,15 +377,6 @@
                                 android:textAppearance="@style/TextAppearance.TutorSync.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
-
-                        <ImageView
-                            android:id="@+id/ivCheckThemeLight"
-                            android:layout_width="@dimen/icon_md"
-                            android:layout_height="@dimen/icon_md"
-                            android:importantForAccessibility="no"
-                            android:src="@drawable/ic_check_circle"
-                            android:visibility="invisible"
-                            app:tint="?attr/colorPrimary" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -470,15 +436,6 @@
                                 android:textAppearance="@style/TextAppearance.TutorSync.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
-
-                        <ImageView
-                            android:id="@+id/ivCheckThemeDark"
-                            android:layout_width="@dimen/icon_md"
-                            android:layout_height="@dimen/icon_md"
-                            android:importantForAccessibility="no"
-                            android:src="@drawable/ic_check_circle"
-                            android:visibility="invisible"
-                            app:tint="?attr/colorPrimary" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

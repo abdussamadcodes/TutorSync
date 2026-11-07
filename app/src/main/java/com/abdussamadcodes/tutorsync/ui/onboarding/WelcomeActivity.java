@@ -128,7 +128,9 @@ public class WelcomeActivity extends BaseActivity {
         appPreferences.setLanguageCode(langCode);
         renderSelectionStates();
         if (!current.equals(langCode)) {
-            LocaleThemeHelper.applySavedLocaleAndTheme(this);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                LocaleThemeHelper.applySavedLocaleAndTheme(this);
+            }, 150);
         }
     }
 
@@ -138,7 +140,9 @@ public class WelcomeActivity extends BaseActivity {
         appPreferences.setThemeMode(themeMode);
         renderSelectionStates();
         if (!current.equals(themeMode)) {
-            LocaleThemeHelper.applySavedLocaleAndTheme(this);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                LocaleThemeHelper.applySavedLocaleAndTheme(this);
+            }, 150);
         }
     }
 
@@ -146,11 +150,9 @@ public class WelcomeActivity extends BaseActivity {
         boolean isBangla = AppPreferences.LANG_BANGLA.equals(appPreferences.getLanguageCode());
         binding.cardLangEnglish.setChecked(!isBangla);
         binding.cardLangEnglish.setSelected(!isBangla);
-        binding.ivCheckEnglish.setVisibility(!isBangla ? View.VISIBLE : View.INVISIBLE);
 
         binding.cardLangBangla.setChecked(isBangla);
         binding.cardLangBangla.setSelected(isBangla);
-        binding.ivCheckBangla.setVisibility(isBangla ? View.VISIBLE : View.INVISIBLE);
 
         String theme = appPreferences.getThemeMode();
         boolean isSystem = AppPreferences.THEME_SYSTEM.equals(theme);
@@ -159,15 +161,12 @@ public class WelcomeActivity extends BaseActivity {
 
         binding.cardThemeSystem.setChecked(isSystem);
         binding.cardThemeSystem.setSelected(isSystem);
-        binding.ivCheckThemeSystem.setVisibility(isSystem ? View.VISIBLE : View.INVISIBLE);
 
         binding.cardThemeLight.setChecked(isLight);
         binding.cardThemeLight.setSelected(isLight);
-        binding.ivCheckThemeLight.setVisibility(isLight ? View.VISIBLE : View.INVISIBLE);
 
         binding.cardThemeDark.setChecked(isDark);
         binding.cardThemeDark.setSelected(isDark);
-        binding.ivCheckThemeDark.setVisibility(isDark ? View.VISIBLE : View.INVISIBLE);
     }
 
     private void renderStep(boolean animate) {

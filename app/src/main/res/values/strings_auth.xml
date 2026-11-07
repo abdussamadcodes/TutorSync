@@ -7,10 +7,10 @@
     <string name="setup_lang_subtitle">Select the language for menus, dates, and currency formatting. You can change this anytime in Settings.</string>
     <string name="setup_lang_en_badge">EN</string>
     <string name="setup_lang_en_title">English</string>
-    <string name="setup_lang_en_desc">Use TutorSync in English (৳8,000)</string>
+    <string name="setup_lang_en_desc">Use TutorSync in English</string>
     <string name="setup_lang_bn_badge">বাং</string>
     <string name="setup_lang_bn_title">বাংলা</string>
-    <string name="setup_lang_bn_desc">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন (৳৮,০০০)</string>
+    <string name="setup_lang_bn_desc">টিউটরসিঙ্ক বাংলায় ব্যবহার করুন</string>
 
     <string name="setup_theme_title">Choose your appearance</string>
     <string name="setup_theme_subtitle">Pick a display mode that feels comfortable for teaching and billing day or night.</string>

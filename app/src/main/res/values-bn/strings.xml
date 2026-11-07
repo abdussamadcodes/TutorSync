@@ -48,7 +48,7 @@
     <string name="dashboard_metric_students">মোট শিক্ষার্থী</string>
     <string name="dashboard_metric_subjects">সক্রিয় বিষয়</string>
     <string name="dashboard_revenue_title">আনুমানিক আয়</string>
-    <string name="dashboard_quick_actions">কুইক অ্যাকশন</string>
+    <string name="dashboard_quick_actions">setup_lang_en_desc অ্যাকশন</string>
     <string name="dashboard_action_new_student">শিক্ষার্থী</string>
     <string name="dashboard_action_new_subject">বিষয়</string>
     <string name="dashboard_action_new_schedule">রুটিন</string>
