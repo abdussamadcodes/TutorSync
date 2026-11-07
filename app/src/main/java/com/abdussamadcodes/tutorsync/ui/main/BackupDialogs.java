@@ -18,7 +18,6 @@ import com.google.android.material.textfield.TextInputLayout;
 import java.text.DateFormat;
 import java.util.Date;
 
-/** M6 / M8: every dialog of the backup and restore flow. */
 public final class BackupDialogs {
 
     public interface PasswordCallback {
@@ -30,11 +29,6 @@ public final class BackupDialogs {
     private BackupDialogs() {
     }
 
-    // ---------------------------------------------------------------------------------
-    // Export
-    // ---------------------------------------------------------------------------------
-
-    /** Asks for a new backup password (typed twice). "No password" is offered as a clearly marked option. */
     public static void askNewPassword(@NonNull Activity activity,
                                       @NonNull PasswordCallback onPassword,
                                       @NonNull Runnable onNoPassword) {
@@ -51,7 +45,7 @@ public final class BackupDialogs {
                 .setMessage(R.string.backup_export_password_message)
                 .setView(layout)
                 .setPositiveButton(R.string.backup_export_confirm_action, null)
-                .setNegativeButton(R.string.action_cancel, null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .setNeutralButton(R.string.backup_export_without_password, null)
                 .create();
 
@@ -81,18 +75,13 @@ public final class BackupDialogs {
                         .setTitle(R.string.backup_plain_warning_title)
                         .setMessage(R.string.backup_plain_warning_msg)
                         .setPositiveButton(R.string.backup_plain_warning_action, (x, w) -> onNoPassword.run())
-                        .setNegativeButton(R.string.action_cancel, null)
+                        .setNegativeButton(R.string.common_cancel, null)
                         .show();
             });
         });
         dialog.show();
     }
 
-    // ---------------------------------------------------------------------------------
-    // Restore
-    // ---------------------------------------------------------------------------------
-
-    /** Asks for the password of an encrypted backup. */
     public static void askExistingPassword(@NonNull Activity activity,
                                            boolean previousAttemptWasWrong,
                                            @NonNull PasswordCallback onPassword,
@@ -109,7 +98,7 @@ public final class BackupDialogs {
                 .setMessage(R.string.backup_import_password_message)
                 .setView(layout)
                 .setPositiveButton(R.string.backup_import_password_action, null)
-                .setNegativeButton(R.string.action_cancel, (d, w) -> {
+                .setNegativeButton(R.string.common_cancel, (d, w) -> {
                     if (onCancel != null) onCancel.run();
                 })
                 .setOnCancelListener(d -> {
@@ -129,8 +118,6 @@ public final class BackupDialogs {
         dialog.show();
     }
 
-    /** Lets the tutor choose between a backup file and the latest automatic safety backup. */
-    /** Lets the tutor choose between a backup file and the latest automatic safety backup. */
     public static void chooseRestoreSource(@NonNull Activity activity,
                                            long latestSafetyBackupTime,
                                            @NonNull Runnable onPickFile,
@@ -142,23 +129,19 @@ public final class BackupDialogs {
                 activity.getString(R.string.backup_source_safety, when)
         };
 
-        // Track the selected index (default to 0)
+        // Add radio buttons and an OK button
         final int[] selectedIndex = {0};
-
         new MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.backup_source_title)
-                .setSingleChoiceItems(items, 0, (d, which) -> {
-                    selectedIndex[0] = which;
-                })
-                .setPositiveButton("OK", (d, which) -> {
+                .setSingleChoiceItems(items, 0, (d, which) -> selectedIndex[0] = which)
+                .setPositiveButton(R.string.common_ok, (d, which) -> {
                     if (selectedIndex[0] == 0) onPickFile.run();
                     else onUseSafetyBackup.run();
                 })
-                .setNegativeButton(R.string.action_cancel, null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .show();
     }
 
-    /** M6: shows what is in the backup and explains the MERGE before anything is changed. */
     public static void confirmRestore(@NonNull Activity activity,
                                       @NonNull BackupRestoreManager.ParsedBackup backup,
                                       @NonNull String activeAccountId,
@@ -182,13 +165,9 @@ public final class BackupDialogs {
                 .setTitle(R.string.backup_confirm_restore_title)
                 .setMessage(msg.toString())
                 .setPositiveButton(R.string.backup_confirm_restore_action, (d, w) -> onConfirm.run())
-                .setNegativeButton(R.string.action_cancel, null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .show();
     }
-
-    // ---------------------------------------------------------------------------------
-    // helpers
-    // ---------------------------------------------------------------------------------
 
     private static LinearLayout verticalLayout(@NonNull Activity a) {
         LinearLayout layout = new LinearLayout(a);
@@ -216,7 +195,6 @@ public final class BackupDialogs {
         return (int) (v * a.getResources().getDisplayMetrics().density);
     }
 
-    /** Password text as a char[] (never a String), so it can be wiped after use. */
     private static char[] chars(@NonNull TextInputLayout til) {
         Editable e = til.getEditText() != null ? til.getEditText().getText() : null;
         if (e == null) return new char[0];

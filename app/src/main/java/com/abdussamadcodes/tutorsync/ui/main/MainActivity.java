@@ -847,10 +847,6 @@ public class MainActivity extends BaseActivity {
     // 5. CLOUD & LOCAL BACKUP UI SELECTION & ENGINE
     // =========================================================================
 
-// =========================================================================
-    // 5. CLOUD & LOCAL BACKUP UI SELECTION & ENGINE
-    // =========================================================================
-
     private void showBackupDestinationDialog() {
         String[] options = {"Local Device Storage", "Google Drive Cloud"};
         final int[] selectedIndex = {0};
@@ -858,7 +854,7 @@ public class MainActivity extends BaseActivity {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Backup Destination")
                 .setSingleChoiceItems(options, 0, (dialog, which) -> selectedIndex[0] = which)
-                .setPositiveButton("OK", (dialog, which) -> {
+                .setPositiveButton(R.string.common_ok, (dialog, which) -> {
                     if (selectedIndex[0] == 0) {
                         String timeStamp = new java.text.SimpleDateFormat("yyyy-MMM-dd_hh-mm-a", java.util.Locale.US).format(new java.util.Date());
                         String baseName = "TutorSync_Backup_" + timeStamp;
@@ -879,7 +875,7 @@ public class MainActivity extends BaseActivity {
                         }
                     }
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .show();
     }
 
@@ -890,7 +886,7 @@ public class MainActivity extends BaseActivity {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Restore Source")
                 .setSingleChoiceItems(options, 0, (dialog, which) -> selectedIndex[0] = which)
-                .setPositiveButton("OK", (dialog, which) -> {
+                .setPositiveButton(R.string.common_ok, (dialog, which) -> {
                     if (selectedIndex[0] == 0) {
                         startRestoreFlow();
                     } else {
@@ -903,7 +899,7 @@ public class MainActivity extends BaseActivity {
                         }
                     }
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .show();
     }
 
@@ -1010,9 +1006,17 @@ public class MainActivity extends BaseActivity {
                 String[] items = new String[finalFiles.size()];
                 for (int i = 0; i < finalFiles.size(); i++) {
                     com.google.api.services.drive.model.File f = finalFiles.get(i);
-                    // Clean up the name for the UI dialog list
-                    String cleanName = f.getName().replace(".tsbackup", "").replace(".json", "").replace("_", " ");
-                    items[i] = cleanName + " (" + (f.getSize() != null ? f.getSize() / 1024 : 0) + " KB)";
+
+                    // Extract real Date metadata for a beautiful UI string
+                    long timeMs = f.getCreatedTime() != null ? f.getCreatedTime().getValue() : 0;
+                    String displayDate = timeMs > 0
+                            ? java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(new java.util.Date(timeMs))
+                            : f.getName();
+
+                    long kb = f.getSize() != null ? (f.getSize() / 1024) : 0;
+                    String encLabel = f.getName().endsWith(".tsbackup") ? " (Encrypted)" : "";
+
+                    items[i] = displayDate + " • " + kb + " KB" + encLabel;
                 }
 
                 final int[] selectedIndex = {0};
@@ -1021,7 +1025,7 @@ public class MainActivity extends BaseActivity {
                         .setTitle("Select Cloud Backup")
                         .setSingleChoiceItems(items, 0, (dialog, which) -> selectedIndex[0] = which)
                         .setPositiveButton("Restore", (dialog, which) -> downloadAndParseDriveBackup(account, finalFiles.get(selectedIndex[0])))
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton(R.string.common_cancel, null)
                         .show();
             });
         });
@@ -1061,7 +1065,6 @@ public class MainActivity extends BaseActivity {
     }
 
     // --- Original Local Storage Helper Routines ---
-
     private void loadProfileImageIntoView(@Nullable String path, @NonNull ImageView target) {
         if (!ImageUtils.loadProfileImageIntoView(path, target)) target.setImageResource(R.drawable.ic_tutor_logo);
     }
