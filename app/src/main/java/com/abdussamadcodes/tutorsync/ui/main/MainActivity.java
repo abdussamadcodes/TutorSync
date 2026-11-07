@@ -1,5 +1,6 @@
 package com.abdussamadcodes.tutorsync.ui.main;
 
+import android.app.Activity;
 import android.app.DatePickerDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -62,8 +63,10 @@ import com.abdussamadcodes.tutorsync.util.AppExecutors;
 import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.abdussamadcodes.tutorsync.util.BackupCrypto;
 import com.abdussamadcodes.tutorsync.util.BackupRestoreManager;
+import com.abdussamadcodes.tutorsync.util.GoogleDriveBackupHelper;
 import com.abdussamadcodes.tutorsync.util.ImageUtils;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -82,6 +85,7 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -124,18 +128,40 @@ public class MainActivity extends BaseActivity {
     @Nullable
     private DatabaseReference connectedRef;
 
+    private static final int ACTION_NONE = 0;
+    private static final int ACTION_DRIVE_BACKUP = 1;
+    private static final int ACTION_DRIVE_RESTORE = 2;
+    private int pendingDriveAction = ACTION_NONE;
+
+    private final ActivityResultLauncher<Intent> driveAuthLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    try {
+                        GoogleSignInAccount account = GoogleAuthHelper.extractDriveAccountFromIntent(result.getData());
+                        if (account != null) {
+                            if (pendingDriveAction == ACTION_DRIVE_BACKUP) {
+                                startDriveBackupFlow(account);
+                            } else if (pendingDriveAction == ACTION_DRIVE_RESTORE) {
+                                startDriveRestoreFlow(account);
+                            }
+                        } else {
+                            Toast.makeText(this, "Google Drive permission denied.", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Drive authentication failed.", Toast.LENGTH_SHORT).show();
+                    }
+                }
+                pendingDriveAction = ACTION_NONE;
+            });
+
     private final ActivityResultLauncher<String> pickProfilePhotoLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
                 if (uri != null) {
                     String accountId = sessionManager.getActiveAccountId();
                     if (accountId.isEmpty()) return;
 
-                    // Compress new photo and delete any previous unsaved pending photo from this dialog session
                     String savedPath = ImageUtils.compressAndSaveImage(
-                            this,
-                            uri,
-                            "profile_" + accountId,
-                            pendingProfilePicPath
+                            this, uri, "profile_" + accountId, pendingProfilePicPath
                     );
                     if (savedPath != null) {
                         pendingProfilePicPath = savedPath;
@@ -155,7 +181,6 @@ public class MainActivity extends BaseActivity {
                 }
             });
 
-    // M8: password-protected backups are written to a file the tutor picks; the password waits here.
     @Nullable private char[] pendingBackupPassword = null;
     private final ActivityResultLauncher<String> encryptedExportLauncher =
             registerForActivityResult(new ActivityResultContracts.CreateDocument("application/octet-stream"), uri -> {
@@ -198,21 +223,16 @@ public class MainActivity extends BaseActivity {
         setContentView(binding.getRoot());
         applySystemBarInsets(binding.mainRoot);
 
-        // 1. Attach listeners and adapters FIRST
         setupUI();
         setupListeners();
-
-        // Apply initial layout based on orientation
         applyResponsiveLayout(getResources().getConfiguration().orientation);
 
-        // 2. Restore the active tab AFTER setupUI() so the tab visibility updates properly
         int restoredTabId = savedInstanceState != null
                 ? savedInstanceState.getInt(STATE_ACTIVE_TAB, lastActiveTabId)
                 : lastActiveTabId;
         binding.bottomNavigation.setSelectedItemId(restoredTabId);
         switchToTab(restoredTabId);
 
-        // 3. Networking & Firebase Services (Realtime DB, Firestore, HTTP REST JSON API)
         attachRealtimePresenceListener();
         syncAccountToFirestore();
         fetchDailyQuoteFromApi();
@@ -221,48 +241,26 @@ public class MainActivity extends BaseActivity {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        // Explicitly handle layout responsiveness during rotation
         applyResponsiveLayout(newConfig.orientation);
     }
 
-    /**
-     * Requirement: Layout Responsiveness (Optional).
-     * Dynamically adjusts the weighting and orientation of dashboard metric cards based on screen rotation.
-     */
     private void applyResponsiveLayout(int orientation) {
         if (binding == null) return;
-
         try {
-            // Find the container holding the stat cards (assuming it's a LinearLayout holding the stats)
-            // If the exact ID isn't known, we navigate via known parents, but assuming standard Structure
             if (binding.tvStudentCount.getParent() instanceof ViewGroup) {
                 ViewGroup statContainer = (ViewGroup) binding.tvStudentCount.getParent().getParent();
-
                 if (statContainer instanceof LinearLayout) {
                     LinearLayout layout = (LinearLayout) statContainer;
-
-                    if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                        // In Landscape, stretch cards out horizontally evenly
-                        layout.setOrientation(LinearLayout.HORIZONTAL);
-                        for (int i = 0; i < layout.getChildCount(); i++) {
-                            View child = layout.getChildAt(i);
-                            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) child.getLayoutParams();
-                            lp.width = 0;
-                            lp.weight = 1f;
+                    layout.setOrientation(LinearLayout.HORIZONTAL);
+                    for (int i = 0; i < layout.getChildCount(); i++) {
+                        View child = layout.getChildAt(i);
+                        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) child.getLayoutParams();
+                        lp.width = 0;
+                        lp.weight = 1f;
+                        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
                             lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
-                            child.setLayoutParams(lp);
                         }
-                    } else {
-                        // In Portrait, stack or format appropriately (reverting to default)
-                        // Depending on your base XML, they might already be horizontal, but we ensure proper weighting
-                        layout.setOrientation(LinearLayout.HORIZONTAL);
-                        for (int i = 0; i < layout.getChildCount(); i++) {
-                            View child = layout.getChildAt(i);
-                            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) child.getLayoutParams();
-                            lp.width = 0;
-                            lp.weight = 1f; // Adjust back to default equal weighting
-                            child.setLayoutParams(lp);
-                        }
+                        child.setLayoutParams(lp);
                     }
                 }
             }
@@ -308,11 +306,6 @@ public class MainActivity extends BaseActivity {
     // FIREBASE REALTIME DB, FIRESTORE & HTTP REST JSON API
     // =========================================================================
 
-    /**
-     * Watches Firebase's special ".info/connected" node so that whenever the device connects or
-     * reconnects to Firebase servers, it registers the onDisconnect() handler FIRST and then
-     * marks the active account as isOnline = true.
-     */
     private void attachRealtimePresenceListener() {
         final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
@@ -339,7 +332,6 @@ public class MainActivity extends BaseActivity {
                         onlineStatus.put("isOnline", true);
                         onlineStatus.put("lastActive", ServerValue.TIMESTAMP);
 
-                        // 1. Register onDisconnect FIRST, then set isOnline = true
                         presenceRef.onDisconnect().setValue(offlineStatus).addOnCompleteListener(task -> {
                             if (sessionManager.hasActiveSession()) {
                                 presenceRef.setValue(onlineStatus);
@@ -347,13 +339,10 @@ public class MainActivity extends BaseActivity {
                         });
                     }
                 }
-
                 @Override
                 public void onCancelled(@NonNull DatabaseError error) {
-                    Log.e("FirebaseRealtime", "Connection listener cancelled", error.toException());
                 }
             };
-
             connectedRef.addValueEventListener(connectionListener);
         } catch (Exception e) {
             Log.e("FirebaseRealtime", "Failed to attach presence listener", e);
@@ -363,7 +352,6 @@ public class MainActivity extends BaseActivity {
     private void setFirebaseRealtimePresence(boolean isOnline) {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
-
         try {
             DatabaseReference presenceRef = FirebaseDatabase.getInstance().getReference("status/" + accountId);
             Map<String, Object> status = new HashMap<>();
@@ -379,15 +367,13 @@ public class MainActivity extends BaseActivity {
                 presenceRef.onDisconnect().cancel();
             }
             presenceRef.setValue(status);
-        } catch (Exception e) {
-            Log.e("FirebaseRealtime", "Realtime DB presence update error", e);
+        } catch (Exception ignored) {
         }
     }
 
     private void syncAccountToFirestore() {
         final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
-
         AppExecutors.getInstance().diskIO().execute(() -> {
             try {
                 Account account = accountStore.getAccountById(accountId);
@@ -396,9 +382,7 @@ public class MainActivity extends BaseActivity {
 
                 if (account != null) {
                     String localPicPath = account.getProfilePicPath();
-                    boolean hasLocalPhoto = localPicPath != null && !localPicPath.trim().isEmpty()
-                            && new File(localPicPath).exists();
-
+                    boolean hasLocalPhoto = localPicPath != null && !localPicPath.trim().isEmpty() && new File(localPicPath).exists();
                     Map<String, Object> tutorDoc = new HashMap<>();
                     tutorDoc.put("accountId", accountId);
                     tutorDoc.put("fullName", account.getFullName());
@@ -410,20 +394,15 @@ public class MainActivity extends BaseActivity {
                     tutorDoc.put("activeSubjectCount", subjects.size());
                     tutorDoc.put("lastSyncedAt", System.currentTimeMillis());
 
-                    FirebaseFirestore.getInstance()
-                            .collection("tutors")
-                            .document(accountId)
-                            .set(tutorDoc);
+                    FirebaseFirestore.getInstance().collection("tutors").document(accountId).set(tutorDoc);
                 }
-            } catch (Exception e) {
-                Log.e("FirestoreSync", "Firestore sync error", e);
+            } catch (Exception ignored) {
             }
         });
     }
 
     private void fetchDailyQuoteFromApi() {
         if (!GoogleAuthHelper.isNetworkConnected(this)) return;
-
         AppExecutors.getInstance().diskIO().execute(() -> {
             HttpURLConnection conn = null;
             try {
@@ -437,11 +416,8 @@ public class MainActivity extends BaseActivity {
                     StringBuilder response = new StringBuilder();
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
                         String line;
-                        while ((line = reader.readLine()) != null) {
-                            response.append(line);
-                        }
+                        while ((line = reader.readLine()) != null) response.append(line);
                     }
-
                     JSONObject jsonRoot = new JSONObject(response.toString());
                     JSONObject slip = jsonRoot.optJSONObject("slip");
                     if (slip != null) {
@@ -449,7 +425,6 @@ public class MainActivity extends BaseActivity {
                         if (!advice.isEmpty()) {
                             AppExecutors.getInstance().mainThread().execute(() -> {
                                 if (isFinishing() || isDestroyed() || binding == null) return;
-                                // Update the subtitle TextView right below tvGreeting in topToolbar
                                 if (binding.tvGreeting.getParent() instanceof ViewGroup) {
                                     ViewGroup parent = (ViewGroup) binding.tvGreeting.getParent();
                                     if (parent.getChildCount() > 1 && parent.getChildAt(1) instanceof TextView) {
@@ -461,12 +436,9 @@ public class MainActivity extends BaseActivity {
                         }
                     }
                 }
-            } catch (Exception e) {
-                Log.e("API_Fetch", "Failed to fetch daily tip JSON", e);
+            } catch (Exception ignored) {
             } finally {
-                if (conn != null) {
-                    conn.disconnect();
-                }
+                if (conn != null) conn.disconnect();
             }
         });
     }
@@ -478,29 +450,21 @@ public class MainActivity extends BaseActivity {
     private void setupUI() {
         occurrenceAdapter = new OccurrenceAdapter(group -> {
             AttendanceBottomSheetFragment bottomSheet = AttendanceBottomSheetFragment.newInstance(
-                    sessionManager.getActiveAccountId(),
-                    group.getStudentId(),
-                    new ArrayList<>(group.getOccurrenceIds())
+                    sessionManager.getActiveAccountId(), group.getStudentId(), new ArrayList<>(group.getOccurrenceIds())
             );
             bottomSheet.show(getSupportFragmentManager(), AttendanceBottomSheetFragment.TAG);
         });
 
         binding.rvOccurrences.setLayoutManager(new LinearLayoutManager(this));
         binding.rvOccurrences.setAdapter(occurrenceAdapter);
-
         getSupportFragmentManager().setFragmentResultListener("attendance_request_key", this, (requestKey, result) -> {
-            if (result.getBoolean("attendance_recorded", false)) {
-                loadDashboardData();
-            }
+            if (result.getBoolean("attendance_recorded", false)) loadDashboardData();
         });
-
         binding.bottomNavigation.setOnItemSelectedListener(item -> switchToTab(item.getItemId()));
     }
 
     private boolean switchToTab(int itemId) {
-        if (itemId != R.id.nav_home && itemId != R.id.nav_directory && itemId != R.id.nav_settings) {
-            return false;
-        }
+        if (itemId != R.id.nav_home && itemId != R.id.nav_directory && itemId != R.id.nav_settings) return false;
         lastActiveTabId = itemId;
         binding.tabHome.setVisibility(itemId == R.id.nav_home ? View.VISIBLE : View.GONE);
         binding.tabDirectory.setVisibility(itemId == R.id.nav_directory ? View.VISIBLE : View.GONE);
@@ -525,7 +489,6 @@ public class MainActivity extends BaseActivity {
     private void loadDashboardData() {
         final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
-
         final String currentLang = appPreferences.getLanguageCode();
 
         AppExecutors.getInstance().diskIO().execute(() -> {
@@ -537,7 +500,6 @@ public class MainActivity extends BaseActivity {
                     lastReconciledAccountId = accountId;
                 }
 
-                // H1: keep recurring classes rolling forward (idempotent; never recreates removed classes)
                 new ScheduleRepository().topUpRecurringOccurrences(accountId);
 
                 final Account account = accountStore.getAccountById(accountId);
@@ -552,23 +514,15 @@ public class MainActivity extends BaseActivity {
                 for (ClassOccurrence occ : occurrences) {
                     boolean found = false;
                     for (OccurrenceGroup g : groups) {
-                        if (g.getStudentId().equals(occ.getStudentId()) &&
-                                g.getStartTimeMinutes() == occ.getStartTimeMinutes() &&
-                                g.getDurationMinutes() == occ.getDurationMinutes()) {
-
-                            if (occ.getSubjectId() != null && !g.getSubjectIds().contains(occ.getSubjectId())) {
-                                g.getSubjectIds().add(occ.getSubjectId());
-                            }
-                            if (!g.getOccurrenceIds().contains(occ.getId())) {
-                                g.getOccurrenceIds().add(occ.getId());
-                            }
+                        if (g.getStudentId().equals(occ.getStudentId()) && g.getStartTimeMinutes() == occ.getStartTimeMinutes() && g.getDurationMinutes() == occ.getDurationMinutes()) {
+                            if (occ.getSubjectId() != null && !g.getSubjectIds().contains(occ.getSubjectId())) g.getSubjectIds().add(occ.getSubjectId());
+                            if (!g.getOccurrenceIds().contains(occ.getId())) g.getOccurrenceIds().add(occ.getId());
                             found = true;
                             break;
                         }
                     }
                     if (!found) {
-                        OccurrenceGroup newGroup = new OccurrenceGroup(
-                                occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
+                        OccurrenceGroup newGroup = new OccurrenceGroup(occ.getStudentId(), occ.getDate(), occ.getStartTimeMinutes(), occ.getDurationMinutes());
                         if (occ.getSubjectId() != null) newGroup.getSubjectIds().add(occ.getSubjectId());
                         newGroup.getOccurrenceIds().add(occ.getId());
                         groups.add(newGroup);
@@ -579,10 +533,7 @@ public class MainActivity extends BaseActivity {
                     if (isFinishing() || isDestroyed() || binding == null) return;
                     if (!accountId.equals(sessionManager.getActiveAccountId())) return;
 
-                    // Hide Change Password row & divider if logged in with Google Sign-In
                     setChangePasswordRowVisible(!isGoogleAccount);
-
-                    // H2: attendance-history card shows how many recent classes still need attendance
                     if (needsAttendanceCount > 0) {
                         binding.tvAttendanceHistoryBadge.setVisibility(View.VISIBLE);
                         binding.tvAttendanceHistoryBadge.setText(needsAttendanceCount > 99 ? "99+" : String.valueOf(needsAttendanceCount));
@@ -592,22 +543,15 @@ public class MainActivity extends BaseActivity {
                         binding.tvAttendanceHistorySub.setText(R.string.dashboard_attendance_history_sub);
                     }
 
-                    String accountName = (account != null && !account.getFullName().trim().isEmpty())
-                            ? account.getFullName() : "Tutor";
+                    String accountName = (account != null && !account.getFullName().trim().isEmpty()) ? account.getFullName() : "Tutor";
                     String username = (account != null) ? account.getUsername() : "";
                     String phone = (account != null && account.getPhone() != null) ? account.getPhone() : "";
                     String email = (account != null && account.getEmail() != null) ? account.getEmail() : "";
-                    String profilePicPath = (account != null && account.getProfilePicPath() != null)
-                            ? account.getProfilePicPath() : "";
+                    String profilePicPath = (account != null && account.getProfilePicPath() != null) ? account.getProfilePicPath() : "";
 
-                    if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
-                        binding.tvGreeting.setText("হ্যালো, " + accountName + "!");
-                    } else {
-                        binding.tvGreeting.setText("Hello, " + accountName + "!");
-                    }
-
-                    // Populate Settings Profile Card
+                    binding.tvGreeting.setText(AppPreferences.LANG_BANGLA.equals(currentLang) ? "হ্যালো, " + accountName + "!" : "Hello, " + accountName + "!");
                     binding.tvSettingsProfileName.setText(accountName);
+
                     if (!username.isEmpty()) {
                         binding.tvSettingsUsername.setText("@" + username);
                         binding.tvSettingsUsername.setVisibility(View.VISIBLE);
@@ -615,22 +559,15 @@ public class MainActivity extends BaseActivity {
                         binding.tvSettingsUsername.setVisibility(View.GONE);
                     }
 
-                    if (!phone.isEmpty() && !email.isEmpty()) {
-                        binding.tvSettingsProfileSubtitle.setText(phone + " • " + email);
-                    } else if (!phone.isEmpty()) {
-                        binding.tvSettingsProfileSubtitle.setText(phone);
-                    } else if (!email.isEmpty()) {
-                        binding.tvSettingsProfileSubtitle.setText(email);
-                    } else {
-                        binding.tvSettingsProfileSubtitle.setText(R.string.profile_tap_to_edit);
-                    }
+                    if (!phone.isEmpty() && !email.isEmpty()) binding.tvSettingsProfileSubtitle.setText(phone + " • " + email);
+                    else if (!phone.isEmpty()) binding.tvSettingsProfileSubtitle.setText(phone);
+                    else if (!email.isEmpty()) binding.tvSettingsProfileSubtitle.setText(email);
+                    else binding.tvSettingsProfileSubtitle.setText(R.string.profile_tap_to_edit);
 
                     loadProfileImageIntoView(profilePicPath, binding.ivSettingsProfilePic);
-
                     binding.tvStudentCount.setText(String.valueOf(students.size()));
                     binding.tvSubjectCount.setText(String.valueOf(subjects.size()));
                     binding.tvRevenue.setText(String.format(Locale.US, "৳ %.2f", totalRevenueMinor / 100.0));
-
                     occurrenceAdapter.setData(groups, students, subjects);
 
                     if (groups.isEmpty()) {
@@ -648,84 +585,43 @@ public class MainActivity extends BaseActivity {
 
     private void refreshStatusLabels() {
         String currentLang = appPreferences.getLanguageCode();
-        if (AppPreferences.LANG_BANGLA.equals(currentLang)) {
-            binding.tvActiveLanguageValue.setText("বাংলা");
-        } else {
-            binding.tvActiveLanguageValue.setText("English");
-        }
-
+        binding.tvActiveLanguageValue.setText(AppPreferences.LANG_BANGLA.equals(currentLang) ? "বাংলা" : "English");
         String themeMode = appPreferences.getThemeMode();
-        if (AppPreferences.THEME_LIGHT.equals(themeMode)) {
-            binding.tvActiveThemeValue.setText(R.string.theme_light);
-        } else if (AppPreferences.THEME_DARK.equals(themeMode)) {
-            binding.tvActiveThemeValue.setText(R.string.theme_dark);
-        } else {
-            binding.tvActiveThemeValue.setText(R.string.theme_system);
-        }
+        if (AppPreferences.THEME_LIGHT.equals(themeMode)) binding.tvActiveThemeValue.setText(R.string.theme_light);
+        else if (AppPreferences.THEME_DARK.equals(themeMode)) binding.tvActiveThemeValue.setText(R.string.theme_dark);
+        else binding.tvActiveThemeValue.setText(R.string.theme_system);
 
         if (sessionManager.hasPinSetup()) {
-            if (sessionManager.isBiometricEnabled()) {
-                binding.tvAppLockStatusValue.setText("PIN + Biometric");
-            } else {
-                binding.tvAppLockStatusValue.setText("PIN Enabled");
-            }
+            binding.tvAppLockStatusValue.setText(sessionManager.isBiometricEnabled() ? "PIN + Biometric" : "PIN Enabled");
         } else {
             binding.tvAppLockStatusValue.setText(R.string.app_lock_status_off);
         }
     }
 
     private void setupListeners() {
-        binding.btnQuickAddStudent.setOnClickListener(v ->
-                startActivity(new Intent(this, StudentFormActivity.class))
-        );
+        binding.btnQuickAddStudent.setOnClickListener(v -> startActivity(new Intent(this, StudentFormActivity.class)));
+        binding.btnQuickAddSubject.setOnClickListener(v -> startActivity(new Intent(this, SubjectFormActivity.class)));
+        binding.btnQuickAddSchedule.setOnClickListener(v -> startActivity(new Intent(this, ScheduleFormActivity.class)));
+        binding.cardManageStudents.setOnClickListener(v -> startActivity(new Intent(this, StudentListActivity.class)));
+        binding.cardManageSubjects.setOnClickListener(v -> startActivity(new Intent(this, SubjectListActivity.class)));
+        binding.cardManageSchedules.setOnClickListener(v -> startActivity(new Intent(this, ScheduleListActivity.class)));
+        binding.cardAttendanceHistory.setOnClickListener(v -> startActivity(new Intent(this, AttendanceHistoryActivity.class)));
+        binding.cardRevenue.setOnClickListener(v -> startActivity(new Intent(this, InvoiceListActivity.class)));
 
-        binding.btnQuickAddSubject.setOnClickListener(v ->
-                startActivity(new Intent(this, SubjectFormActivity.class))
-        );
-
-        binding.btnQuickAddSchedule.setOnClickListener(v ->
-                startActivity(new Intent(this, ScheduleFormActivity.class))
-        );
-
-        binding.cardManageStudents.setOnClickListener(v ->
-                startActivity(new Intent(this, StudentListActivity.class))
-        );
-
-        binding.cardManageSubjects.setOnClickListener(v ->
-                startActivity(new Intent(this, SubjectListActivity.class))
-        );
-
-        binding.cardManageSchedules.setOnClickListener(v ->
-                startActivity(new Intent(this, ScheduleListActivity.class))
-        );
-
-        binding.cardAttendanceHistory.setOnClickListener(v ->
-                startActivity(new Intent(this, AttendanceHistoryActivity.class))
-        );
-
-        binding.cardRevenue.setOnClickListener(v ->
-                startActivity(new Intent(this, InvoiceListActivity.class))
-        );
-
-        // 1. Tutor Profile Card & Edit Button
         binding.cardTutorProfile.setOnClickListener(v -> showEditProfileBottomSheet());
         binding.btnEditProfile.setOnClickListener(v -> showEditProfileBottomSheet());
 
-        // 2. Security Section: Existing PIN/Biometric + Change Password
         binding.btnConfigureAppLock.setOnClickListener(v -> showConfigureAppLockDialog());
         binding.rowAppLock.setOnClickListener(v -> showConfigureAppLockDialog());
 
         binding.btnChangePassword.setOnClickListener(v -> showChangePasswordBottomSheet());
         binding.rowChangePassword.setOnClickListener(v -> showChangePasswordBottomSheet());
 
-        // 3. Preferences Section
         binding.btnOpenLanguageSettings.setOnClickListener(v -> {
             lastActiveTabId = R.id.nav_settings;
             startActivity(WelcomeActivity.createReopenIntent(this));
         });
-        binding.rowLanguageSettings.setOnClickListener(v ->
-                binding.btnOpenLanguageSettings.performClick()
-        );
+        binding.rowLanguageSettings.setOnClickListener(v -> binding.btnOpenLanguageSettings.performClick());
 
         binding.btnCycleTheme.setOnClickListener(v -> {
             lastActiveTabId = R.id.nav_settings;
@@ -737,27 +633,14 @@ public class MainActivity extends BaseActivity {
             LocaleThemeHelper.applyThemeMode(next);
             showMessage(binding.getRoot(), R.string.msg_theme_updated);
         });
-        binding.rowThemeSettings.setOnClickListener(v ->
-                binding.btnCycleTheme.performClick()
-        );
+        binding.rowThemeSettings.setOnClickListener(v -> binding.btnCycleTheme.performClick());
 
-        // 4. Local Backup & Restore
-        binding.btnExportBackup.setOnClickListener(v ->
-                BackupDialogs.askNewPassword(this,
-                        pw -> {
-                            pendingBackupPassword = pw;
-                            encryptedExportLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".tsbackup");
-                        },
-                        () -> exportBackupLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".json"))
-        );
-        binding.btnImportBackup.setOnClickListener(v -> startRestoreFlow()
-        );
+        // 4. Cloud & Local Backup/Restore Entry Points
+        binding.btnExportBackup.setOnClickListener(v -> showBackupDestinationDialog());
+        binding.btnImportBackup.setOnClickListener(v -> showRestoreSourceDialog());
 
-        // 5. Sign Out
         binding.btnSignOut.setOnClickListener(v -> {
-            if (connectedRef != null && connectionListener != null) {
-                connectedRef.removeEventListener(connectionListener);
-            }
+            if (connectedRef != null && connectionListener != null) connectedRef.removeEventListener(connectionListener);
             setFirebaseRealtimePresence(false);
             lastActiveTabId = R.id.nav_home;
             lastReconciledAccountId = null;
@@ -770,12 +653,11 @@ public class MainActivity extends BaseActivity {
     }
 
     // =========================================================================
-    // 1. TUTOR PROFILE SETTINGS (WITH READ-ONLY USERNAME & LOCAL PHOTO STORAGE)
+    // 1. TUTOR PROFILE SETTINGS
     // =========================================================================
     private void showEditProfileBottomSheet() {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
-
         BottomSheetDialog bottomSheet = new BottomSheetDialog(this);
         View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_tutor_profile, null);
         bottomSheet.setContentView(sheetView);
@@ -791,27 +673,18 @@ public class MainActivity extends BaseActivity {
 
         activeDialogProfileImageView = ivDialogProfilePic;
         pendingProfilePicPath = null;
-
-        // Enforce read-only username
         etUsername.setKeyListener(null);
         etUsername.setEnabled(false);
         etUsername.setFocusable(false);
 
         Account account = accountStore.getAccountById(accountId);
-        String currentFullName = account != null ? account.getFullName() : "";
-        String currentUsername = account != null ? account.getUsername() : "";
-        String currentPhone = (account != null && account.getPhone() != null) ? account.getPhone() : "";
-        String currentEmail = (account != null && account.getEmail() != null) ? account.getEmail() : "";
-        String currentDob = (account != null && account.getDob() != null) ? account.getDob() : "";
-        String currentAddress = (account != null && account.getAddress() != null) ? account.getAddress() : "";
+        etUsername.setText(account != null ? account.getUsername() : "");
+        etFullName.setText(account != null ? account.getFullName() : "");
+        etPhone.setText((account != null && account.getPhone() != null) ? account.getPhone() : "");
+        etEmail.setText((account != null && account.getEmail() != null) ? account.getEmail() : "");
+        etDob.setText((account != null && account.getDob() != null) ? account.getDob() : "");
+        etAddress.setText((account != null && account.getAddress() != null) ? account.getAddress() : "");
         final String currentPicPath = (account != null && account.getProfilePicPath() != null) ? account.getProfilePicPath() : "";
-
-        etUsername.setText(currentUsername);
-        etFullName.setText(currentFullName);
-        etPhone.setText(currentPhone);
-        etEmail.setText(currentEmail);
-        etDob.setText(currentDob);
-        etAddress.setText(currentAddress);
         loadProfileImageIntoView(currentPicPath, ivDialogProfilePic);
 
         sheetView.findViewById(R.id.btnPickProfilePhoto).setOnClickListener(v -> {
@@ -822,8 +695,7 @@ public class MainActivity extends BaseActivity {
         etDob.setOnClickListener(v -> {
             Calendar cal = Calendar.getInstance();
             new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
-                String formattedDate = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, dayOfMonth);
-                etDob.setText(formattedDate);
+                etDob.setText(String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, dayOfMonth));
             }, cal.get(Calendar.YEAR) - 22, cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show();
         });
 
@@ -832,40 +704,24 @@ public class MainActivity extends BaseActivity {
         sheetView.findViewById(R.id.btnSaveProfile).setOnClickListener(v -> {
             tilFullName.setError(null);
             String newFullName = etFullName.getText() != null ? etFullName.getText().toString().trim() : "";
-            String newPhone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
-            String newEmail = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
-            String newDob = etDob.getText() != null ? etDob.getText().toString().trim() : "";
-            String newAddress = etAddress.getText() != null ? etAddress.getText().toString().trim() : "";
-
             if (newFullName.isEmpty()) {
                 tilFullName.setError(getString(R.string.auth_err_empty));
                 return;
             }
-
             if (pendingProfilePicPath != null) {
                 accountStore.updateProfilePicPath(accountId, pendingProfilePicPath);
-                if (!currentPicPath.isEmpty() && !currentPicPath.equals(pendingProfilePicPath)) {
-                    ImageUtils.deleteProfileImage(this, currentPicPath);
-                }
+                if (!currentPicPath.isEmpty() && !currentPicPath.equals(pendingProfilePicPath)) ImageUtils.deleteProfileImage(this, currentPicPath);
                 pendingProfilePicPath = null;
             }
-
-            boolean updated = accountStore.updateProfile(
-                    accountId, newFullName, newPhone, newEmail, newAddress, newDob
-            );
-
-            if (updated) {
+            if (accountStore.updateProfile(accountId, newFullName, etPhone.getText().toString().trim(), etEmail.getText().toString().trim(), etAddress.getText().toString().trim(), etDob.getText().toString().trim())) {
                 syncAccountToFirestore();
                 bottomSheet.dismiss();
                 loadDashboardData();
-            } else {
-                showMessage(binding.getRoot(), "Failed to save profile");
-            }
+            } else showMessage(binding.getRoot(), "Failed to save profile");
         });
 
         bottomSheet.setOnDismissListener(d -> {
             activeDialogProfileImageView = null;
-            // Clean up any unsaved pending image if the user cancelled/dismissed
             if (pendingProfilePicPath != null && !pendingProfilePicPath.equals(currentPicPath)) {
                 ImageUtils.deleteProfileImage(this, pendingProfilePicPath);
                 pendingProfilePicPath = null;
@@ -875,12 +731,11 @@ public class MainActivity extends BaseActivity {
     }
 
     // =========================================================================
-    // 2. SECURITY: CHANGE PASSWORD (WITH OFFLINE GUARD & FIREBASE SYNC)
+    // 2. SECURITY: CHANGE PASSWORD
     // =========================================================================
     private void showChangePasswordBottomSheet() {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
-
         Account currentAccount = accountStore.getAccountById(accountId);
         if (currentAccount == null || GoogleAuthHelper.isGoogleSignInAccount(currentAccount)) {
             setChangePasswordRowVisible(false);
@@ -894,143 +749,58 @@ public class MainActivity extends BaseActivity {
         TextInputLayout tilCurrent = sheetView.findViewById(R.id.tilCurrentPassword);
         TextInputLayout tilNew = sheetView.findViewById(R.id.tilNewPassword);
         TextInputLayout tilConfirm = sheetView.findViewById(R.id.tilConfirmNewPassword);
-
         TextInputEditText etCurrent = sheetView.findViewById(R.id.etCurrentPassword);
         TextInputEditText etNew = sheetView.findViewById(R.id.etNewPassword);
         TextInputEditText etConfirm = sheetView.findViewById(R.id.etConfirmNewPassword);
 
-        View btnCancel = sheetView.findViewById(R.id.btnCancelChangePassword);
+        sheetView.findViewById(R.id.btnCancelChangePassword).setOnClickListener(v -> bottomSheet.dismiss());
         MaterialButton btnSubmit = sheetView.findViewById(R.id.btnSubmitChangePassword);
 
-        btnCancel.setOnClickListener(v -> bottomSheet.dismiss());
-
         btnSubmit.setOnClickListener(v -> {
-            tilCurrent.setError(null);
-            tilNew.setError(null);
-            tilConfirm.setError(null);
-
+            tilCurrent.setError(null); tilNew.setError(null); tilConfirm.setError(null);
             String currentPass = etCurrent.getText() != null ? etCurrent.getText().toString() : "";
             String newPass = etNew.getText() != null ? etNew.getText().toString() : "";
             String confirmPass = etConfirm.getText() != null ? etConfirm.getText().toString() : "";
 
-            if (currentPass.isEmpty()) {
-                tilCurrent.setError(getString(R.string.auth_err_empty));
-                return;
-            }
-            if (newPass.isEmpty()) {
-                tilNew.setError(getString(R.string.auth_err_empty));
-                return;
-            }
-            if (confirmPass.isEmpty()) {
-                tilConfirm.setError(getString(R.string.auth_err_empty));
-                return;
-            }
-
-            Account account = accountStore.getAccountById(accountId);
-            if (account == null) {
-                showMessage(binding.getRoot(), R.string.auth_err_hashing);
-                return;
-            }
+            if (currentPass.isEmpty()) { tilCurrent.setError(getString(R.string.auth_err_empty)); return; }
+            if (newPass.isEmpty()) { tilNew.setError(getString(R.string.auth_err_empty)); return; }
+            if (confirmPass.isEmpty()) { tilConfirm.setError(getString(R.string.auth_err_empty)); return; }
 
             try {
-                String currentComputedHash = PasswordHasher.hashPassword(currentPass, account.getSalt());
-                if (!currentComputedHash.equals(account.getPasswordHash())) {
-                    tilCurrent.setError(getString(R.string.err_incorrect_current_password));
-                    return;
+                if (!PasswordHasher.hashPassword(currentPass, currentAccount.getSalt()).equals(currentAccount.getPasswordHash())) {
+                    tilCurrent.setError(getString(R.string.err_incorrect_current_password)); return;
                 }
-
-                if (newPass.length() < 8) {
-                    tilNew.setError(getString(R.string.auth_err_pass_length));
-                    return;
-                }
-                if (!newPass.matches(".*[A-Z].*")) {
-                    tilNew.setError(getString(R.string.auth_err_pass_upper));
-                    return;
-                }
-                if (!newPass.matches(".*[a-z].*")) {
-                    tilNew.setError(getString(R.string.auth_err_pass_lower));
-                    return;
-                }
-                if (!newPass.matches(".*[0-9].*")) {
-                    tilNew.setError(getString(R.string.auth_err_pass_digit));
-                    return;
-                }
-                if (!newPass.matches(".*[^A-Za-z0-9].*")) {
-                    tilNew.setError(getString(R.string.auth_err_pass_special));
-                    return;
-                }
-                if (newPass.equals(currentPass)) {
-                    tilNew.setError(getString(R.string.err_new_password_same));
-                    return;
-                }
-                if (!newPass.equals(confirmPass)) {
-                    tilConfirm.setError(getString(R.string.auth_err_password_mismatch));
-                    return;
-                }
+                if (newPass.length() < 8) { tilNew.setError(getString(R.string.auth_err_pass_length)); return; }
+                if (!newPass.matches(".*[A-Z].*")) { tilNew.setError(getString(R.string.auth_err_pass_upper)); return; }
+                if (!newPass.matches(".*[a-z].*")) { tilNew.setError(getString(R.string.auth_err_pass_lower)); return; }
+                if (!newPass.matches(".*[0-9].*")) { tilNew.setError(getString(R.string.auth_err_pass_digit)); return; }
+                if (!newPass.matches(".*[^A-Za-z0-9].*")) { tilNew.setError(getString(R.string.auth_err_pass_special)); return; }
+                if (newPass.equals(currentPass)) { tilNew.setError(getString(R.string.err_new_password_same)); return; }
+                if (!newPass.equals(confirmPass)) { tilConfirm.setError(getString(R.string.auth_err_password_mismatch)); return; }
 
                 final String newSalt = PasswordHasher.generateSalt();
                 final String newHash = PasswordHasher.hashPassword(newPass, newSalt);
 
-                // Check if this account is an Email + Password account backed by Firebase
-                String accountEmail = null;
-                if (Patterns.EMAIL_ADDRESS.matcher(account.getUsername()).matches()) {
-                    accountEmail = account.getUsername();
-                } else if (account.getEmail() != null
-                        && Patterns.EMAIL_ADDRESS.matcher(account.getEmail().trim()).matches()) {
-                    accountEmail = account.getEmail().trim();
-                }
+                String accountEmail = Patterns.EMAIL_ADDRESS.matcher(currentAccount.getUsername()).matches() ? currentAccount.getUsername()
+                        : (currentAccount.getEmail() != null && Patterns.EMAIL_ADDRESS.matcher(currentAccount.getEmail().trim()).matches() ? currentAccount.getEmail().trim() : null);
 
                 if (accountEmail != null) {
-                    // Require internet connection so Firebase Auth and Local SQLite never get out of sync
-                    if (!GoogleAuthHelper.isNetworkConnected(this)) {
-                        tilNew.setError("Internet connection is required to change the password for an email account.");
-                        return;
-                    }
-
+                    if (!GoogleAuthHelper.isNetworkConnected(this)) { tilNew.setError("Internet required."); return; }
                     btnSubmit.setEnabled(false);
-                    btnCancel.setEnabled(false);
-
-                    GoogleAuthHelper.updateFirebasePassword(this, accountEmail, currentPass, newPass,
-                            new GoogleAuthHelper.PasswordUpdateCallback() {
-                                @Override
-                                public void onUpdated() {
-                                    btnSubmit.setEnabled(true);
-                                    btnCancel.setEnabled(true);
-                                    if (accountStore.updatePassword(accountId, newHash, newSalt)) {
-                                        bottomSheet.dismiss();
-                                        showMessage(binding.getRoot(), R.string.msg_password_updated);
-                                    } else {
-                                        showMessage(binding.getRoot(), R.string.auth_err_hashing);
-                                    }
-                                }
-
-                                @Override
-                                public void onError(@NonNull String message) {
-                                    btnSubmit.setEnabled(true);
-                                    btnCancel.setEnabled(true);
-                                    tilCurrent.setError(message);
-                                }
-                            });
+                    GoogleAuthHelper.updateFirebasePassword(this, accountEmail, currentPass, newPass, new GoogleAuthHelper.PasswordUpdateCallback() {
+                        @Override public void onUpdated() {
+                            if (accountStore.updatePassword(accountId, newHash, newSalt)) { bottomSheet.dismiss(); showMessage(binding.getRoot(), R.string.msg_password_updated); }
+                        }
+                        @Override public void onError(@NonNull String msg) { btnSubmit.setEnabled(true); tilCurrent.setError(msg); }
+                    });
                 } else {
-                    // Pure offline username account: update local SQLite directly
-                    if (accountStore.updatePassword(accountId, newHash, newSalt)) {
-                        bottomSheet.dismiss();
-                        showMessage(binding.getRoot(), R.string.msg_password_updated);
-                    } else {
-                        showMessage(binding.getRoot(), R.string.auth_err_hashing);
-                    }
+                    if (accountStore.updatePassword(accountId, newHash, newSalt)) { bottomSheet.dismiss(); showMessage(binding.getRoot(), R.string.msg_password_updated); }
                 }
-            } catch (Exception e) {
-                showMessage(binding.getRoot(), R.string.auth_err_hashing);
-            }
+            } catch (Exception e) { showMessage(binding.getRoot(), R.string.auth_err_hashing); }
         });
-
         bottomSheet.show();
     }
 
-    // =========================================================================
-    // 3. SECURITY: EXISTING PIN & BIOMETRIC APP LOCK CONFIGURATION
-    // =========================================================================
     private void showConfigureAppLockDialog() {
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
@@ -1054,18 +824,12 @@ public class MainActivity extends BaseActivity {
                 .setView(container)
                 .setPositiveButton(R.string.action_save, (dialog, which) -> {
                     String rawPin = etPin.getText().toString().trim();
-                    if (rawPin.length() < 4 || rawPin.length() > 6) {
-                        Toast.makeText(this, "PIN must be 4 to 6 digits", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
+                    if (rawPin.length() < 4 || rawPin.length() > 6) { Toast.makeText(this, "PIN must be 4 to 6 digits", Toast.LENGTH_SHORT).show(); return; }
                     try {
-                        // M9: salted, slow hash; the attempt counter is reset
                         sessionManager.setPin(rawPin, cbBio.isChecked() && bioReady);
                         AppLockManager.getInstance().markUnlocked();
                         refreshStatusLabels();
-                    } catch (Exception e) {
-                        showMessage(binding.getRoot(), R.string.auth_err_hashing);
-                    }
+                    } catch (Exception e) { showMessage(binding.getRoot(), R.string.auth_err_hashing); }
                 })
                 .setNegativeButton(R.string.action_cancel, null);
 
@@ -1076,108 +840,281 @@ public class MainActivity extends BaseActivity {
                 refreshStatusLabels();
             });
         }
-
         builder.show();
     }
 
     // =========================================================================
-    // 4. PROFILE IMAGE & BACKUP HELPERS
+    // 5. CLOUD & LOCAL BACKUP UI SELECTION & ENGINE
     // =========================================================================
-    private void loadProfileImageIntoView(@Nullable String path, @NonNull ImageView target) {
-        if (!ImageUtils.loadProfileImageIntoView(path, target)) {
-            target.setImageResource(R.drawable.ic_tutor_logo);
+
+    private void showBackupDestinationDialog() {
+        String[] options = {"Local Device Storage", "Google Drive Cloud"};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Backup Destination")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        BackupDialogs.askNewPassword(this,
+                                pw -> {
+                                    pendingBackupPassword = pw;
+                                    encryptedExportLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".tsbackup");
+                                },
+                                () -> exportBackupLauncher.launch("tutorsync_backup_" + System.currentTimeMillis() + ".json"));
+                    } else {
+                        pendingDriveAction = ACTION_DRIVE_BACKUP;
+                        GoogleSignInAccount account = GoogleAuthHelper.getSignedInDriveAccount(this);
+                        if (account != null) {
+                            startDriveBackupFlow(account);
+                        } else {
+                            driveAuthLauncher.launch(GoogleAuthHelper.getDriveAccessIntent(this));
+                        }
+                    }
+                })
+                .show();
+    }
+
+    private void showRestoreSourceDialog() {
+        String[] options = {"Local Device Storage", "Google Drive Cloud"};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Restore Source")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        startRestoreFlow();
+                    } else {
+                        pendingDriveAction = ACTION_DRIVE_RESTORE;
+                        GoogleSignInAccount account = GoogleAuthHelper.getSignedInDriveAccount(this);
+                        if (account != null) {
+                            startDriveRestoreFlow(account);
+                        } else {
+                            driveAuthLauncher.launch(GoogleAuthHelper.getDriveAccessIntent(this));
+                        }
+                    }
+                })
+                .show();
+    }
+
+    // --- Google Drive Cloud Backup Routine ---
+
+    private void startDriveBackupFlow(@NonNull GoogleSignInAccount account) {
+        BackupDialogs.askNewPassword(this,
+                pw -> performDriveBackup(account, pw, true),
+                () -> performDriveBackup(account, null, false)
+        );
+    }
+
+    private void performDriveBackup(@NonNull GoogleSignInAccount account, @Nullable char[] password, boolean isEncrypted) {
+        final String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty() || !isBackupTaskRunning.compareAndSet(false, true)) {
+            if (password != null) Arrays.fill(password, '\0');
+            return;
         }
+
+        Toast.makeText(this, "Uploading to Google Drive...", Toast.LENGTH_SHORT).show();
+        final Context appContext = getApplicationContext();
+
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            boolean success = false;
+            String errorMsg = null;
+            File tempFile = null;
+            SQLiteDatabase db = null;
+            try {
+                db = DatabaseManager.getInstance().openDatabase();
+                GoogleDriveBackupHelper driveHelper = new GoogleDriveBackupHelper(appContext, account);
+
+                String extension = isEncrypted ? ".tsbackup" : ".json";
+                String mimeType = isEncrypted ? "application/octet-stream" : "application/json";
+                tempFile = new File(appContext.getCacheDir(), "tutorsync_drive_" + System.currentTimeMillis() + extension);
+
+                try (OutputStream out = new FileOutputStream(tempFile)) {
+                    if (isEncrypted) {
+                        BackupRestoreManager.exportEncryptedBackupToStream(appContext, db, accountId, out, password);
+                    } else {
+                        BackupRestoreManager.exportAccountBackupToStream(appContext, db, accountId, out);
+                    }
+                }
+
+                driveHelper.uploadBackup(tempFile, mimeType);
+                success = true;
+
+            } catch (Exception e) {
+                errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
+            } finally {
+                if (password != null) Arrays.fill(password, '\0');
+                if (db != null) DatabaseManager.getInstance().closeDatabase();
+                if (tempFile != null && tempFile.exists()) tempFile.delete();
+                isBackupTaskRunning.set(false);
+            }
+
+            final boolean finalSuccess = success;
+            final String finalError = errorMsg;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (finalSuccess) {
+                    Toast.makeText(MainActivity.this, "Successfully backed up to Google Drive!", Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "Drive Backup failed: " + finalError, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+    }
+
+    // --- Google Drive Cloud Restore Routine ---
+
+    private void startDriveRestoreFlow(@NonNull GoogleSignInAccount account) {
+        if (!isBackupTaskRunning.compareAndSet(false, true)) return;
+        Toast.makeText(this, "Fetching Google Drive backups...", Toast.LENGTH_SHORT).show();
+
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            List<com.google.api.services.drive.model.File> files = null;
+            String error = null;
+            try {
+                GoogleDriveBackupHelper driveHelper = new GoogleDriveBackupHelper(getApplicationContext(), account);
+                files = driveHelper.listBackups();
+            } catch (Exception e) {
+                error = e.getMessage();
+            } finally {
+                isBackupTaskRunning.set(false);
+            }
+
+            final List<com.google.api.services.drive.model.File> finalFiles = files;
+            final String finalError = error;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (finalError != null) {
+                    Toast.makeText(this, "Failed to list Drive backups: " + finalError, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                if (finalFiles == null || finalFiles.isEmpty()) {
+                    Toast.makeText(this, "No TutorSync backups found in Google Drive.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                String[] items = new String[finalFiles.size()];
+                for (int i = 0; i < finalFiles.size(); i++) {
+                    com.google.api.services.drive.model.File f = finalFiles.get(i);
+                    items[i] = f.getName() + " (" + (f.getSize() != null ? f.getSize() / 1024 : 0) + " KB)";
+                }
+
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle("Select Cloud Backup")
+                        .setItems(items, (dialog, which) -> downloadAndParseDriveBackup(account, finalFiles.get(which)))
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            });
+        });
+    }
+
+    private void downloadAndParseDriveBackup(@NonNull GoogleSignInAccount account, @NonNull com.google.api.services.drive.model.File driveFile) {
+        if (!isBackupTaskRunning.compareAndSet(false, true)) return;
+        Toast.makeText(this, "Downloading from Google Drive...", Toast.LENGTH_SHORT).show();
+
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            File tempFile = null;
+            String error = null;
+            try {
+                GoogleDriveBackupHelper driveHelper = new GoogleDriveBackupHelper(getApplicationContext(), account);
+                tempFile = new File(getApplicationContext().getCacheDir(), "drive_restore_tmp_" + System.currentTimeMillis());
+                driveHelper.downloadBackup(driveFile.getId(), tempFile);
+            } catch (Exception e) {
+                error = e.getMessage();
+                if (tempFile != null && tempFile.exists()) tempFile.delete();
+                tempFile = null;
+            } finally {
+                isBackupTaskRunning.set(false);
+            }
+
+            final File finalTempFile = tempFile;
+            final String finalError = error;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (finalError != null || finalTempFile == null) {
+                    Toast.makeText(this, "Failed to download backup: " + finalError, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                // Route directly into the existing parse flow with the temp file.
+                beginParseBackup(null, finalTempFile, null);
+            });
+        });
+    }
+
+    // --- Original Local Storage Helper Routines ---
+
+    private void loadProfileImageIntoView(@Nullable String path, @NonNull ImageView target) {
+        if (!ImageUtils.loadProfileImageIntoView(path, target)) target.setImageResource(R.drawable.ic_tutor_logo);
     }
 
     private void exportBackupToUri(@NonNull Uri uri) {
         final String accountId = sessionManager.getActiveAccountId();
-        if (accountId.isEmpty()) return;
-
-        if (!isBackupTaskRunning.compareAndSet(false, true)) {
-            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
+        if (accountId.isEmpty() || !isBackupTaskRunning.compareAndSet(false, true)) return;
         final Context appContext = getApplicationContext();
         AppExecutors.getInstance().diskIO().execute(() -> {
             SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
             String errorMsg = null;
             boolean exported = false;
             try (OutputStream out = appContext.getContentResolver().openOutputStream(uri)) {
-                if (out != null) {
-                    BackupRestoreManager.exportAccountBackupToStream(appContext, db, accountId, out);
-                    exported = true;
-                } else {
-                    errorMsg = "Unable to open destination file.";
-                }
-            } catch (Exception e) {
-                errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
-            } finally {
-                DatabaseManager.getInstance().closeDatabase();
-                isBackupTaskRunning.set(false);
-            }
+                if (out != null) { BackupRestoreManager.exportAccountBackupToStream(appContext, db, accountId, out); exported = true; }
+                else errorMsg = "Unable to open destination file.";
+            } catch (Exception e) { errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
+            } finally { DatabaseManager.getInstance().closeDatabase(); isBackupTaskRunning.set(false); }
 
             final boolean success = exported;
             final String finalError = errorMsg;
             AppExecutors.getInstance().mainThread().execute(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                if (success) {
-                    Toast.makeText(MainActivity.this, "Backup exported successfully!", Toast.LENGTH_SHORT).show();
-                } else if (finalError != null) {
-                    Toast.makeText(MainActivity.this, "Export failed: " + finalError, Toast.LENGTH_SHORT).show();
-                }
+                if (success) Toast.makeText(MainActivity.this, "Backup exported successfully!", Toast.LENGTH_SHORT).show();
+                else if (finalError != null) Toast.makeText(MainActivity.this, "Export failed: " + finalError, Toast.LENGTH_SHORT).show();
             });
         });
     }
 
-    // =========================================================================
-    // RESTORE FLOW (M6): choose source -> (password) -> preview + confirmation -> safety backup -> merge
-    // =========================================================================
+    private void exportEncryptedBackupToUri(@NonNull Uri uri, @NonNull char[] password) {
+        final String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty() || !isBackupTaskRunning.compareAndSet(false, true)) { Arrays.fill(password, '\0'); return; }
+        final Context appContext = getApplicationContext();
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+            String errorMsg = null;
+            boolean exported = false;
+            try (OutputStream out = appContext.getContentResolver().openOutputStream(uri)) {
+                if (out != null) { BackupRestoreManager.exportEncryptedBackupToStream(appContext, db, accountId, out, password); exported = true; }
+                else errorMsg = "Unable to open destination file.";
+            } catch (Exception e) { errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
+            } finally { Arrays.fill(password, '\0'); DatabaseManager.getInstance().closeDatabase(); isBackupTaskRunning.set(false); }
+
+            final boolean success = exported;
+            final String finalError = errorMsg;
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (success) Toast.makeText(MainActivity.this, R.string.backup_export_encrypted_ok, Toast.LENGTH_LONG).show();
+                else if (finalError != null) Toast.makeText(MainActivity.this, "Export failed: " + finalError, Toast.LENGTH_SHORT).show();
+            });
+        });
+    }
 
     private void startRestoreFlow() {
         final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
         final List<File> safetyBackups = BackupRestoreManager.listSafetyBackups(getApplicationContext(), accountId);
-        if (safetyBackups.isEmpty()) {
-            importBackupLauncher.launch(new String[]{"*/*"});
-            return;
-        }
+        if (safetyBackups.isEmpty()) { importBackupLauncher.launch(new String[]{"*/*"}); return; }
         BackupDialogs.chooseRestoreSource(this, safetyBackups.get(0).lastModified(),
-                () -> importBackupLauncher.launch(new String[]{"*/*"}),
-                () -> beginParseBackup(null, safetyBackups.get(0), null));
+                () -> importBackupLauncher.launch(new String[]{"*/*"}), () -> beginParseBackup(null, safetyBackups.get(0), null));
     }
 
     private void importBackupFromUri(@NonNull Uri uri) {
         beginParseBackup(uri, null, null);
     }
 
-    /** Reads the backup in the background; nothing in the database is touched yet. */
     private void beginParseBackup(@Nullable Uri uri, @Nullable File file, @Nullable char[] password) {
         final String accountId = sessionManager.getActiveAccountId();
-        if (accountId.isEmpty()) {
-            if (password != null) Arrays.fill(password, '\0');
-            return;
-        }
-        if (!isBackupTaskRunning.compareAndSet(false, true)) {
-            if (password != null) Arrays.fill(password, '\0');
-            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (accountId.isEmpty() || !isBackupTaskRunning.compareAndSet(false, true)) { if (password != null) Arrays.fill(password, '\0'); return; }
 
         final Context appContext = getApplicationContext();
         AppExecutors.getInstance().diskIO().execute(() -> {
             BackupRestoreManager.ParsedBackup parsed = null;
             Exception error = null;
-            try (InputStream in = file != null
-                    ? new FileInputStream(file)
-                    : appContext.getContentResolver().openInputStream(uri)) {
-                if (in == null) {
-                    throw new IOException("Unable to open the backup file.");
-                }
+            try (InputStream in = file != null ? new FileInputStream(file) : appContext.getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new IOException("Unable to open the backup file.");
                 parsed = BackupRestoreManager.parseBackup(in, password);
-            } catch (Exception e) {
-                error = e;
-            } finally {
+            } catch (Exception e) { error = e; } finally {
                 if (password != null) Arrays.fill(password, '\0');
                 isBackupTaskRunning.set(false);
             }
@@ -1191,118 +1128,41 @@ public class MainActivity extends BaseActivity {
                 } else if (finalError instanceof BackupCrypto.WrongPasswordException) {
                     BackupDialogs.askExistingPassword(this, true, pw -> beginParseBackup(uri, file, pw), null);
                 } else if (finalError != null) {
-                    Toast.makeText(this, getString(R.string.backup_restore_read_failed_fmt,
-                                    finalError.getMessage() != null ? finalError.getMessage() : "Invalid backup"),
-                            Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, getString(R.string.backup_restore_read_failed_fmt, finalError.getMessage() != null ? finalError.getMessage() : "Invalid backup"), Toast.LENGTH_LONG).show();
                 } else if (finalParsed != null) {
-                    BackupDialogs.confirmRestore(this, finalParsed, accountId,
-                            () -> performRestore(finalParsed, accountId));
+                    BackupDialogs.confirmRestore(this, finalParsed, accountId, () -> performRestore(finalParsed, accountId));
                 }
             });
         });
     }
 
-    /** Saves a safety backup first (restore is cancelled if that fails), then merges the backup. */
     private void performRestore(@NonNull BackupRestoreManager.ParsedBackup backup, @NonNull String accountId) {
-        if (!isBackupTaskRunning.compareAndSet(false, true)) {
-            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
+        if (!isBackupTaskRunning.compareAndSet(false, true)) return;
         final Context appContext = getApplicationContext();
         AppExecutors.getInstance().diskIO().execute(() -> {
             SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-            String message;
-            boolean restoreSucceeded = false;
+            String message; boolean restoreSucceeded = false;
             try {
                 boolean safetySaved = true;
-                try {
-                    BackupRestoreManager.createSafetyBackup(appContext, db, accountId);
-                } catch (Exception safetyError) {
-                    safetySaved = false;
-                }
+                try { BackupRestoreManager.createSafetyBackup(appContext, db, accountId); } catch (Exception e) { safetySaved = false; }
 
-                if (!safetySaved) {
-                    message = getString(R.string.backup_safety_failed);
+                if (!safetySaved) { message = getString(R.string.backup_safety_failed);
                 } else {
                     try {
-                        BackupRestoreManager.ImportResult result =
-                                BackupRestoreManager.importParsedBackup(appContext, db, accountId, backup);
-                        studentRepo.migrateLegacyStudentIds(accountId);
-                        invoiceRepo.migrateLegacyInvoiceIds(accountId);
-                        lastReconciledAccountId = accountId;
-                        restoreSucceeded = true;
-                        message = result.hasConflicts()
-                                ? getString(R.string.backup_restore_done_conflicts_fmt, result.insertedCount,
-                                result.updatedCount, result.skippedCount, result.conflictCount)
-                                : getString(R.string.backup_restore_done_fmt, result.insertedCount,
-                                result.updatedCount, result.skippedCount);
-                    } catch (Exception e) {
-                        // the merge runs in one transaction, so a failure leaves the data untouched
-                        message = getString(R.string.backup_restore_failed_fmt,
-                                e.getMessage() != null ? e.getMessage() : "Invalid backup");
-                    }
+                        BackupRestoreManager.ImportResult result = BackupRestoreManager.importParsedBackup(appContext, db, accountId, backup);
+                        studentRepo.migrateLegacyStudentIds(accountId); invoiceRepo.migrateLegacyInvoiceIds(accountId);
+                        lastReconciledAccountId = accountId; restoreSucceeded = true;
+                        message = result.hasConflicts() ? getString(R.string.backup_restore_done_conflicts_fmt, result.insertedCount, result.updatedCount, result.skippedCount, result.conflictCount)
+                                : getString(R.string.backup_restore_done_fmt, result.insertedCount, result.updatedCount, result.skippedCount);
+                    } catch (Exception e) { message = getString(R.string.backup_restore_failed_fmt, e.getMessage() != null ? e.getMessage() : "Invalid backup"); }
                 }
-            } finally {
-                DatabaseManager.getInstance().closeDatabase();
-                isBackupTaskRunning.set(false);
-            }
+            } finally { DatabaseManager.getInstance().closeDatabase(); isBackupTaskRunning.set(false); }
 
-            final String finalMsg = message;
-            final boolean finalSuccess = restoreSucceeded;
+            final String finalMsg = message; final boolean finalSuccess = restoreSucceeded;
             AppExecutors.getInstance().mainThread().execute(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 Toast.makeText(MainActivity.this, finalMsg, Toast.LENGTH_LONG).show();
-                if (finalSuccess) {
-                    refreshStatusLabels();
-                    loadDashboardData();
-                }
-            });
-        });
-    }
-
-    /** M8: writes a password-protected, compressed backup. */
-    private void exportEncryptedBackupToUri(@NonNull Uri uri, @NonNull char[] password) {
-        final String accountId = sessionManager.getActiveAccountId();
-        if (accountId.isEmpty()) {
-            Arrays.fill(password, '\0');
-            return;
-        }
-        if (!isBackupTaskRunning.compareAndSet(false, true)) {
-            Arrays.fill(password, '\0');
-            Toast.makeText(this, "Backup operation already in progress...", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        final Context appContext = getApplicationContext();
-        AppExecutors.getInstance().diskIO().execute(() -> {
-            SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
-            String errorMsg = null;
-            boolean exported = false;
-            try (OutputStream out = appContext.getContentResolver().openOutputStream(uri)) {
-                if (out != null) {
-                    BackupRestoreManager.exportEncryptedBackupToStream(appContext, db, accountId, out, password);
-                    exported = true;
-                } else {
-                    errorMsg = "Unable to open destination file.";
-                }
-            } catch (Exception e) {
-                errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
-            } finally {
-                Arrays.fill(password, '\0');
-                DatabaseManager.getInstance().closeDatabase();
-                isBackupTaskRunning.set(false);
-            }
-
-            final boolean success = exported;
-            final String finalError = errorMsg;
-            AppExecutors.getInstance().mainThread().execute(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                if (success) {
-                    Toast.makeText(MainActivity.this, R.string.backup_export_encrypted_ok, Toast.LENGTH_LONG).show();
-                } else if (finalError != null) {
-                    Toast.makeText(MainActivity.this, "Export failed: " + finalError, Toast.LENGTH_SHORT).show();
-                }
+                if (finalSuccess) { refreshStatusLabels(); loadDashboardData(); }
             });
         });
     }
