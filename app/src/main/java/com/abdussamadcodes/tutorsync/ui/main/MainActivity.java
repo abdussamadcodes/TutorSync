@@ -606,7 +606,7 @@ public class MainActivity extends BaseActivity {
     }
 
     // =========================================================================
-    // 2. SECURITY: CHANGE PASSWORD (WITH CURRENT PASSWORD VERIFICATION & FIREBASE SYNC)
+    // 2. SECURITY: CHANGE PASSWORD (WITH OFFLINE GUARD & FIREBASE SYNC)
     // =========================================================================
     private void showChangePasswordBottomSheet() {
         String accountId = sessionManager.getActiveAccountId();
@@ -702,7 +702,7 @@ public class MainActivity extends BaseActivity {
                 final String newSalt = PasswordHasher.generateSalt();
                 final String newHash = PasswordHasher.hashPassword(newPass, newSalt);
 
-                // Check if this account uses an email address (Firebase Email/Password account)
+                // Check if this account is an Email + Password account backed by Firebase
                 String accountEmail = null;
                 if (Patterns.EMAIL_ADDRESS.matcher(account.getUsername()).matches()) {
                     accountEmail = account.getUsername();
@@ -712,10 +712,16 @@ public class MainActivity extends BaseActivity {
                 }
 
                 if (accountEmail != null) {
+                    // Require internet connection so Firebase Auth and Local SQLite never get out of sync
+                    if (!GoogleAuthHelper.isNetworkConnected(this)) {
+                        tilNew.setError("Internet connection is required to change the password for an email account.");
+                        return;
+                    }
+
                     btnSubmit.setEnabled(false);
                     btnCancel.setEnabled(false);
 
-                    GoogleAuthHelper.updateFirebasePassword(accountEmail, currentPass, newPass,
+                    GoogleAuthHelper.updateFirebasePassword(this, accountEmail, currentPass, newPass,
                             new GoogleAuthHelper.PasswordUpdateCallback() {
                                 @Override
                                 public void onUpdated() {
@@ -737,7 +743,7 @@ public class MainActivity extends BaseActivity {
                                 }
                             });
                 } else {
-                    // Offline-only username account: update local SQLite directly
+                    // Pure offline username account: update local SQLite directly
                     if (accountStore.updatePassword(accountId, newHash, newSalt)) {
                         bottomSheet.dismiss();
                         showMessage(binding.getRoot(), R.string.msg_password_updated);

@@ -3,6 +3,9 @@ package com.abdussamadcodes.tutorsync.account;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.Looper;
@@ -90,6 +93,20 @@ public final class GoogleAuthHelper {
     }
 
     /**
+     * Checks if the device currently has an active internet transport (Wi-Fi, Cellular, or Ethernet).
+     */
+    public static boolean isNetworkConnected(@NonNull Context context) {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return false;
+        Network network = cm.getActiveNetwork();
+        if (network == null) return false;
+        NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+        return caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+    }
+
+    /**
      * Returns true if the local account is a Google-managed account OR if the currently signed-in
      * FirebaseUser for this account authenticated via google.com without an email/password provider.
      */
@@ -128,13 +145,20 @@ public final class GoogleAuthHelper {
      * so clearing app data will recognize the new password on future sign-ins.
      */
     public static void updateFirebasePassword(
+            @NonNull Context context,
             @NonNull String email,
             @NonNull String currentPassword,
             @NonNull String newPassword,
             @NonNull PasswordUpdateCallback callback) {
 
-        final String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         final Handler mainHandler = new Handler(Looper.getMainLooper());
+        if (!isNetworkConnected(context)) {
+            mainHandler.post(() -> callback.onError(
+                    "Internet connection is required to change the password for an email-registered account so your cloud login stays in sync."));
+            return;
+        }
+
+        final String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         FirebaseAuth auth = FirebaseAuth.getInstance();
         FirebaseUser currentUser = auth.getCurrentUser();
 
