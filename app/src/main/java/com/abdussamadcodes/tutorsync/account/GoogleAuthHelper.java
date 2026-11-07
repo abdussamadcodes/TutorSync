@@ -27,7 +27,9 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
+import com.google.api.services.drive.DriveScopes;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
@@ -45,6 +47,7 @@ public final class GoogleAuthHelper {
 
     private static final String TAG = "GoogleAuthHelper";
     private static final long FIREBASE_TIMEOUT_MS = 12000L;
+    public static final Scope SCOPE_DRIVE_APPDATA = new Scope(DriveScopes.DRIVE_APPDATA);
 
     public interface AuthCallback {
         void onSuccess(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser);
@@ -104,6 +107,50 @@ public final class GoogleAuthHelper {
         return caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
                 || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
                 || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+    }
+
+    /**
+     * Returns the currently signed-in GoogleSignInAccount if it already has the Drive AppData scope granted.
+     */
+    @Nullable
+    public static GoogleSignInAccount getSignedInDriveAccount(@NonNull Context context) {
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(context.getApplicationContext());
+        if (account != null && account.getAccount() != null
+                && GoogleSignIn.hasPermissions(account, SCOPE_DRIVE_APPDATA)) {
+            return account;
+        }
+        return null;
+    }
+
+    /**
+     * Builds an Intent to sign in / authorize Google Drive AppData scope for backup & restore.
+     */
+    @NonNull
+    public static Intent getDriveAccessIntent(@NonNull Context context) {
+        GoogleSignInOptions.Builder builder = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .requestScopes(SCOPE_DRIVE_APPDATA);
+        String webClientId = getWebClientId(context);
+        if (webClientId != null) {
+            builder.requestIdToken(webClientId);
+        }
+        GoogleSignInClient client = GoogleSignIn.getClient(context.getApplicationContext(), builder.build());
+        return client.getSignInIntent();
+    }
+
+    /**
+     * Extracts the GoogleSignInAccount after the user completes the Drive permission consent dialog.
+     */
+    @Nullable
+    public static GoogleSignInAccount extractDriveAccountFromIntent(@Nullable Intent data) throws ApiException {
+        if (data == null) return null;
+        Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+        GoogleSignInAccount account = task.getResult(ApiException.class);
+        if (account != null && account.getAccount() != null
+                && GoogleSignIn.hasPermissions(account, SCOPE_DRIVE_APPDATA)) {
+            return account;
+        }
+        return null;
     }
 
     /**
@@ -232,6 +279,7 @@ public final class GoogleAuthHelper {
                     .requestIdToken(webClientId)
                     .requestEmail()
                     .requestProfile()
+                    .requestScopes(SCOPE_DRIVE_APPDATA)
                     .build();
 
             GoogleSignInClient client = GoogleSignIn.getClient(activity, gso);
@@ -607,6 +655,7 @@ public final class GoogleAuthHelper {
                 GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                         .requestIdToken(webClientId)
                         .requestEmail()
+                        .requestScopes(SCOPE_DRIVE_APPDATA)
                         .build();
                 GoogleSignIn.getClient(context.getApplicationContext(), gso).signOut();
             }

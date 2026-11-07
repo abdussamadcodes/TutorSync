@@ -38,6 +38,14 @@ android {
         viewBinding = true
         buildConfig = true
     }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/INDEX.LIST"
+        }
+    }
 }
 
 dependencies {
@@ -70,6 +78,17 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
     implementation("com.google.android.gms:play-services-auth:21.5.0")
+
+    // Google Drive API (AppData Folder Cloud Backup - 100% Free)
+    implementation("com.google.api-client:google-api-client-android:2.6.0") {
+        exclude(group = "org.apache.httpcomponents")
+    }
+    implementation("com.google.http-client:google-http-client-gson:1.44.2") {
+        exclude(group = "org.apache.httpcomponents")
+    }
+    implementation("com.google.apis:google-api-services-drive:v3-rev20240509-2.0.0") {
+        exclude(group = "org.apache.httpcomponents")
+    }
 
     // Testing
     testImplementation("junit:junit:4.13.2")
