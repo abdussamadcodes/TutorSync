@@ -12,15 +12,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.credentials.ClearCredentialStateRequest;
-import androidx.credentials.Credential;
 import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
-import androidx.credentials.CustomCredential;
-import androidx.credentials.GetCredentialRequest;
-import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.exceptions.ClearCredentialException;
-import androidx.credentials.exceptions.GetCredentialCancellationException;
-import androidx.credentials.exceptions.GetCredentialException;
 
 import com.abdussamadcodes.tutorsync.model.Account;
 import com.abdussamadcodes.tutorsync.util.AppExecutors;
@@ -30,8 +24,6 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -43,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class GoogleAuthHelper {
 
     private static final String TAG = "GoogleAuthHelper";
-    private static final long CREDENTIAL_MANAGER_TIMEOUT_MS = 8000L;
+    private static final long FIREBASE_TIMEOUT_MS = 12000L;
 
     public interface AuthCallback {
         void onSuccess(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser);
@@ -72,92 +64,49 @@ public final class GoogleAuthHelper {
     }
 
     /**
-     * Launches Google Sign-In via Credential Manager (single-step button flow) with a watchdog
-     * fallback to GoogleSignInClient if Credential Manager stalls after clearing app data.
+     * Launches the Google account chooser reliably every time (including immediately after
+     * clearing app storage or signing out) without hanging on CredentialManager's HiddenActivity.
      */
     public static void signInWithGoogle(@NonNull Activity activity, @NonNull AuthCallback callback) {
         final String webClientId = getWebClientId(activity);
         if (webClientId == null) {
-            callback.onError("Missing default_web_client_id. Verify google-services.json has Google Sign-In enabled.");
+            callback.onError("Missing default_web_client_id. Check google-services.json in app/.");
             return;
         }
 
-        final CredentialManager credentialManager = CredentialManager.create(activity);
-        final CancellationSignal cancellationSignal = new CancellationSignal();
-        final AtomicBoolean completed = new AtomicBoolean(false);
-        final Handler mainHandler = new Handler(Looper.getMainLooper());
-
-        // Watchdog: if Credential Manager binder stalls after app-data clear, switch to Play Services Intent
-        Runnable timeoutRunnable = () -> {
-            if (completed.compareAndSet(false, true)) {
-                Log.w(TAG, "CredentialManager timed out; falling back to GoogleSignInClient intent.");
-                try {
-                    cancellationSignal.cancel();
-                } catch (Exception ignored) {
-                }
-                launchFallbackSignInIntent(activity, webClientId, callback);
-            }
-        };
-        mainHandler.postDelayed(timeoutRunnable, CREDENTIAL_MANAGER_TIMEOUT_MS);
-
-        GetSignInWithGoogleOption signInWithGoogleOption =
-                new GetSignInWithGoogleOption.Builder(webClientId).build();
-
-        GetCredentialRequest request = new GetCredentialRequest.Builder()
-                .addCredentialOption(signInWithGoogleOption)
-                .build();
-
-        credentialManager.getCredentialAsync(
-                activity,
-                request,
-                cancellationSignal,
-                ContextCompat.getMainExecutor(activity),
-                new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                    @Override
-                    public void onResult(GetCredentialResponse result) {
-                        mainHandler.removeCallbacks(timeoutRunnable);
-                        if (!completed.compareAndSet(false, true)) {
-                            return;
-                        }
-                        handleCredentialResult(activity, result.getCredential(), callback);
-                    }
-
-                    @Override
-                    public void onError(@NonNull GetCredentialException e) {
-                        mainHandler.removeCallbacks(timeoutRunnable);
-                        if (!completed.compareAndSet(false, true)) {
-                            return;
-                        }
-                        Log.w(TAG, "CredentialManager onError: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-                        if (e instanceof GetCredentialCancellationException) {
-                            callback.onCancelled();
-                        } else {
-                            // Fall back cleanly to Google Play Services Sign-In Intent
-                            launchFallbackSignInIntent(activity, webClientId, callback);
-                        }
-                    }
-                }
-        );
-    }
-
-    private static void launchFallbackSignInIntent(
-            @NonNull Activity activity,
-            @NonNull String webClientId,
-            @NonNull AuthCallback callback) {
         try {
             GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                     .requestIdToken(webClientId)
                     .requestEmail()
+                    .requestProfile()
                     .build();
+
             GoogleSignInClient client = GoogleSignIn.getClient(activity, gso);
-            client.signOut().addOnCompleteListener(t -> {
-                if (activity.isFinishing() || activity.isDestroyed()) {
-                    callback.onCancelled();
-                    return;
+
+            // Clear any stale cached GoogleSignIn state with a 1.5s max wait so it never hangs,
+            // then launch the account chooser intent directly.
+            final AtomicBoolean launched = new AtomicBoolean(false);
+            final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+            Runnable launchPicker = () -> {
+                if (launched.compareAndSet(false, true)) {
+                    if (activity.isFinishing() || activity.isDestroyed()) {
+                        callback.onCancelled();
+                        return;
+                    }
+                    callback.onFallbackIntentRequired(client.getSignInIntent());
                 }
-                callback.onFallbackIntentRequired(client.getSignInIntent());
+            };
+
+            // Watchdog in case signOut() IPC takes > 1s after clearing app data
+            mainHandler.postDelayed(launchPicker, 1000L);
+
+            client.signOut().addOnCompleteListener(t -> {
+                mainHandler.removeCallbacks(launchPicker);
+                launchPicker.run();
             });
         } catch (Exception ex) {
+            Log.e(TAG, "Failed to start Google Sign-In", ex);
             callback.onError(ex.getMessage() != null ? ex.getMessage() : "Google Sign-In unavailable.");
         }
     }
@@ -179,58 +128,55 @@ public final class GoogleAuthHelper {
                 callback.onError("Google Sign-In did not return an ID token.");
             }
         } catch (ApiException e) {
-            // 12501 = SIGN_IN_CANCELLED, 12502 = SIGN_IN_CURRENTLY_IN_PROGRESS
-            if (e.getStatusCode() == 12501) {
+            int code = e.getStatusCode();
+            Log.e(TAG, "GoogleSignIn ApiException statusCode=" + code, e);
+            if (code == 12501) {
+                // User pressed back / dismissed the account picker
                 callback.onCancelled();
+            } else if (code == 10) {
+                callback.onError("Developer Error (code 10): Verify debug SHA-1 & SHA-256 are added in Firebase Console and re-download google-services.json.");
+            } else if (code == 7) {
+                callback.onError("Network error (code 7): Check your internet connection.");
             } else {
-                Log.e(TAG, "GoogleSignIn ApiException code=" + e.getStatusCode(), e);
-                callback.onError("Google Sign-In error (code " + e.getStatusCode() + "). Check SHA-1 in Firebase Console.");
+                callback.onError("Google Sign-In failed (code " + code + ").");
             }
         } catch (Exception e) {
+            Log.e(TAG, "GoogleSignIn unexpected exception", e);
             callback.onError(e.getMessage() != null ? e.getMessage() : "Google Sign-In failed.");
         }
     }
 
-    private static void handleCredentialResult(
-            @NonNull Activity activity,
-            @NonNull Credential credential,
-            @NonNull AuthCallback callback) {
-
-        if (credential instanceof CustomCredential
-                && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType())) {
-            try {
-                GoogleIdTokenCredential googleIdTokenCredential =
-                        GoogleIdTokenCredential.createFrom(credential.getData());
-                String idToken = googleIdTokenCredential.getIdToken();
-                authenticateWithFirebase(activity, idToken, callback);
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to parse GoogleIdTokenCredential", e);
-                callback.onError("Invalid Google ID token credential.");
-            }
-        } else {
-            callback.onError("Unsupported credential type returned.");
-        }
-    }
-
-    /**
-     * Authenticates with Firebase WITHOUT passing Activity as a lifecycle-bound listener,
-     * preventing the callback from being dropped during overlay window transitions.
-     */
     private static void authenticateWithFirebase(
             @NonNull Activity activity,
             @NonNull String idToken,
             @NonNull AuthCallback callback) {
 
         final Context appContext = activity.getApplicationContext();
-        AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
+        final AtomicBoolean finished = new AtomicBoolean(false);
+        final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+        Runnable timeoutGuard = () -> {
+            if (finished.compareAndSet(false, true)) {
+                if (!activity.isFinishing() && !activity.isDestroyed()) {
+                    callback.onError("Firebase connection timed out. Check emulator internet access.");
+                }
+            }
+        };
+        mainHandler.postDelayed(timeoutGuard, FIREBASE_TIMEOUT_MS);
+
+        AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
         FirebaseAuth.getInstance()
                 .signInWithCredential(credential)
                 .addOnCompleteListener(task -> {
+                    mainHandler.removeCallbacks(timeoutGuard);
+                    if (!finished.compareAndSet(false, true)) {
+                        return;
+                    }
+
                     if (!task.isSuccessful()) {
                         Exception ex = task.getException();
                         Log.e(TAG, "Firebase signInWithCredential failed", ex);
-                        AppExecutors.getInstance().mainThread().execute(() -> {
+                        mainHandler.post(() -> {
                             if (activity.isFinishing() || activity.isDestroyed()) return;
                             callback.onError(ex != null && ex.getMessage() != null
                                     ? ex.getMessage()
@@ -241,7 +187,7 @@ public final class GoogleAuthHelper {
 
                     FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
                     if (user == null || user.getEmail() == null || user.getEmail().trim().isEmpty()) {
-                        AppExecutors.getInstance().mainThread().execute(() -> {
+                        mainHandler.post(() -> {
                             if (activity.isFinishing() || activity.isDestroyed()) return;
                             callback.onError("Google account did not provide an email address.");
                         });
@@ -254,21 +200,26 @@ public final class GoogleAuthHelper {
 
                     AppExecutors.getInstance().diskIO().execute(() -> {
                         Account localAccount = null;
+                        String dbError = null;
                         try {
                             LocalAccountStore store = new LocalAccountStore(appContext);
                             localAccount = store.getOrCreateGoogleAccount(uid, email, displayName);
                         } catch (Exception e) {
                             Log.e(TAG, "Error creating/linking local account", e);
+                            dbError = e.getMessage();
                         }
                         final Account resolvedAccount = localAccount;
-                        AppExecutors.getInstance().mainThread().execute(() -> {
+                        final String finalDbError = dbError;
+                        mainHandler.post(() -> {
                             if (activity.isFinishing() || activity.isDestroyed()) {
                                 return;
                             }
                             if (resolvedAccount != null) {
                                 callback.onSuccess(resolvedAccount, user);
                             } else {
-                                callback.onError("Could not create or link local tutor account.");
+                                callback.onError(finalDbError != null
+                                        ? "Local DB error: " + finalDbError
+                                        : "Could not create or link local tutor account.");
                             }
                         });
                     });

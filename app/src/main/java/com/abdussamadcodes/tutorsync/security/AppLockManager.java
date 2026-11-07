@@ -272,6 +272,10 @@ public final class AppLockManager implements Application.ActivityLifecycleCallba
     }
 
     private boolean isExemptActivity(@NonNull Activity activity) {
+        String className = activity.getClass().getName();
+        if (!className.startsWith("com.abdussamadcodes.tutorsync")) {
+            return true; // Never lock or intercept Google Play Services / Credential Manager / Firebase activities
+        }
         return activity instanceof PinLockActivity
                 || activity instanceof SignInActivity
                 || activity instanceof SignUpActivity
