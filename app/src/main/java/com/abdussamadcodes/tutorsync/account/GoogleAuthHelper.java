@@ -17,6 +17,7 @@ import androidx.credentials.CredentialManagerCallback;
 import androidx.credentials.exceptions.ClearCredentialException;
 
 import com.abdussamadcodes.tutorsync.model.Account;
+import com.abdussamadcodes.tutorsync.security.PasswordHasher;
 import com.abdussamadcodes.tutorsync.util.AppExecutors;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -29,6 +30,9 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings("deprecation")
@@ -41,6 +45,21 @@ public final class GoogleAuthHelper {
         void onSuccess(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser);
         void onFallbackIntentRequired(@NonNull Intent signInIntent);
         void onCancelled();
+        void onError(@NonNull String message);
+    }
+
+    public interface EmailSignUpCallback {
+        void onRegistered(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser, boolean verificationEmailSent);
+        void onError(@NonNull String message);
+    }
+
+    public interface EmailSignInCallback {
+        void onSuccess(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser, boolean isEmailVerified);
+        void onError(@NonNull String message);
+    }
+
+    public interface VerificationStatusCallback {
+        void onResult(boolean isVerified);
         void onError(@NonNull String message);
     }
 
@@ -63,10 +82,6 @@ public final class GoogleAuthHelper {
         return value.isEmpty() ? null : value;
     }
 
-    /**
-     * Launches the Google account chooser reliably every time (including immediately after
-     * clearing app storage or signing out) without hanging on CredentialManager's HiddenActivity.
-     */
     public static void signInWithGoogle(@NonNull Activity activity, @NonNull AuthCallback callback) {
         final String webClientId = getWebClientId(activity);
         if (webClientId == null) {
@@ -83,8 +98,6 @@ public final class GoogleAuthHelper {
 
             GoogleSignInClient client = GoogleSignIn.getClient(activity, gso);
 
-            // Clear any stale cached GoogleSignIn state with a 1.5s max wait so it never hangs,
-            // then launch the account chooser intent directly.
             final AtomicBoolean launched = new AtomicBoolean(false);
             final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -98,7 +111,6 @@ public final class GoogleAuthHelper {
                 }
             };
 
-            // Watchdog in case signOut() IPC takes > 1s after clearing app data
             mainHandler.postDelayed(launchPicker, 1000L);
 
             client.signOut().addOnCompleteListener(t -> {
@@ -131,7 +143,6 @@ public final class GoogleAuthHelper {
             int code = e.getStatusCode();
             Log.e(TAG, "GoogleSignIn ApiException statusCode=" + code, e);
             if (code == 12501) {
-                // User pressed back / dismissed the account picker
                 callback.onCancelled();
             } else if (code == 10) {
                 callback.onError("Developer Error (code 10): Verify debug SHA-1 & SHA-256 are added in Firebase Console and re-download google-services.json.");
@@ -158,7 +169,7 @@ public final class GoogleAuthHelper {
         Runnable timeoutGuard = () -> {
             if (finished.compareAndSet(false, true)) {
                 if (!activity.isFinishing() && !activity.isDestroyed()) {
-                    callback.onError("Firebase connection timed out. Check emulator internet access.");
+                    callback.onError("Firebase connection timed out. Check internet access.");
                 }
             }
         };
@@ -224,6 +235,220 @@ public final class GoogleAuthHelper {
                         });
                     });
                 });
+    }
+
+    /**
+     * Registers an Email + Password account in Firebase Auth, sends a verification email,
+     * and saves the hashed password + email in the local SQLite database for offline login.
+     */
+    public static void registerEmailPasswordAccount(
+            @NonNull Activity activity,
+            @NonNull String fullName,
+            @NonNull String email,
+            @NonNull String password,
+            @NonNull EmailSignUpCallback callback) {
+
+        final Context appContext = activity.getApplicationContext();
+        final String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+        FirebaseAuth.getInstance()
+                .createUserWithEmailAndPassword(normalizedEmail, password)
+                .addOnCompleteListener(task -> {
+                    if (!task.isSuccessful()) {
+                        Exception ex = task.getException();
+                        mainHandler.post(() -> {
+                            if (activity.isFinishing() || activity.isDestroyed()) return;
+                            callback.onError(ex != null && ex.getMessage() != null
+                                    ? ex.getMessage()
+                                    : "Could not register email with Firebase. Make sure Email/Password is enabled in Firebase Console.");
+                        });
+                        return;
+                    }
+
+                    FirebaseUser firebaseUser = FirebaseAuth.getInstance().getCurrentUser();
+                    if (firebaseUser == null) {
+                        mainHandler.post(() -> {
+                            if (activity.isFinishing() || activity.isDestroyed()) return;
+                            callback.onError("Firebase user creation failed.");
+                        });
+                        return;
+                    }
+
+                    // Send verification email right away
+                    firebaseUser.sendEmailVerification().addOnCompleteListener(verifyTask -> {
+                        final boolean sent = verifyTask.isSuccessful();
+                        AppExecutors.getInstance().diskIO().execute(() -> {
+                            Account savedAccount = null;
+                            try {
+                                LocalAccountStore store = new LocalAccountStore(appContext);
+                                String salt = PasswordHasher.generateSalt();
+                                String hash = PasswordHasher.hashPassword(password, salt);
+
+                                Account existing = store.findAccountByUsernameOrEmail(normalizedEmail);
+                                if (existing != null) {
+                                    store.updatePassword(existing.getId(), hash, salt);
+                                    store.updateProfile(
+                                            existing.getId(),
+                                            fullName,
+                                            existing.getPhone(),
+                                            normalizedEmail,
+                                            existing.getAddress(),
+                                            existing.getDob()
+                                    );
+                                    savedAccount = store.getAccountById(existing.getId());
+                                } else {
+                                    String deterministicId = UUID.nameUUIDFromBytes(
+                                            ("GOOGLE_ACCT:" + normalizedEmail).getBytes(StandardCharsets.UTF_8)
+                                    ).toString();
+                                    Account newAccount = new Account(
+                                            deterministicId,
+                                            fullName,
+                                            normalizedEmail,
+                                            hash,
+                                            salt,
+                                            null,
+                                            normalizedEmail,
+                                            null,
+                                            null,
+                                            null
+                                    );
+                                    if (store.saveAccount(newAccount)) {
+                                        savedAccount = newAccount;
+                                    }
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Failed saving email account locally", e);
+                            }
+
+                            final Account finalAccount = savedAccount;
+                            mainHandler.post(() -> {
+                                if (activity.isFinishing() || activity.isDestroyed()) return;
+                                if (finalAccount != null) {
+                                    callback.onRegistered(finalAccount, firebaseUser, sent);
+                                } else {
+                                    callback.onError("Failed to save local account.");
+                                }
+                            });
+                        });
+                    });
+                });
+    }
+
+    /**
+     * Authenticates with Firebase Email/Password (e.g. after a password reset link was used)
+     * and updates the local SQLite password hash + salt so offline login stays synchronized.
+     */
+    public static void signInWithEmailAndSyncLocal(
+            @NonNull Activity activity,
+            @NonNull String email,
+            @NonNull String password,
+            @NonNull EmailSignInCallback callback) {
+
+        final Context appContext = activity.getApplicationContext();
+        final String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+        FirebaseAuth.getInstance()
+                .signInWithEmailAndPassword(normalizedEmail, password)
+                .addOnCompleteListener(task -> {
+                    if (!task.isSuccessful()) {
+                        Exception ex = task.getException();
+                        mainHandler.post(() -> {
+                            if (activity.isFinishing() || activity.isDestroyed()) return;
+                            callback.onError(ex != null && ex.getMessage() != null
+                                    ? ex.getMessage()
+                                    : "Invalid email or password.");
+                        });
+                        return;
+                    }
+
+                    FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                    if (user == null) {
+                        mainHandler.post(() -> {
+                            if (activity.isFinishing() || activity.isDestroyed()) return;
+                            callback.onError("Authentication failed.");
+                        });
+                        return;
+                    }
+
+                    user.reload().addOnCompleteListener(reloadTask -> {
+                        final boolean verified = user.isEmailVerified();
+                        AppExecutors.getInstance().diskIO().execute(() -> {
+                            Account localAccount = null;
+                            try {
+                                LocalAccountStore store = new LocalAccountStore(appContext);
+                                String newSalt = PasswordHasher.generateSalt();
+                                String newHash = PasswordHasher.hashPassword(password, newSalt);
+
+                                localAccount = store.findAccountByUsernameOrEmail(normalizedEmail);
+                                if (localAccount != null) {
+                                    store.updatePassword(localAccount.getId(), newHash, newSalt);
+                                    localAccount = store.getAccountById(localAccount.getId());
+                                } else {
+                                    // Provision local account if signing in on a fresh install
+                                    localAccount = store.getOrCreateGoogleAccount(
+                                            user.getUid(), normalizedEmail, user.getDisplayName());
+                                    if (localAccount != null) {
+                                        store.updatePassword(localAccount.getId(), newHash, newSalt);
+                                        localAccount = store.getAccountById(localAccount.getId());
+                                    }
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error syncing local password after Firebase sign-in", e);
+                            }
+
+                            final Account resolved = localAccount;
+                            mainHandler.post(() -> {
+                                if (activity.isFinishing() || activity.isDestroyed()) return;
+                                if (resolved != null) {
+                                    callback.onSuccess(resolved, user, verified);
+                                } else {
+                                    callback.onError("Could not sync local account.");
+                                }
+                            });
+                        });
+                    });
+                });
+    }
+
+    /**
+     * Reloads the current FirebaseUser to check if the user clicked the verification link in their email.
+     */
+    public static void checkEmailVerified(@NonNull VerificationStatusCallback callback) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            callback.onError("No active Firebase user.");
+            return;
+        }
+        user.reload().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                callback.onResult(user.isEmailVerified());
+            } else {
+                Exception e = task.getException();
+                callback.onError(e != null && e.getMessage() != null
+                        ? e.getMessage()
+                        : "Could not check verification status.");
+            }
+        });
+    }
+
+    public static void resendVerificationEmail(@NonNull ResetEmailCallback callback) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            callback.onError("No active Firebase user.");
+            return;
+        }
+        user.sendEmailVerification().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                callback.onSent();
+            } else {
+                Exception e = task.getException();
+                callback.onError(e != null && e.getMessage() != null
+                        ? e.getMessage()
+                        : "Could not resend verification email.");
+            }
+        });
     }
 
     public static void sendPasswordResetEmail(@NonNull String email, @NonNull ResetEmailCallback callback) {

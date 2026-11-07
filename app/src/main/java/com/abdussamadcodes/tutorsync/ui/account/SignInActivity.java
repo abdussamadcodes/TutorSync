@@ -151,13 +151,9 @@ public class SignInActivity extends BaseActivity {
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             Account account = accountStore.findAccountByUsernameOrEmail(identifier);
-            if (account != null) {
-                if (LocalAccountStore.isGoogleManagedAccount(account)) {
-                    btnLoading.setLoading(false);
-                    binding.btnGoogleAuth.setEnabled(true);
-                    showMessage(binding.getRoot(), R.string.auth2_err_google_managed_use_button);
-                    return;
-                }
+
+            // 1. Check local SQLite password hash first (works 100% offline)
+            if (account != null && !LocalAccountStore.isGoogleManagedAccount(account)) {
                 try {
                     String calculatedHash = PasswordHasher.hashPassword(password, account.getSalt());
                     if (calculatedHash.equals(account.getPasswordHash())) {
@@ -166,15 +162,60 @@ public class SignInActivity extends BaseActivity {
                         finish();
                         return;
                     }
-                } catch (Exception e) {
-                    // Fallthrough to generic error below
+                } catch (Exception ignored) {
                 }
+            }
+
+            // 2. If identifier or linked account has an email, check Firebase Auth!
+            // This handles signing in with a NEW password after a Firebase Password Reset email,
+            // or signing in on a freshly installed device, and syncs the new password to SQLite.
+            String emailToTry = null;
+            if (Patterns.EMAIL_ADDRESS.matcher(identifier).matches()) {
+                emailToTry = identifier;
+            } else if (account != null && account.getEmail() != null
+                    && Patterns.EMAIL_ADDRESS.matcher(account.getEmail().trim()).matches()) {
+                emailToTry = account.getEmail().trim();
+            }
+
+            if (emailToTry != null) {
+                GoogleAuthHelper.signInWithEmailAndSyncLocal(this, emailToTry, password,
+                        new GoogleAuthHelper.EmailSignInCallback() {
+                            @Override
+                            public void onSuccess(@NonNull Account localAccount,
+                                                  @NonNull FirebaseUser firebaseUser,
+                                                  boolean isEmailVerified) {
+                                btnLoading.setLoading(false);
+                                binding.btnGoogleAuth.setEnabled(true);
+                                sessionManager.login(localAccount.getId());
+                                startActivity(new Intent(SignInActivity.this, MainActivity.class));
+                                finish();
+                            }
+
+                            @Override
+                            public void onError(@NonNull String message) {
+                                btnLoading.setLoading(false);
+                                binding.btnGoogleAuth.setEnabled(true);
+                                if (account != null && LocalAccountStore.isGoogleManagedAccount(account)) {
+                                    showMessage(binding.getRoot(), R.string.auth2_err_google_managed_use_button);
+                                } else {
+                                    showMessage(binding.getRoot(), R.string.auth_err_invalid_credentials);
+                                }
+                            }
+                        });
+                return;
+            }
+
+            if (account != null && LocalAccountStore.isGoogleManagedAccount(account)) {
+                btnLoading.setLoading(false);
+                binding.btnGoogleAuth.setEnabled(true);
+                showMessage(binding.getRoot(), R.string.auth2_err_google_managed_use_button);
+                return;
             }
 
             btnLoading.setLoading(false);
             binding.btnGoogleAuth.setEnabled(true);
             showMessage(binding.getRoot(), R.string.auth_err_invalid_credentials);
-        }, 300);
+        }, 250);
     }
 
     private void showSmartPasswordRecoveryDialog() {
@@ -206,7 +247,7 @@ public class SignInActivity extends BaseActivity {
                 .setTitle(R.string.auth2_forgot_password_title)
                 .setMessage(R.string.auth2_recovery_prompt)
                 .setView(container)
-                .setPositiveButton(R.string.auth2_recovery_check_action, (d, which) -> {
+                .setPositiveButton(R.string.auth2_recovery_send_email, (d, which) -> {
                     String query = etInput.getText() != null ? etInput.getText().toString().trim() : "";
                     evaluateRecoveryForIdentifier(query);
                 })
@@ -226,21 +267,43 @@ public class SignInActivity extends BaseActivity {
             AppExecutors.getInstance().mainThread().execute(() -> {
                 if (isFinishing() || isDestroyed()) return;
 
+                String candidateEmail = null;
+                if (found != null && found.getEmail() != null
+                        && Patterns.EMAIL_ADDRESS.matcher(found.getEmail().trim()).matches()) {
+                    candidateEmail = found.getEmail().trim();
+                } else if (Patterns.EMAIL_ADDRESS.matcher(identifier).matches()) {
+                    candidateEmail = identifier;
+                }
+
+                // If the account was created only via Google Sign-In, offer Google Sign-In OR sending a Firebase password email
                 if (found != null && LocalAccountStore.isGoogleManagedAccount(found)) {
                     String label = found.getEmail() != null ? found.getEmail() : found.getUsername();
                     showGoogleAccountRecoveryDialog(label);
                     return;
                 }
 
-                String candidateEmail = null;
-                if (found != null && found.getEmail() != null && Patterns.EMAIL_ADDRESS.matcher(found.getEmail().trim()).matches()) {
-                    candidateEmail = found.getEmail().trim();
-                } else if (Patterns.EMAIL_ADDRESS.matcher(identifier).matches()) {
-                    candidateEmail = identifier;
-                }
-
+                // Send password reset email directly if we have an email
                 if (candidateEmail != null) {
-                    showEmailPasswordResetDialog(candidateEmail);
+                    final String targetEmail = candidateEmail;
+                    GoogleAuthHelper.sendPasswordResetEmail(targetEmail, new GoogleAuthHelper.ResetEmailCallback() {
+                        @Override
+                        public void onSent() {
+                            if (isFinishing() || isDestroyed()) return;
+                            new MaterialAlertDialogBuilder(SignInActivity.this)
+                                    .setTitle("Password Reset Email Sent")
+                                    .setMessage("We sent a password reset link to:\n" + targetEmail
+                                            + "\n\n1. Open the email (check your Spam folder too) and set your new password.\n"
+                                            + "2. Return here and sign in with your email and new password — TutorSync will automatically update your offline password.")
+                                    .setPositiveButton(R.string.auth2_forgot_password_ok, null)
+                                    .show();
+                        }
+
+                        @Override
+                        public void onError(@NonNull String message) {
+                            if (isFinishing() || isDestroyed()) return;
+                            showMessage(binding.getRoot(), message);
+                        }
+                    });
                 } else {
                     showOfflineRecoveryExplanation();
                 }
@@ -260,30 +323,6 @@ public class SignInActivity extends BaseActivity {
                     } catch (Exception ignored) {
                     }
                 })
-                .setNegativeButton(R.string.action_cancel, null)
-                .show();
-    }
-
-    private void showEmailPasswordResetDialog(@NonNull String email) {
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.auth2_recovery_email_title)
-                .setMessage(getString(R.string.auth2_recovery_email_msg, email))
-                .setPositiveButton(R.string.auth2_recovery_send_email, (d, w) -> {
-                    GoogleAuthHelper.sendPasswordResetEmail(email, new GoogleAuthHelper.ResetEmailCallback() {
-                        @Override
-                        public void onSent() {
-                            if (isFinishing() || isDestroyed()) return;
-                            showMessage(binding.getRoot(), getString(R.string.auth2_recovery_email_sent, email));
-                        }
-
-                        @Override
-                        public void onError(@NonNull String message) {
-                            if (isFinishing() || isDestroyed()) return;
-                            showMessage(binding.getRoot(), message);
-                        }
-                    });
-                })
-                .setNeutralButton(R.string.auth2_continue_with_google, (d, w) -> startGoogleSignIn())
                 .setNegativeButton(R.string.action_cancel, null)
                 .show();
     }

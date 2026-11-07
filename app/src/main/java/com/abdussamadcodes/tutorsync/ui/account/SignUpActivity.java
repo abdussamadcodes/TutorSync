@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Patterns;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -14,6 +15,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 
 import com.abdussamadcodes.tutorsync.R;
@@ -26,8 +28,10 @@ import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.common.ButtonLoading;
 import com.abdussamadcodes.tutorsync.ui.main.MainActivity;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.firebase.auth.FirebaseUser;
 
+import java.util.Locale;
 import java.util.UUID;
 
 public class SignUpActivity extends BaseActivity {
@@ -215,25 +219,35 @@ public class SignUpActivity extends BaseActivity {
 
     private void attemptSignUp() {
         String fullName = binding.etFullName.getText() != null ? binding.etFullName.getText().toString().trim() : "";
-        String username = binding.etUsername.getText() != null ? binding.etUsername.getText().toString().trim() : "";
+        String identifier = binding.etUsername.getText() != null ? binding.etUsername.getText().toString().trim() : "";
         String password = binding.etPassword.getText() != null ? binding.etPassword.getText().toString() : "";
 
         binding.tilFullName.setError(null);
         binding.tilUsername.setError(null);
         binding.tilPassword.setError(null);
+        binding.tilConfirmPassword.setError(null);
 
         if (fullName.isEmpty()) {
             binding.tilFullName.setError(getString(R.string.auth2_err_full_name_required));
             return;
         }
-        if (username.isEmpty()) {
+        if (identifier.isEmpty()) {
             binding.tilUsername.setError(getString(R.string.auth2_err_username_required));
             return;
         }
-        if (!username.matches("^[a-zA-Z0-9]+$")) {
-            binding.tilUsername.setError(getString(R.string.auth_err_invalid_username));
+
+        boolean isEmail = Patterns.EMAIL_ADDRESS.matcher(identifier).matches();
+        boolean isAlphanumericUsername = identifier.matches("^[a-zA-Z0-9_]+$");
+
+        if (!isEmail && !isAlphanumericUsername) {
+            if (identifier.contains("@")) {
+                binding.tilUsername.setError("Please enter a valid email address");
+            } else {
+                binding.tilUsername.setError(getString(R.string.auth_err_invalid_username));
+            }
             return;
         }
+
         if (!isPasswordValid) {
             binding.tilPassword.setError(getString(R.string.auth_err_empty));
             return;
@@ -246,8 +260,32 @@ public class SignUpActivity extends BaseActivity {
         btnLoading.setLoading(true, getString(R.string.auth2_action_creating_account));
         binding.btnGoogleAuth.setEnabled(false);
 
+        if (isEmail) {
+            // Email-based Sign Up: register with Firebase Auth, send verification email, and store locally
+            GoogleAuthHelper.registerEmailPasswordAccount(this, fullName, identifier, password,
+                    new GoogleAuthHelper.EmailSignUpCallback() {
+                        @Override
+                        public void onRegistered(@NonNull Account localAccount,
+                                                 @NonNull FirebaseUser firebaseUser,
+                                                 boolean verificationEmailSent) {
+                            btnLoading.setLoading(false);
+                            binding.btnGoogleAuth.setEnabled(true);
+                            showEmailVerificationDialog(localAccount, identifier, verificationEmailSent);
+                        }
+
+                        @Override
+                        public void onError(@NonNull String message) {
+                            btnLoading.setLoading(false);
+                            binding.btnGoogleAuth.setEnabled(true);
+                            showMessage(binding.getRoot(), message);
+                        }
+                    });
+            return;
+        }
+
+        // Offline Username-only Sign Up
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (accountStore.getAccountByUsername(username) != null) {
+            if (accountStore.findAccountByUsernameOrEmail(identifier) != null) {
                 btnLoading.setLoading(false);
                 binding.btnGoogleAuth.setEnabled(true);
                 binding.tilUsername.setError(getString(R.string.auth_err_user_exists));
@@ -261,7 +299,7 @@ public class SignUpActivity extends BaseActivity {
                 Account newAccount = new Account(
                         UUID.randomUUID().toString(),
                         fullName,
-                        username,
+                        identifier.toLowerCase(Locale.ROOT),
                         hash,
                         salt
                 );
@@ -281,5 +319,69 @@ public class SignUpActivity extends BaseActivity {
                 showMessage(binding.getRoot(), R.string.auth_err_hashing);
             }
         }, 300);
+    }
+
+    private void showEmailVerificationDialog(@NonNull Account localAccount,
+                                             @NonNull String email,
+                                             boolean emailSent) {
+        String message = emailSent
+                ? "We sent a verification link to:\n" + email + "\n\nPlease open your email and click the verification link, then tap \"I've Verified\" below."
+                : "Your account was created for " + email + ", but the verification email could not be sent right now. Tap \"Resend Email\" to try again.";
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setTitle("Verify Your Email")
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton("I've Verified — Continue", null)
+                .setNeutralButton("Resend Email", null)
+                .setNegativeButton("Skip for Now", (d, w) -> {
+                    sessionManager.login(localAccount.getId());
+                    startActivity(new Intent(SignUpActivity.this, MainActivity.class));
+                    finish();
+                })
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                GoogleAuthHelper.checkEmailVerified(new GoogleAuthHelper.VerificationStatusCallback() {
+                    @Override
+                    public void onResult(boolean isVerified) {
+                        if (isFinishing() || isDestroyed()) return;
+                        if (isVerified) {
+                            dialog.dismiss();
+                            sessionManager.login(localAccount.getId());
+                            startActivity(new Intent(SignUpActivity.this, MainActivity.class));
+                            finish();
+                        } else {
+                            showMessage(binding.getRoot(), "Email not verified yet. Please click the link in your inbox (check Spam too).");
+                        }
+                    }
+
+                    @Override
+                    public void onError(@NonNull String err) {
+                        if (isFinishing() || isDestroyed()) return;
+                        showMessage(binding.getRoot(), err);
+                    }
+                });
+            });
+
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                GoogleAuthHelper.resendVerificationEmail(new GoogleAuthHelper.ResetEmailCallback() {
+                    @Override
+                    public void onSent() {
+                        if (isFinishing() || isDestroyed()) return;
+                        showMessage(binding.getRoot(), "Verification email resent to " + email);
+                    }
+
+                    @Override
+                    public void onError(@NonNull String err) {
+                        if (isFinishing() || isDestroyed()) return;
+                        showMessage(binding.getRoot(), err);
+                    }
+                });
+            });
+        });
+
+        dialog.show();
     }
 }
