@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "516201605620",
+    "project_id": "tutorsync-d7d99",
+    "storage_bucket": "tutorsync-d7d99.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:516201605620:android:34e669c1776157bbcdb1a1",
+        "android_client_info": {
+          "package_name": "com.abdussamadcodes.tutorsync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDU7_31-RM96QyzNIJY_-II9RbQb1ePM08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

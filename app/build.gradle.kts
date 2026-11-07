@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -13,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = 2
-        versionName = "1.1.0"
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -59,6 +60,14 @@ dependencies {
     // Background Work & Biometric Security
     implementation("androidx.work:work-runtime:2.9.1")
     implementation("androidx.biometric:biometric:1.1.0")
+
+    // Firebase Auth, Credential Manager & Google Play Services Auth
+    implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
+    implementation("com.google.android.gms:play-services-auth:21.5.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
