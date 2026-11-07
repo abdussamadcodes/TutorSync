@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.res.Configuration;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
@@ -96,6 +97,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -306,6 +308,21 @@ public class MainActivity extends BaseActivity {
     // FIREBASE REALTIME DB, FIRESTORE & HTTP REST JSON API
     // =========================================================================
 
+    private String getActiveTabName(int tabId) {
+        if (tabId == R.id.nav_directory) return "DIRECTORY";
+        if (tabId == R.id.nav_settings) return "SETTINGS";
+        return "HOME_DASHBOARD";
+    }
+
+    private static String formatMinutesOfDay(int totalMinutes) {
+        int hours24 = (totalMinutes / 60) % 24;
+        int mins = totalMinutes % 60;
+        String period = hours24 >= 12 ? "PM" : "AM";
+        int hours12 = hours24 % 12;
+        if (hours12 == 0) hours12 = 12;
+        return String.format(Locale.US, "%02d:%02d %s", hours12, mins, period);
+    }
+
     private void attachRealtimePresenceListener() {
         final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
@@ -326,15 +343,21 @@ public class MainActivity extends BaseActivity {
                     if (Boolean.TRUE.equals(connected) && sessionManager.hasActiveSession()) {
                         Map<String, Object> offlineStatus = new HashMap<>();
                         offlineStatus.put("isOnline", false);
+                        offlineStatus.put("sessionState", "OFFLINE");
                         offlineStatus.put("lastActive", ServerValue.TIMESTAMP);
 
                         Map<String, Object> onlineStatus = new HashMap<>();
                         onlineStatus.put("isOnline", true);
+                        onlineStatus.put("sessionState", "ACTIVE");
+                        onlineStatus.put("activeScreen", getActiveTabName(lastActiveTabId));
+                        onlineStatus.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
+                        onlineStatus.put("androidVersion", "Android " + Build.VERSION.RELEASE);
                         onlineStatus.put("lastActive", ServerValue.TIMESTAMP);
 
-                        presenceRef.onDisconnect().setValue(offlineStatus).addOnCompleteListener(task -> {
+                        // Using updateChildren preserves workspaceSummary and todaySchedule nodes!
+                        presenceRef.onDisconnect().updateChildren(offlineStatus).addOnCompleteListener(task -> {
                             if (sessionManager.hasActiveSession()) {
-                                presenceRef.setValue(onlineStatus);
+                                presenceRef.updateChildren(onlineStatus);
                             }
                         });
                     }
@@ -356,18 +379,95 @@ public class MainActivity extends BaseActivity {
             DatabaseReference presenceRef = FirebaseDatabase.getInstance().getReference("status/" + accountId);
             Map<String, Object> status = new HashMap<>();
             status.put("isOnline", isOnline);
+            status.put("sessionState", isOnline ? "ACTIVE" : "SIGNED_OUT");
+            status.put("activeScreen", getActiveTabName(lastActiveTabId));
             status.put("lastActive", ServerValue.TIMESTAMP);
 
             if (isOnline) {
                 Map<String, Object> offlineStatus = new HashMap<>();
                 offlineStatus.put("isOnline", false);
+                offlineStatus.put("sessionState", "OFFLINE");
                 offlineStatus.put("lastActive", ServerValue.TIMESTAMP);
-                presenceRef.onDisconnect().setValue(offlineStatus);
+                presenceRef.onDisconnect().updateChildren(offlineStatus);
             } else {
                 presenceRef.onDisconnect().cancel();
             }
-            presenceRef.setValue(status);
+            presenceRef.updateChildren(status);
         } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * Pushes rich live workspace metrics and today's class schedule board to Firebase Realtime Database
+     * under status/{accountId} whenever the dashboard refreshes.
+     */
+    private void syncRealtimeWorkspaceTelemetry(
+            @NonNull String accountId,
+            @Nullable Account account,
+            @NonNull List<Student> students,
+            @NonNull List<Subject> subjects,
+            @NonNull List<OccurrenceGroup> todayGroups,
+            int needsAttendanceCount,
+            int totalRevenueMinor,
+            @NonNull String currentLang) {
+        try {
+            DatabaseReference presenceRef = FirebaseDatabase.getInstance().getReference("status/" + accountId);
+
+            Map<String, String> studentNames = new HashMap<>();
+            for (Student s : students) {
+                studentNames.put(s.getId(), s.getName());
+            }
+            Map<String, String> subjectTitles = new HashMap<>();
+            for (Subject sub : subjects) {
+                subjectTitles.put(sub.getId(), sub.getRawTitle());
+            }
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("accountId", accountId);
+            payload.put("tutorName", (account != null && !account.getFullName().trim().isEmpty()) ? account.getFullName() : "Tutor");
+            payload.put("username", (account != null && account.getUsername() != null) ? account.getUsername() : "");
+            payload.put("isOnline", true);
+            payload.put("sessionState", "ACTIVE");
+            payload.put("activeScreen", getActiveTabName(lastActiveTabId));
+            payload.put("language", currentLang);
+            payload.put("themeMode", appPreferences.getThemeMode());
+            payload.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
+            payload.put("androidVersion", "Android " + Build.VERSION.RELEASE);
+            payload.put("lastActive", ServerValue.TIMESTAMP);
+
+            // Nested live workspace summary metrics
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("activeStudentCount", students.size());
+            summary.put("activeSubjectCount", subjects.size());
+            summary.put("todayClassCount", todayGroups.size());
+            summary.put("pendingAttendanceCount", needsAttendanceCount);
+            summary.put("totalRevenueMinor", totalRevenueMinor);
+            summary.put("totalRevenueFormatted", String.format(Locale.US, "৳ %.2f", totalRevenueMinor / 100.0));
+            payload.put("workspaceSummary", summary);
+
+            // Nested live board of today's scheduled classes
+            Map<String, Object> todayScheduleMap = new LinkedHashMap<>();
+            for (int i = 0; i < todayGroups.size(); i++) {
+                OccurrenceGroup g = todayGroups.get(i);
+                Map<String, Object> slot = new LinkedHashMap<>();
+                String stName = studentNames.get(g.getStudentId());
+                slot.put("studentName", stName != null ? stName : "Student");
+                slot.put("startTime", formatMinutesOfDay(g.getStartTimeMinutes()));
+                slot.put("durationMinutes", g.getDurationMinutes());
+
+                List<String> subNames = new ArrayList<>();
+                for (String subId : g.getSubjectIds()) {
+                    String title = subjectTitles.get(subId);
+                    if (title != null && !title.isEmpty()) subNames.add(title);
+                }
+                slot.put("subjects", subNames.isEmpty() ? "General" : android.text.TextUtils.join(", ", subNames));
+                todayScheduleMap.put("session_" + (i + 1), slot);
+            }
+            payload.put("todaySchedule", todayScheduleMap);
+
+            presenceRef.updateChildren(payload);
+        } catch (Exception e) {
+            Log.e("FirebaseRealtime", "Failed to sync realtime workspace telemetry", e);
         }
     }
 
@@ -469,6 +569,20 @@ public class MainActivity extends BaseActivity {
         binding.tabHome.setVisibility(itemId == R.id.nav_home ? View.VISIBLE : View.GONE);
         binding.tabDirectory.setVisibility(itemId == R.id.nav_directory ? View.VISIBLE : View.GONE);
         binding.tabSettings.setVisibility(itemId == R.id.nav_settings ? View.VISIBLE : View.GONE);
+
+        // Live-update the active screen in Realtime Database when switching bottom tabs
+        if (sessionManager != null && sessionManager.hasActiveSession()) {
+            String accountId = sessionManager.getActiveAccountId();
+            if (!accountId.isEmpty()) {
+                try {
+                    Map<String, Object> tabUpdate = new HashMap<>();
+                    tabUpdate.put("activeScreen", getActiveTabName(itemId));
+                    tabUpdate.put("lastActive", ServerValue.TIMESTAMP);
+                    FirebaseDatabase.getInstance().getReference("status/" + accountId).updateChildren(tabUpdate);
+                } catch (Exception ignored) {
+                }
+            }
+        }
         return true;
     }
 
@@ -528,6 +642,12 @@ public class MainActivity extends BaseActivity {
                         groups.add(newGroup);
                     }
                 }
+
+                // Push expanded live telemetry & today's class schedule to Firebase Realtime Database
+                syncRealtimeWorkspaceTelemetry(
+                        accountId, account, students, subjects, groups,
+                        needsAttendanceCount, totalRevenueMinor, currentLang
+                );
 
                 AppExecutors.getInstance().mainThread().execute(() -> {
                     if (isFinishing() || isDestroyed() || binding == null) return;
