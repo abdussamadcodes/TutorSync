@@ -1237,6 +1237,7 @@ public class MainActivity extends BaseActivity {
                 isBackupTaskRunning.set(false);
             }
 
+
             final boolean success = exported;
             final String finalError = errorMsg;
             AppExecutors.getInstance().mainThread().execute(() -> {
