@@ -68,9 +68,12 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ServerValue;
+import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import org.json.JSONObject;
@@ -114,6 +117,11 @@ public class MainActivity extends BaseActivity {
     private ImageView activeDialogProfileImageView;
     @Nullable
     private String pendingProfilePicPath;
+
+    @Nullable
+    private ValueEventListener connectionListener;
+    @Nullable
+    private DatabaseReference connectedRef;
 
     private final ActivityResultLauncher<String> pickProfilePhotoLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
@@ -201,7 +209,7 @@ public class MainActivity extends BaseActivity {
         switchToTab(restoredTabId);
 
         // 3. Networking & Firebase Services (Realtime DB, Firestore, HTTP REST JSON API)
-        setFirebaseRealtimePresence(true);
+        attachRealtimePresenceListener();
         syncAccountToFirestore();
         fetchDailyQuoteFromApi();
     }
@@ -227,12 +235,73 @@ public class MainActivity extends BaseActivity {
             switchToTab(lastActiveTabId);
             refreshStatusLabels();
             loadDashboardData();
+            setFirebaseRealtimePresence(true);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (connectedRef != null && connectionListener != null) {
+            connectedRef.removeEventListener(connectionListener);
         }
     }
 
     // =========================================================================
     // FIREBASE REALTIME DB, FIRESTORE & HTTP REST JSON API
     // =========================================================================
+
+    /**
+     * Watches Firebase's special ".info/connected" node so that whenever the device connects or
+     * reconnects to Firebase servers, it registers the onDisconnect() handler FIRST and then
+     * marks the active account as isOnline = true.
+     */
+    private void attachRealtimePresenceListener() {
+        final String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) return;
+
+        try {
+            FirebaseDatabase db = FirebaseDatabase.getInstance();
+            final DatabaseReference presenceRef = db.getReference("status/" + accountId);
+            connectedRef = db.getReference(".info/connected");
+
+            if (connectionListener != null) {
+                connectedRef.removeEventListener(connectionListener);
+            }
+
+            connectionListener = new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    Boolean connected = snapshot.getValue(Boolean.class);
+                    if (Boolean.TRUE.equals(connected) && sessionManager.hasActiveSession()) {
+                        Map<String, Object> offlineStatus = new HashMap<>();
+                        offlineStatus.put("isOnline", false);
+                        offlineStatus.put("lastActive", ServerValue.TIMESTAMP);
+
+                        Map<String, Object> onlineStatus = new HashMap<>();
+                        onlineStatus.put("isOnline", true);
+                        onlineStatus.put("lastActive", ServerValue.TIMESTAMP);
+
+                        // 1. Register onDisconnect FIRST, then set isOnline = true
+                        presenceRef.onDisconnect().setValue(offlineStatus).addOnCompleteListener(task -> {
+                            if (sessionManager.hasActiveSession()) {
+                                presenceRef.setValue(onlineStatus);
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+                    Log.e("FirebaseRealtime", "Connection listener cancelled", error.toException());
+                }
+            };
+
+            connectedRef.addValueEventListener(connectionListener);
+        } catch (Exception e) {
+            Log.e("FirebaseRealtime", "Failed to attach presence listener", e);
+        }
+    }
 
     private void setFirebaseRealtimePresence(boolean isOnline) {
         String accountId = sessionManager.getActiveAccountId();
@@ -244,13 +313,15 @@ public class MainActivity extends BaseActivity {
             status.put("isOnline", isOnline);
             status.put("lastActive", ServerValue.TIMESTAMP);
 
-            presenceRef.setValue(status);
             if (isOnline) {
                 Map<String, Object> offlineStatus = new HashMap<>();
                 offlineStatus.put("isOnline", false);
                 offlineStatus.put("lastActive", ServerValue.TIMESTAMP);
                 presenceRef.onDisconnect().setValue(offlineStatus);
+            } else {
+                presenceRef.onDisconnect().cancel();
             }
+            presenceRef.setValue(status);
         } catch (Exception e) {
             Log.e("FirebaseRealtime", "Realtime DB presence update error", e);
         }
@@ -627,6 +698,9 @@ public class MainActivity extends BaseActivity {
 
         // 5. Sign Out
         binding.btnSignOut.setOnClickListener(v -> {
+            if (connectedRef != null && connectionListener != null) {
+                connectedRef.removeEventListener(connectionListener);
+            }
             setFirebaseRealtimePresence(false);
             lastActiveTabId = R.id.nav_home;
             lastReconciledAccountId = null;
