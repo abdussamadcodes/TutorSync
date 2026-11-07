@@ -222,6 +222,48 @@
             android:layout_marginTop="@dimen/space_xl"
             tools:text="Sign In" />
 
+        <!-- Divider + Continue with Google -->
+        <LinearLayout
+            android:id="@+id/llGoogleDivider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="?attr/colorOutlineVariant" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="@dimen/space_sm"
+                android:text="@string/auth2_or_divider"
+                android:textAppearance="@style/TextAppearance.TutorSync.Caption"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="?attr/colorOutlineVariant" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGoogleAuth"
+            style="@style/Widget.TutorSync.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:text="@string/auth2_continue_with_google"
+            app:icon="@drawable/ic_google_logo"
+            app:iconGravity="textStart"
+            app:iconPadding="@dimen/space_xs"
+            app:iconTint="@null" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnForgotPassword"
             style="@style/Widget.TutorSync.Button.Text"
@@ -229,6 +271,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/space_sm"
             android:text="@string/auth2_forgot_password_action" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnToggleAuth"
             style="@style/Widget.TutorSync.Button.Text"

@@ -13,10 +13,20 @@ import com.abdussamadcodes.tutorsync.database.TutorSyncContract;
 import com.abdussamadcodes.tutorsync.database.TutorSyncContract.AccountEntry;
 import com.abdussamadcodes.tutorsync.model.Account;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.UUID;
+
 public class LocalAccountStore {
+
+    public static final String GOOGLE_AUTH_SENTINEL = "GOOGLE_AUTH_MANAGED";
 
     public LocalAccountStore(@NonNull Context context) {
         // SQLite backed
+    }
+
+    public static boolean isGoogleManagedAccount(@Nullable Account account) {
+        return account != null && GOOGLE_AUTH_SENTINEL.equals(account.getPasswordHash());
     }
 
     public boolean saveAccount(@NonNull Account account) {
@@ -27,7 +37,7 @@ public class LocalAccountStore {
             ContentValues values = new ContentValues();
             values.put(AccountEntry.COLUMN_ID, TutorSyncContract.ensureValidUuid(account.getId()));
             values.put(AccountEntry.COLUMN_FULL_NAME, account.getFullName());
-            values.put(AccountEntry.COLUMN_USERNAME, account.getUsername().toLowerCase());
+            values.put(AccountEntry.COLUMN_USERNAME, account.getUsername().toLowerCase(Locale.ROOT));
             values.put(AccountEntry.COLUMN_PASSWORD_HASH, account.getPasswordHash());
             values.put(AccountEntry.COLUMN_SALT, account.getSalt());
             values.put(AccountEntry.COLUMN_PHONE, account.getPhone());
@@ -55,7 +65,7 @@ public class LocalAccountStore {
         Account account = null;
 
         String selection = AccountEntry.COLUMN_USERNAME + " = ?";
-        String[] selectionArgs = { username.toLowerCase() };
+        String[] selectionArgs = { username.trim().toLowerCase(Locale.ROOT) };
 
         Cursor cursor = null;
         try {
@@ -68,6 +78,155 @@ public class LocalAccountStore {
             DatabaseManager.getInstance().closeDatabase();
         }
         return account;
+    }
+
+    @Nullable
+    public Account getAccountByEmail(@NonNull String email) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        if (normalizedEmail.isEmpty()) {
+            return null;
+        }
+
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        Account account = null;
+
+        String selection = "LOWER(" + AccountEntry.COLUMN_EMAIL + ") = ? OR " + AccountEntry.COLUMN_USERNAME + " = ?";
+        String[] selectionArgs = { normalizedEmail, normalizedEmail };
+
+        Cursor cursor = null;
+        try {
+            cursor = db.query(AccountEntry.TABLE_NAME, null, selection, selectionArgs, null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                account = mapCursorToAccount(cursor);
+            }
+        } finally {
+            if (cursor != null) cursor.close();
+            DatabaseManager.getInstance().closeDatabase();
+        }
+        return account;
+    }
+
+    @Nullable
+    public Account findAccountByUsernameOrEmail(@NonNull String identifier) {
+        String clean = identifier.trim();
+        if (clean.isEmpty()) {
+            return null;
+        }
+        Account byUsername = getAccountByUsername(clean);
+        if (byUsername != null) {
+            return byUsername;
+        }
+        return getAccountByEmail(clean);
+    }
+
+    @Nullable
+    public Account getOrCreateGoogleAccount(@NonNull String firebaseUid,
+                                            @NonNull String email,
+                                            @Nullable String displayName) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        if (normalizedEmail.isEmpty()) {
+            return null;
+        }
+
+        // 1. Check if an account with this email already exists locally
+        Account existing = getAccountByEmail(normalizedEmail);
+        if (existing != null) {
+            if (existing.getEmail() == null || existing.getEmail().trim().isEmpty()) {
+                updateProfile(
+                        existing.getId(),
+                        existing.getFullName(),
+                        existing.getPhone(),
+                        normalizedEmail,
+                        existing.getAddress(),
+                        existing.getDob()
+                );
+                return getAccountById(existing.getId());
+            }
+            return existing;
+        }
+
+        // 2. Create a new local account scoped to a deterministic UUID
+        String deterministicId = UUID.nameUUIDFromBytes(
+                ("GOOGLE_ACCT:" + normalizedEmail).getBytes(StandardCharsets.UTF_8)
+        ).toString();
+
+        Account byId = getAccountById(deterministicId);
+        if (byId != null) {
+            return byId;
+        }
+
+        String resolvedName = (displayName != null && !displayName.trim().isEmpty())
+                ? displayName.trim()
+                : deriveNameFromEmail(normalizedEmail);
+
+        String uniqueUsername = resolveUniqueUsernameForGoogle(normalizedEmail, firebaseUid);
+
+        SQLiteDatabase db = DatabaseManager.getInstance().openDatabase();
+        try {
+            long currentTime = System.currentTimeMillis();
+            ContentValues values = new ContentValues();
+            values.put(AccountEntry.COLUMN_ID, deterministicId);
+            values.put(AccountEntry.COLUMN_FULL_NAME, resolvedName);
+            values.put(AccountEntry.COLUMN_USERNAME, uniqueUsername);
+            values.put(AccountEntry.COLUMN_PASSWORD_HASH, GOOGLE_AUTH_SENTINEL);
+            values.put(AccountEntry.COLUMN_SALT, GOOGLE_AUTH_SENTINEL);
+            values.put(AccountEntry.COLUMN_EMAIL, normalizedEmail);
+            values.put(AccountEntry.COLUMN_SYNC_STATUS, "GOOGLE_LINKED");
+            values.put(AccountEntry.COLUMN_CREATED_AT, currentTime);
+            values.put(AccountEntry.COLUMN_UPDATED_AT, currentTime);
+            values.put(AccountEntry.COLUMN_LAST_MODIFIED, currentTime);
+
+            long rowId = db.insert(AccountEntry.TABLE_NAME, null, values);
+            if (rowId != -1) {
+                return new Account(
+                        deterministicId,
+                        resolvedName,
+                        uniqueUsername,
+                        GOOGLE_AUTH_SENTINEL,
+                        GOOGLE_AUTH_SENTINEL,
+                        null,
+                        normalizedEmail,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } finally {
+            DatabaseManager.getInstance().closeDatabase();
+        }
+        return getAccountByEmail(normalizedEmail);
+    }
+
+    @NonNull
+    private String resolveUniqueUsernameForGoogle(@NonNull String normalizedEmail, @NonNull String firebaseUid) {
+        if (getAccountByUsername(normalizedEmail) == null) {
+            return normalizedEmail;
+        }
+        String prefix = normalizedEmail.contains("@")
+                ? normalizedEmail.substring(0, normalizedEmail.indexOf('@'))
+                : normalizedEmail;
+        String cleanPrefix = prefix.replaceAll("[^a-z0-9]", "");
+        if (cleanPrefix.isEmpty()) {
+            cleanPrefix = "tutor";
+        }
+        String suffix = firebaseUid.length() >= 6
+                ? firebaseUid.substring(0, 6).toLowerCase(Locale.ROOT)
+                : String.valueOf(System.currentTimeMillis() % 100000);
+        String candidate = cleanPrefix + "_" + suffix;
+        int attempt = 1;
+        while (getAccountByUsername(candidate) != null) {
+            candidate = cleanPrefix + "_" + suffix + attempt;
+            attempt++;
+        }
+        return candidate;
+    }
+
+    @NonNull
+    private static String deriveNameFromEmail(@NonNull String email) {
+        int atIndex = email.indexOf('@');
+        String localPart = atIndex > 0 ? email.substring(0, atIndex) : email;
+        String cleaned = localPart.replace('.', ' ').replace('_', ' ').replace('-', ' ').trim();
+        return cleaned.isEmpty() ? "Tutor" : cleaned;
     }
 
     @Nullable

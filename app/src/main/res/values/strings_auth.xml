@@ -28,13 +28,13 @@
     <!-- Shared Auth (SignInActivity & SignUpActivity) -->
     <string name="auth2_brand_tagline">Offline student, schedule &amp; fee manager for private tutors</string>
     <string name="auth2_sign_in_heading">Sign in to your workspace</string>
-    <string name="auth2_sign_in_subheading">Enter your local tutor account credentials to continue.</string>
+    <string name="auth2_sign_in_subheading">Enter your local tutor account credentials or continue with Google.</string>
     <string name="auth2_sign_up_heading">Create your tutor account</string>
     <string name="auth2_sign_up_subheading">Your data stays 100% offline and encrypted on this device.</string>
 
     <string name="auth2_label_full_name">Full name *</string>
     <string name="auth2_helper_full_name">Shown on student invoices and statements</string>
-    <string name="auth2_label_username">Username *</string>
+    <string name="auth2_label_username">Username or Email *</string>
     <string name="auth2_helper_username">Letters and numbers only (no spaces)</string>
     <string name="auth2_label_password">Password *</string>
     <string name="auth2_label_confirm_password">Confirm password *</string>
@@ -42,9 +42,26 @@
     <string name="auth2_action_signing_in">Signing in…</string>
     <string name="auth2_action_creating_account">Creating account…</string>
     <string name="auth2_forgot_password_action">Forgot password?</string>
-    <string name="auth2_forgot_password_title">Offline Account Security</string>
+    <string name="auth2_forgot_password_title">Account &amp; Password Recovery</string>
     <string name="auth2_forgot_password_body">TutorSync is 100% offline and never sends your password to a server.\n\nIf you have an encrypted backup file and remember its backup password, you can create a new account and restore your data from Settings → Data &amp; Backup.</string>
     <string name="auth2_forgot_password_ok">Got it</string>
+
+    <!-- Google Sign-In & Smart Recovery -->
+    <string name="auth2_or_divider">OR</string>
+    <string name="auth2_continue_with_google">Continue with Google</string>
+    <string name="auth2_google_signing_in">Connecting to Google…</string>
+    <string name="auth2_err_google_managed_use_button">This account uses Google Sign-In. Please tap \"Continue with Google\" below.</string>
+    <string name="auth2_recovery_prompt">Enter your username or email address to check available recovery options:</string>
+    <string name="auth2_recovery_hint">Username or Email</string>
+    <string name="auth2_recovery_check_action">Continue</string>
+    <string name="auth2_recovery_google_title">Google Account Recovery</string>
+    <string name="auth2_recovery_google_msg">The account \"%1$s\" is linked with Google Sign-In and does not use a local password.\n\nTap \"Continue with Google\" to sign in directly, or recover your Google Account password via Google.</string>
+    <string name="auth2_recovery_google_sign_in_now">Sign In with Google</string>
+    <string name="auth2_recovery_google_open_web">Google Account Help</string>
+    <string name="auth2_recovery_email_title">Send Password Reset Email?</string>
+    <string name="auth2_recovery_email_msg">If \"%1$s\" is registered with Firebase Email authentication, we can send a password reset link to this address.\n\nFor offline-only local passwords, you can also sign in using your linked Google account or restore from a backup.</string>
+    <string name="auth2_recovery_send_email">Send Reset Email</string>
+    <string name="auth2_recovery_email_sent">If an online account exists for %1$s, a password reset email has been sent.</string>
 
     <!-- Password Checklist & Strength -->
     <string name="auth2_pw_rules_title">Password requirements</string>

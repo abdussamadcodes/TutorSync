@@ -28,13 +28,13 @@
     <!-- Shared Auth (SignInActivity & SignUpActivity) -->
     <string name="auth2_brand_tagline">প্রাইভেট টিউটরদের জন্য অফলাইন শিক্ষার্থী, রুটিন ও ফি ম্যানেজার</string>
     <string name="auth2_sign_in_heading">আপনার অ্যাকাউন্টে সাইন ইন করুন</string>
-    <string name="auth2_sign_in_subheading">চালিয়ে যেতে আপনার লোকাল টিউটর অ্যাকাউন্টের তথ্য দিন।</string>
+    <string name="auth2_sign_in_subheading">চালিয়ে যেতে আপনার লোকাল টিউটর অ্যাকাউন্ট অথবা গুগল অ্যাকাউন্ট ব্যবহার করুন।</string>
     <string name="auth2_sign_up_heading">নতুন টিউটর অ্যাকাউন্ট খুলুন</string>
     <string name="auth2_sign_up_subheading">আপনার সকল তথ্য ১০০% অফলাইনে এই ফোনেই সুরক্ষিত থাকে।</string>
 
     <string name="auth2_label_full_name">পূর্ণ নাম *</string>
     <string name="auth2_helper_full_name">শিক্ষার্থীদের ইনভয়েস ও বিবরণীতে দেখানো হবে</string>
-    <string name="auth2_label_username">ইউজারনেম *</string>
+    <string name="auth2_label_username">ইউজারনেম বা ইমেইল *</string>
     <string name="auth2_helper_username">শুধুমাত্র ইংরেজি অক্ষর এবং সংখ্যা (স্পেস ছাড়া)</string>
     <string name="auth2_label_password">পাসওয়ার্ড *</string>
     <string name="auth2_label_confirm_password">পাসওয়ার্ড নিশ্চিত করুন *</string>
@@ -42,9 +42,26 @@
     <string name="auth2_action_signing_in">সাইন ইন হচ্ছে…</string>
     <string name="auth2_action_creating_account">অ্যাকাউন্ট তৈরি হচ্ছে…</string>
     <string name="auth2_forgot_password_action">পাসওয়ার্ড ভুলে গেছেন?</string>
-    <string name="auth2_forgot_password_title">অফলাইন অ্যাকাউন্ট নিরাপত্তা</string>
+    <string name="auth2_forgot_password_title">অ্যাকাউন্ট ও পাসওয়ার্ড পুনরুদ্ধার</string>
     <string name="auth2_forgot_password_body">টিউটরসিঙ্ক সম্পূর্ণ অফলাইন অ্যাপ এবং আপনার পাসওয়ার্ড কখনো কোনো সার্ভারে পাঠানো হয় না।\n\nআপনার কাছে যদি এনক্রিপ্টেড ব্যাকআপ ফাইল থাকে এবং তার পাসওয়ার্ড মনে থাকে, তবে নতুন অ্যাকাউন্ট খুলে সেটিংস → ডেটা ও ব্যাকআপ থেকে তথ্য পুনরুদ্ধার করতে পারবেন।</string>
     <string name="auth2_forgot_password_ok">বুঝেছি</string>
+
+    <!-- Google Sign-In & Smart Recovery -->
+    <string name="auth2_or_divider">অথবা</string>
+    <string name="auth2_continue_with_google">গুগল দিয়ে চালিয়ে যান</string>
+    <string name="auth2_google_signing_in">গুগলের সাথে সংযোগ হচ্ছে…</string>
+    <string name="auth2_err_google_managed_use_button">এই অ্যাকাউন্টটি গুগল সাইন-ইন ব্যবহার করে। নিচের \"গুগল দিয়ে চালিয়ে যান\" বাটনে ট্যাপ করুন।</string>
+    <string name="auth2_recovery_prompt">পাসওয়ার্ড পুনরুদ্ধারের উপায় দেখতে আপনার ইউজারনেম বা ইমেইল লিখুন:</string>
+    <string name="auth2_recovery_hint">ইউজারনেম বা ইমেইল</string>
+    <string name="auth2_recovery_check_action">এগিয়ে যান</string>
+    <string name="auth2_recovery_google_title">গুগল অ্যাকাউন্ট পুনরুদ্ধার</string>
+    <string name="auth2_recovery_google_msg">\"%1$s\" অ্যাকাউন্টটি গুগল সাইন-ইনের সাথে যুক্ত এবং এতে কোনো লোকাল পাসওয়ার্ড নেই।\n\nসরাসরি প্রবেশ করতে \"গুগল দিয়ে সাইন ইন\" ট্যাপ করুন অথবা গুগলের মাধ্যমে আপনার গুগল পাসওয়ার্ড রিসেট করুন।</string>
+    <string name="auth2_recovery_google_sign_in_now">গুগল দিয়ে সাইন ইন</string>
+    <string name="auth2_recovery_google_open_web">গুগল অ্যাকাউন্ট সহায়তা</string>
+    <string name="auth2_recovery_email_title">পাসওয়ার্ড রিসেট ইমেইল পাঠাবেন?</string>
+    <string name="auth2_recovery_email_msg">যদি \"%1$s\" ফায়ারবেস ইমেইল অথেনটিকেশনে নিবন্ধিত থাকে, আমরা এই ঠিকানায় একটি রিসেট লিংক পাঠাতে পারি।\n\nঅফলাইন পাসওয়ার্ডের ক্ষেত্রে আপনার লিংক করা গুগল অ্যাকাউন্ট দিয়ে সাইন ইন করতে পারেন অথবা ব্যাকআপ ফাইল থেকে ডেটা পুনরুদ্ধার করতে পারেন।</string>
+    <string name="auth2_recovery_send_email">রিসেট ইমেইল পাঠান</string>
+    <string name="auth2_recovery_email_sent">%1$s ঠিকানায় অনলাইন অ্যাকাউন্ট থাকলে পাসওয়ার্ড রিসেট ইমেইল পাঠানো হয়েছে।</string>
 
     <!-- Password Checklist & Strength -->
     <string name="auth2_pw_rules_title">পাসওয়ার্ডের শর্তাবলি</string>

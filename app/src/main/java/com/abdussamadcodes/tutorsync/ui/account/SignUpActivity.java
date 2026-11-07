@@ -10,10 +10,12 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.abdussamadcodes.tutorsync.R;
+import com.abdussamadcodes.tutorsync.account.GoogleAuthHelper;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.databinding.ActivityAuthBinding;
 import com.abdussamadcodes.tutorsync.model.Account;
@@ -22,6 +24,7 @@ import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.common.ButtonLoading;
 import com.abdussamadcodes.tutorsync.ui.main.MainActivity;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.util.UUID;
 
@@ -31,6 +34,7 @@ public class SignUpActivity extends BaseActivity {
     private LocalAccountStore accountStore;
     private SessionManager sessionManager;
     private ButtonLoading btnLoading;
+    private ButtonLoading btnGoogleLoading;
     private boolean isPasswordValid = false;
     private boolean doPasswordsMatch = false;
 
@@ -44,6 +48,7 @@ public class SignUpActivity extends BaseActivity {
         accountStore = new LocalAccountStore(this);
         sessionManager = new SessionManager(this);
         btnLoading = new ButtonLoading(binding.btnPrimaryAction);
+        btnGoogleLoading = new ButtonLoading(binding.btnGoogleAuth);
 
         setupUI();
         setupListeners();
@@ -74,6 +79,7 @@ public class SignUpActivity extends BaseActivity {
         binding.btnBack.setOnClickListener(v -> navigateToSignIn());
         binding.btnToggleAuth.setOnClickListener(v -> navigateToSignIn());
         binding.btnPrimaryAction.setOnClickListener(v -> attemptSignUp());
+        binding.btnGoogleAuth.setOnClickListener(v -> startGoogleSignIn());
 
         binding.etPassword.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -89,6 +95,35 @@ public class SignUpActivity extends BaseActivity {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
                 evaluateMatchIndicator();
+            }
+        });
+    }
+
+    private void startGoogleSignIn() {
+        binding.btnPrimaryAction.setEnabled(false);
+        btnGoogleLoading.setLoading(true, getString(R.string.auth2_google_signing_in));
+
+        GoogleAuthHelper.signInWithGoogle(this, new GoogleAuthHelper.AuthCallback() {
+            @Override
+            public void onSuccess(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser) {
+                btnGoogleLoading.setLoading(false);
+                binding.btnPrimaryAction.setEnabled(true);
+                sessionManager.login(localAccount.getId());
+                startActivity(new Intent(SignUpActivity.this, MainActivity.class));
+                finish();
+            }
+
+            @Override
+            public void onCancelled() {
+                btnGoogleLoading.setLoading(false);
+                binding.btnPrimaryAction.setEnabled(true);
+            }
+
+            @Override
+            public void onError(@NonNull String message) {
+                btnGoogleLoading.setLoading(false);
+                binding.btnPrimaryAction.setEnabled(true);
+                showMessage(binding.getRoot(), message);
             }
         });
     }
@@ -186,7 +221,7 @@ public class SignUpActivity extends BaseActivity {
             return;
         }
         if (!isPasswordValid) {
-            binding.tilPassword.setError(getString(R.string.auth_err_empty)); // A generic error forcing them to look at the rules
+            binding.tilPassword.setError(getString(R.string.auth_err_empty));
             return;
         }
         if (!doPasswordsMatch) {
@@ -195,11 +230,12 @@ public class SignUpActivity extends BaseActivity {
         }
 
         btnLoading.setLoading(true, getString(R.string.auth2_action_creating_account));
+        binding.btnGoogleAuth.setEnabled(false);
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            // Ensure username is unique
             if (accountStore.getAccountByUsername(username) != null) {
                 btnLoading.setLoading(false);
+                binding.btnGoogleAuth.setEnabled(true);
                 binding.tilUsername.setError(getString(R.string.auth_err_user_exists));
                 return;
             }
@@ -222,10 +258,12 @@ public class SignUpActivity extends BaseActivity {
                     finish();
                 } else {
                     btnLoading.setLoading(false);
+                    binding.btnGoogleAuth.setEnabled(true);
                     showMessage(binding.getRoot(), R.string.auth_err_hashing);
                 }
             } catch (Exception e) {
                 btnLoading.setLoading(false);
+                binding.btnGoogleAuth.setEnabled(true);
                 showMessage(binding.getRoot(), R.string.auth_err_hashing);
             }
         }, 300);
