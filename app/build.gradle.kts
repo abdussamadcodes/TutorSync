@@ -61,9 +61,11 @@ dependencies {
     implementation("androidx.work:work-runtime:2.9.1")
     implementation("androidx.biometric:biometric:1.1.0")
 
-    // Firebase Auth, Credential Manager & Google Play Services Auth
+    // Firebase Auth, Realtime DB, Firestore & Google Play Services Auth (100% Free Spark Plan)
     implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-firestore")
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")

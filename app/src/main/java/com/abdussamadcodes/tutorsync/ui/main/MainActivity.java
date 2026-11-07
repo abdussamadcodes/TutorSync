@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Log;
 import android.util.Patterns;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,6 +15,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -66,17 +68,29 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
+import com.google.firebase.firestore.FirebaseFirestore;
 
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends BaseActivity {
@@ -185,6 +199,11 @@ public class MainActivity extends BaseActivity {
                 : lastActiveTabId;
         binding.bottomNavigation.setSelectedItemId(restoredTabId);
         switchToTab(restoredTabId);
+
+        // 3. Networking & Firebase Services (Realtime DB, Firestore, HTTP REST JSON API)
+        setFirebaseRealtimePresence(true);
+        syncAccountToFirestore();
+        fetchDailyQuoteFromApi();
     }
 
     @Override
@@ -210,6 +229,123 @@ public class MainActivity extends BaseActivity {
             loadDashboardData();
         }
     }
+
+    // =========================================================================
+    // FIREBASE REALTIME DB, FIRESTORE & HTTP REST JSON API
+    // =========================================================================
+
+    private void setFirebaseRealtimePresence(boolean isOnline) {
+        String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) return;
+
+        try {
+            DatabaseReference presenceRef = FirebaseDatabase.getInstance().getReference("status/" + accountId);
+            Map<String, Object> status = new HashMap<>();
+            status.put("isOnline", isOnline);
+            status.put("lastActive", ServerValue.TIMESTAMP);
+
+            presenceRef.setValue(status);
+            if (isOnline) {
+                Map<String, Object> offlineStatus = new HashMap<>();
+                offlineStatus.put("isOnline", false);
+                offlineStatus.put("lastActive", ServerValue.TIMESTAMP);
+                presenceRef.onDisconnect().setValue(offlineStatus);
+            }
+        } catch (Exception e) {
+            Log.e("FirebaseRealtime", "Realtime DB presence update error", e);
+        }
+    }
+
+    private void syncAccountToFirestore() {
+        final String accountId = sessionManager.getActiveAccountId();
+        if (accountId.isEmpty()) return;
+
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                Account account = accountStore.getAccountById(accountId);
+                List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
+                List<Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
+
+                if (account != null) {
+                    String localPicPath = account.getProfilePicPath();
+                    boolean hasLocalPhoto = localPicPath != null && !localPicPath.trim().isEmpty()
+                            && new File(localPicPath).exists();
+
+                    Map<String, Object> tutorDoc = new HashMap<>();
+                    tutorDoc.put("accountId", accountId);
+                    tutorDoc.put("fullName", account.getFullName());
+                    tutorDoc.put("username", account.getUsername());
+                    tutorDoc.put("email", account.getEmail() != null ? account.getEmail() : "");
+                    tutorDoc.put("hasLocalProfilePhoto", hasLocalPhoto);
+                    tutorDoc.put("localProfilePicPath", hasLocalPhoto ? localPicPath : "");
+                    tutorDoc.put("activeStudentCount", students.size());
+                    tutorDoc.put("activeSubjectCount", subjects.size());
+                    tutorDoc.put("lastSyncedAt", System.currentTimeMillis());
+
+                    FirebaseFirestore.getInstance()
+                            .collection("tutors")
+                            .document(accountId)
+                            .set(tutorDoc);
+                }
+            } catch (Exception e) {
+                Log.e("FirestoreSync", "Firestore sync error", e);
+            }
+        });
+    }
+
+    private void fetchDailyQuoteFromApi() {
+        if (!GoogleAuthHelper.isNetworkConnected(this)) return;
+
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                URL url = new URL("https://api.adviceslip.com/advice");
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(6000);
+                conn.setReadTimeout(6000);
+
+                if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    StringBuilder response = new StringBuilder();
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            response.append(line);
+                        }
+                    }
+
+                    JSONObject jsonRoot = new JSONObject(response.toString());
+                    JSONObject slip = jsonRoot.optJSONObject("slip");
+                    if (slip != null) {
+                        final String advice = slip.optString("advice", "");
+                        if (!advice.isEmpty()) {
+                            AppExecutors.getInstance().mainThread().execute(() -> {
+                                if (isFinishing() || isDestroyed() || binding == null) return;
+                                // Update the subtitle TextView right below tvGreeting in topToolbar
+                                if (binding.tvGreeting.getParent() instanceof ViewGroup) {
+                                    ViewGroup parent = (ViewGroup) binding.tvGreeting.getParent();
+                                    if (parent.getChildCount() > 1 && parent.getChildAt(1) instanceof TextView) {
+                                        TextView tvSub = (TextView) parent.getChildAt(1);
+                                        tvSub.setText("Tip: " + advice);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("API_Fetch", "Failed to fetch daily tip JSON", e);
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
+            }
+        });
+    }
+
+    // =========================================================================
+    // CORE UI & DASHBOARD LOGIC
+    // =========================================================================
 
     private void setupUI() {
         occurrenceAdapter = new OccurrenceAdapter(group -> {
@@ -491,6 +627,7 @@ public class MainActivity extends BaseActivity {
 
         // 5. Sign Out
         binding.btnSignOut.setOnClickListener(v -> {
+            setFirebaseRealtimePresence(false);
             lastActiveTabId = R.id.nav_home;
             lastReconciledAccountId = null;
             GoogleAuthHelper.signOut(this);
@@ -502,7 +639,7 @@ public class MainActivity extends BaseActivity {
     }
 
     // =========================================================================
-    // 1. TUTOR PROFILE SETTINGS (WITH READ-ONLY USERNAME)
+    // 1. TUTOR PROFILE SETTINGS (WITH READ-ONLY USERNAME & LOCAL PHOTO STORAGE)
     // =========================================================================
     private void showEditProfileBottomSheet() {
         String accountId = sessionManager.getActiveAccountId();
@@ -587,6 +724,7 @@ public class MainActivity extends BaseActivity {
             );
 
             if (updated) {
+                syncAccountToFirestore();
                 bottomSheet.dismiss();
                 loadDashboardData();
             } else {
