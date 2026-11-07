@@ -10,6 +10,8 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -38,6 +40,11 @@ public class SignUpActivity extends BaseActivity {
     private boolean isPasswordValid = false;
     private boolean doPasswordsMatch = false;
 
+    private final ActivityResultLauncher<Intent> googleFallbackLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                GoogleAuthHelper.handleFallbackIntentResult(this, result.getData(), createGoogleAuthCallback());
+            });
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -60,17 +67,14 @@ public class SignUpActivity extends BaseActivity {
         binding.btnPrimaryAction.setText(R.string.auth_action_sign_up);
         binding.btnToggleAuth.setText(R.string.auth_prompt_have_account);
 
-        // Show Sign Up specific elements
         binding.btnBack.setVisibility(View.VISIBLE);
         binding.tilFullName.setVisibility(View.VISIBLE);
         binding.tilConfirmPassword.setVisibility(View.VISIBLE);
         binding.llPasswordRules.setVisibility(View.VISIBLE);
         binding.tvMatchIndicator.setVisibility(View.VISIBLE);
 
-        // Hide Sign In specific elements
         binding.btnForgotPassword.setVisibility(View.GONE);
 
-        // Initial state
         evaluatePasswordRules("");
         evaluateMatchIndicator();
     }
@@ -99,11 +103,9 @@ public class SignUpActivity extends BaseActivity {
         });
     }
 
-    private void startGoogleSignIn() {
-        binding.btnPrimaryAction.setEnabled(false);
-        btnGoogleLoading.setLoading(true, getString(R.string.auth2_google_signing_in));
-
-        GoogleAuthHelper.signInWithGoogle(this, new GoogleAuthHelper.AuthCallback() {
+    @NonNull
+    private GoogleAuthHelper.AuthCallback createGoogleAuthCallback() {
+        return new GoogleAuthHelper.AuthCallback() {
             @Override
             public void onSuccess(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser) {
                 btnGoogleLoading.setLoading(false);
@@ -111,6 +113,11 @@ public class SignUpActivity extends BaseActivity {
                 sessionManager.login(localAccount.getId());
                 startActivity(new Intent(SignUpActivity.this, MainActivity.class));
                 finish();
+            }
+
+            @Override
+            public void onFallbackIntentRequired(@NonNull Intent signInIntent) {
+                googleFallbackLauncher.launch(signInIntent);
             }
 
             @Override
@@ -125,7 +132,14 @@ public class SignUpActivity extends BaseActivity {
                 binding.btnPrimaryAction.setEnabled(true);
                 showMessage(binding.getRoot(), message);
             }
-        });
+        };
+    }
+
+    private void startGoogleSignIn() {
+        binding.btnPrimaryAction.setEnabled(false);
+        btnGoogleLoading.setLoading(true, getString(R.string.auth2_google_signing_in));
+
+        GoogleAuthHelper.signInWithGoogle(this, createGoogleAuthCallback());
     }
 
     private void navigateToSignIn() {

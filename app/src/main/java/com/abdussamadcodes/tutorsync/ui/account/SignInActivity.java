@@ -10,6 +10,8 @@ import android.util.Patterns;
 import android.view.View;
 import android.widget.LinearLayout;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -24,7 +26,6 @@ import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
 import com.abdussamadcodes.tutorsync.ui.common.ButtonLoading;
 import com.abdussamadcodes.tutorsync.ui.main.MainActivity;
 import com.abdussamadcodes.tutorsync.util.AppExecutors;
-import com.abdussamadcodes.tutorsync.util.AppPreferences;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -37,6 +38,11 @@ public class SignInActivity extends BaseActivity {
     private SessionManager sessionManager;
     private ButtonLoading btnLoading;
     private ButtonLoading btnGoogleLoading;
+
+    private final ActivityResultLauncher<Intent> googleFallbackLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                GoogleAuthHelper.handleFallbackIntentResult(this, result.getData(), createGoogleAuthCallback());
+            });
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -60,7 +66,6 @@ public class SignInActivity extends BaseActivity {
         binding.btnPrimaryAction.setText(R.string.auth_action_sign_in);
         binding.btnToggleAuth.setText(R.string.auth_prompt_no_account);
 
-        // Hide Sign Up specific elements
         binding.btnBack.setVisibility(View.GONE);
         binding.tilFullName.setVisibility(View.GONE);
         binding.tilConfirmPassword.setVisibility(View.GONE);
@@ -70,7 +75,6 @@ public class SignInActivity extends BaseActivity {
 
     private void setupListeners() {
         binding.btnPrimaryAction.setOnClickListener(v -> attemptSignIn());
-
         binding.btnGoogleAuth.setOnClickListener(v -> startGoogleSignIn());
 
         binding.btnToggleAuth.setOnClickListener(v -> {
@@ -81,13 +85,9 @@ public class SignInActivity extends BaseActivity {
         binding.btnForgotPassword.setOnClickListener(v -> showSmartPasswordRecoveryDialog());
     }
 
-    private void startGoogleSignIn() {
-        binding.tilUsername.setError(null);
-        binding.tilPassword.setError(null);
-        binding.btnPrimaryAction.setEnabled(false);
-        btnGoogleLoading.setLoading(true, getString(R.string.auth2_google_signing_in));
-
-        GoogleAuthHelper.signInWithGoogle(this, new GoogleAuthHelper.AuthCallback() {
+    @NonNull
+    private GoogleAuthHelper.AuthCallback createGoogleAuthCallback() {
+        return new GoogleAuthHelper.AuthCallback() {
             @Override
             public void onSuccess(@NonNull Account localAccount, @NonNull FirebaseUser firebaseUser) {
                 btnGoogleLoading.setLoading(false);
@@ -95,6 +95,11 @@ public class SignInActivity extends BaseActivity {
                 sessionManager.login(localAccount.getId());
                 startActivity(new Intent(SignInActivity.this, MainActivity.class));
                 finish();
+            }
+
+            @Override
+            public void onFallbackIntentRequired(@NonNull Intent signInIntent) {
+                googleFallbackLauncher.launch(signInIntent);
             }
 
             @Override
@@ -109,7 +114,16 @@ public class SignInActivity extends BaseActivity {
                 binding.btnPrimaryAction.setEnabled(true);
                 showMessage(binding.getRoot(), message);
             }
-        });
+        };
+    }
+
+    private void startGoogleSignIn() {
+        binding.tilUsername.setError(null);
+        binding.tilPassword.setError(null);
+        binding.btnPrimaryAction.setEnabled(false);
+        btnGoogleLoading.setLoading(true, getString(R.string.auth2_google_signing_in));
+
+        GoogleAuthHelper.signInWithGoogle(this, createGoogleAuthCallback());
     }
 
     private void attemptSignIn() {
