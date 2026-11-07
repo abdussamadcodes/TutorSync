@@ -12,7 +12,20 @@
           "package_name": "com.abdussamadcodes.tutorsync"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "516201605620-c548ottgf2inuql4s8865o20pu65mpkk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.abdussamadcodes.tutorsync",
+            "certificate_hash": "1a5362748c3eedce6d8cf126517812af98f2e74b"
+          }
+        },
+        {
+          "client_id": "516201605620-jfo8as7a1iueo3st4gvvgi3h79mj12v4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDU7_31-RM96QyzNIJY_-II9RbQb1ePM08"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "516201605620-jfo8as7a1iueo3st4gvvgi3h79mj12v4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
