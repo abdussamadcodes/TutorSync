@@ -7,7 +7,9 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Patterns;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -16,15 +18,12 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import java.util.Arrays;
-import java.io.IOException;
-import java.io.FileInputStream;
-import java.io.File;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.abdussamadcodes.tutorsync.R;
+import com.abdussamadcodes.tutorsync.account.GoogleAuthHelper;
 import com.abdussamadcodes.tutorsync.account.LocalAccountStore;
 import com.abdussamadcodes.tutorsync.database.DatabaseManager;
 import com.abdussamadcodes.tutorsync.databinding.ActivityMainBinding;
@@ -33,6 +32,7 @@ import com.abdussamadcodes.tutorsync.model.ClassOccurrence;
 import com.abdussamadcodes.tutorsync.model.OccurrenceGroup;
 import com.abdussamadcodes.tutorsync.model.Student;
 import com.abdussamadcodes.tutorsync.model.Subject;
+import com.abdussamadcodes.tutorsync.repository.local.AttendanceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.InvoiceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.OccurrenceRepository;
 import com.abdussamadcodes.tutorsync.repository.local.ScheduleRepository;
@@ -43,7 +43,6 @@ import com.abdussamadcodes.tutorsync.security.BiometricAuthHelper;
 import com.abdussamadcodes.tutorsync.security.PasswordHasher;
 import com.abdussamadcodes.tutorsync.security.SessionManager;
 import com.abdussamadcodes.tutorsync.ui.account.SignInActivity;
-import com.abdussamadcodes.tutorsync.repository.local.AttendanceRepository;
 import com.abdussamadcodes.tutorsync.ui.attendance.AttendanceBottomSheetFragment;
 import com.abdussamadcodes.tutorsync.ui.attendance.AttendanceHistoryActivity;
 import com.abdussamadcodes.tutorsync.ui.common.BaseActivity;
@@ -63,13 +62,18 @@ import com.abdussamadcodes.tutorsync.util.BackupRestoreManager;
 import com.abdussamadcodes.tutorsync.util.ImageUtils;
 import com.abdussamadcodes.tutorsync.util.LocaleThemeHelper;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
@@ -240,6 +244,20 @@ public class MainActivity extends BaseActivity {
         return true;
     }
 
+    private void setChangePasswordRowVisible(boolean visible) {
+        binding.rowChangePassword.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (binding.rowChangePassword.getParent() instanceof ViewGroup) {
+            ViewGroup parent = (ViewGroup) binding.rowChangePassword.getParent();
+            int index = parent.indexOfChild(binding.rowChangePassword);
+            if (index > 0) {
+                View dividerAbove = parent.getChildAt(index - 1);
+                if (dividerAbove != null && dividerAbove.getId() == View.NO_ID) {
+                    dividerAbove.setVisibility(visible ? View.VISIBLE : View.GONE);
+                }
+            }
+        }
+    }
+
     private void loadDashboardData() {
         final String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
@@ -259,6 +277,7 @@ public class MainActivity extends BaseActivity {
                 new ScheduleRepository().topUpRecurringOccurrences(accountId);
 
                 final Account account = accountStore.getAccountById(accountId);
+                final boolean isGoogleAccount = GoogleAuthHelper.isGoogleSignInAccount(account);
                 final List<Student> students = studentRepo.getActiveStudentsForAccount(accountId);
                 final List<Subject> subjects = subjectRepo.getActiveSubjectsForAccount(accountId);
                 final int totalRevenueMinor = invoiceRepo.getTotalRevenueForAccount(accountId);
@@ -295,6 +314,9 @@ public class MainActivity extends BaseActivity {
                 AppExecutors.getInstance().mainThread().execute(() -> {
                     if (isFinishing() || isDestroyed() || binding == null) return;
                     if (!accountId.equals(sessionManager.getActiveAccountId())) return;
+
+                    // Hide Change Password row & divider if logged in with Google Sign-In
+                    setChangePasswordRowVisible(!isGoogleAccount);
 
                     // H2: attendance-history card shows how many recent classes still need attendance
                     if (needsAttendanceCount > 0) {
@@ -471,6 +493,7 @@ public class MainActivity extends BaseActivity {
         binding.btnSignOut.setOnClickListener(v -> {
             lastActiveTabId = R.id.nav_home;
             lastReconciledAccountId = null;
+            GoogleAuthHelper.signOut(this);
             sessionManager.logout();
             AppLockManager.getInstance().resetLockState();
             startActivity(new Intent(this, SignInActivity.class));
@@ -583,11 +606,17 @@ public class MainActivity extends BaseActivity {
     }
 
     // =========================================================================
-    // 2. SECURITY: CHANGE PASSWORD (WITH CURRENT PASSWORD VERIFICATION)
+    // 2. SECURITY: CHANGE PASSWORD (WITH CURRENT PASSWORD VERIFICATION & FIREBASE SYNC)
     // =========================================================================
     private void showChangePasswordBottomSheet() {
         String accountId = sessionManager.getActiveAccountId();
         if (accountId.isEmpty()) return;
+
+        Account currentAccount = accountStore.getAccountById(accountId);
+        if (currentAccount == null || GoogleAuthHelper.isGoogleSignInAccount(currentAccount)) {
+            setChangePasswordRowVisible(false);
+            return;
+        }
 
         BottomSheetDialog bottomSheet = new BottomSheetDialog(this);
         View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_change_password, null);
@@ -601,9 +630,12 @@ public class MainActivity extends BaseActivity {
         TextInputEditText etNew = sheetView.findViewById(R.id.etNewPassword);
         TextInputEditText etConfirm = sheetView.findViewById(R.id.etConfirmNewPassword);
 
-        sheetView.findViewById(R.id.btnCancelChangePassword).setOnClickListener(v -> bottomSheet.dismiss());
+        View btnCancel = sheetView.findViewById(R.id.btnCancelChangePassword);
+        MaterialButton btnSubmit = sheetView.findViewById(R.id.btnSubmitChangePassword);
 
-        sheetView.findViewById(R.id.btnSubmitChangePassword).setOnClickListener(v -> {
+        btnCancel.setOnClickListener(v -> bottomSheet.dismiss());
+
+        btnSubmit.setOnClickListener(v -> {
             tilCurrent.setError(null);
             tilNew.setError(null);
             tilConfirm.setError(null);
@@ -654,7 +686,7 @@ public class MainActivity extends BaseActivity {
                     tilNew.setError(getString(R.string.auth_err_pass_digit));
                     return;
                 }
-                if (!newPass.matches(".*[@#$%^&+=!*()~_\\-].*")) {
+                if (!newPass.matches(".*[^A-Za-z0-9].*")) {
                     tilNew.setError(getString(R.string.auth_err_pass_special));
                     return;
                 }
@@ -667,14 +699,51 @@ public class MainActivity extends BaseActivity {
                     return;
                 }
 
-                String newSalt = PasswordHasher.generateSalt();
-                String newHash = PasswordHasher.hashPassword(newPass, newSalt);
+                final String newSalt = PasswordHasher.generateSalt();
+                final String newHash = PasswordHasher.hashPassword(newPass, newSalt);
 
-                if (accountStore.updatePassword(accountId, newHash, newSalt)) {
-                    bottomSheet.dismiss();
-                    showMessage(binding.getRoot(), R.string.msg_password_updated);
+                // Check if this account uses an email address (Firebase Email/Password account)
+                String accountEmail = null;
+                if (Patterns.EMAIL_ADDRESS.matcher(account.getUsername()).matches()) {
+                    accountEmail = account.getUsername();
+                } else if (account.getEmail() != null
+                        && Patterns.EMAIL_ADDRESS.matcher(account.getEmail().trim()).matches()) {
+                    accountEmail = account.getEmail().trim();
+                }
+
+                if (accountEmail != null) {
+                    btnSubmit.setEnabled(false);
+                    btnCancel.setEnabled(false);
+
+                    GoogleAuthHelper.updateFirebasePassword(accountEmail, currentPass, newPass,
+                            new GoogleAuthHelper.PasswordUpdateCallback() {
+                                @Override
+                                public void onUpdated() {
+                                    btnSubmit.setEnabled(true);
+                                    btnCancel.setEnabled(true);
+                                    if (accountStore.updatePassword(accountId, newHash, newSalt)) {
+                                        bottomSheet.dismiss();
+                                        showMessage(binding.getRoot(), R.string.msg_password_updated);
+                                    } else {
+                                        showMessage(binding.getRoot(), R.string.auth_err_hashing);
+                                    }
+                                }
+
+                                @Override
+                                public void onError(@NonNull String message) {
+                                    btnSubmit.setEnabled(true);
+                                    btnCancel.setEnabled(true);
+                                    tilCurrent.setError(message);
+                                }
+                            });
                 } else {
-                    showMessage(binding.getRoot(), R.string.auth_err_hashing);
+                    // Offline-only username account: update local SQLite directly
+                    if (accountStore.updatePassword(accountId, newHash, newSalt)) {
+                        bottomSheet.dismiss();
+                        showMessage(binding.getRoot(), R.string.msg_password_updated);
+                    } else {
+                        showMessage(binding.getRoot(), R.string.auth_err_hashing);
+                    }
                 }
             } catch (Exception e) {
                 showMessage(binding.getRoot(), R.string.auth_err_hashing);
@@ -848,7 +917,7 @@ public class MainActivity extends BaseActivity {
                     BackupDialogs.askExistingPassword(this, true, pw -> beginParseBackup(uri, file, pw), null);
                 } else if (finalError != null) {
                     Toast.makeText(this, getString(R.string.backup_restore_read_failed_fmt,
-                            finalError.getMessage() != null ? finalError.getMessage() : "Invalid backup"),
+                                    finalError.getMessage() != null ? finalError.getMessage() : "Invalid backup"),
                             Toast.LENGTH_LONG).show();
                 } else if (finalParsed != null) {
                     BackupDialogs.confirmRestore(this, finalParsed, accountId,
@@ -890,9 +959,9 @@ public class MainActivity extends BaseActivity {
                         restoreSucceeded = true;
                         message = result.hasConflicts()
                                 ? getString(R.string.backup_restore_done_conflicts_fmt, result.insertedCount,
-                                        result.updatedCount, result.skippedCount, result.conflictCount)
+                                result.updatedCount, result.skippedCount, result.conflictCount)
                                 : getString(R.string.backup_restore_done_fmt, result.insertedCount,
-                                        result.updatedCount, result.skippedCount);
+                                result.updatedCount, result.skippedCount);
                     } catch (Exception e) {
                         // the merge runs in one transaction, so a failure leaves the data untouched
                         message = getString(R.string.backup_restore_failed_fmt,

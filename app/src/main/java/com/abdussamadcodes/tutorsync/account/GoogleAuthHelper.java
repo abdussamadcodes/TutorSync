@@ -26,9 +26,11 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.auth.UserInfo;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -68,6 +70,11 @@ public final class GoogleAuthHelper {
         void onError(@NonNull String message);
     }
 
+    public interface PasswordUpdateCallback {
+        void onUpdated();
+        void onError(@NonNull String message);
+    }
+
     private GoogleAuthHelper() {
     }
 
@@ -80,6 +87,113 @@ public final class GoogleAuthHelper {
         }
         String value = context.getString(resId).trim();
         return value.isEmpty() ? null : value;
+    }
+
+    /**
+     * Returns true if the local account is a Google-managed account OR if the currently signed-in
+     * FirebaseUser for this account authenticated via google.com without an email/password provider.
+     */
+    public static boolean isGoogleSignInAccount(@Nullable Account account) {
+        if (account == null) {
+            return false;
+        }
+        if (LocalAccountStore.isGoogleManagedAccount(account)) {
+            return true;
+        }
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user != null && user.getEmail() != null) {
+            String fbEmail = user.getEmail().trim().toLowerCase(Locale.ROOT);
+            String acctEmail = account.getEmail() != null ? account.getEmail().trim().toLowerCase(Locale.ROOT) : "";
+            String acctUser = account.getUsername().trim().toLowerCase(Locale.ROOT);
+            if (fbEmail.equals(acctEmail) || fbEmail.equals(acctUser)) {
+                boolean hasGoogle = false;
+                boolean hasPassword = false;
+                for (UserInfo info : user.getProviderData()) {
+                    if (GoogleAuthProvider.PROVIDER_ID.equals(info.getProviderId())) {
+                        hasGoogle = true;
+                    } else if (EmailAuthProvider.PROVIDER_ID.equals(info.getProviderId())) {
+                        hasPassword = true;
+                    }
+                }
+                if (hasGoogle && !hasPassword) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Re-authenticates the Email/Password user in Firebase and updates their Firebase password
+     * so clearing app data will recognize the new password on future sign-ins.
+     */
+    public static void updateFirebasePassword(
+            @NonNull String email,
+            @NonNull String currentPassword,
+            @NonNull String newPassword,
+            @NonNull PasswordUpdateCallback callback) {
+
+        final String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        final Handler mainHandler = new Handler(Looper.getMainLooper());
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        FirebaseUser currentUser = auth.getCurrentUser();
+
+        // Case 1: Active FirebaseUser matches the account email -> reauthenticate & updatePassword
+        if (currentUser != null && currentUser.getEmail() != null
+                && currentUser.getEmail().trim().equalsIgnoreCase(normalizedEmail)) {
+            AuthCredential credential = EmailAuthProvider.getCredential(normalizedEmail, currentPassword);
+            currentUser.reauthenticate(credential).addOnCompleteListener(reauthTask -> {
+                if (!reauthTask.isSuccessful()) {
+                    Exception e = reauthTask.getException();
+                    mainHandler.post(() -> callback.onError(
+                            e != null && e.getMessage() != null
+                                    ? e.getMessage()
+                                    : "Could not verify current password with Firebase."));
+                    return;
+                }
+                currentUser.updatePassword(newPassword).addOnCompleteListener(updateTask -> {
+                    if (updateTask.isSuccessful()) {
+                        mainHandler.post(callback::onUpdated);
+                    } else {
+                        Exception e = updateTask.getException();
+                        mainHandler.post(() -> callback.onError(
+                                e != null && e.getMessage() != null
+                                        ? e.getMessage()
+                                        : "Failed to update password in Firebase."));
+                    }
+                });
+            });
+            return;
+        }
+
+        // Case 2: No active Firebase session (e.g. signed in offline earlier) -> sign in with current password & update
+        auth.signInWithEmailAndPassword(normalizedEmail, currentPassword)
+                .addOnCompleteListener(signInTask -> {
+                    if (!signInTask.isSuccessful()) {
+                        Exception e = signInTask.getException();
+                        mainHandler.post(() -> callback.onError(
+                                e != null && e.getMessage() != null
+                                        ? e.getMessage()
+                                        : "Could not connect to Firebase to update your password. Check your internet connection."));
+                        return;
+                    }
+                    FirebaseUser signedInUser = auth.getCurrentUser();
+                    if (signedInUser == null) {
+                        mainHandler.post(() -> callback.onError("Firebase session unavailable."));
+                        return;
+                    }
+                    signedInUser.updatePassword(newPassword).addOnCompleteListener(updateTask -> {
+                        if (updateTask.isSuccessful()) {
+                            mainHandler.post(callback::onUpdated);
+                        } else {
+                            Exception e = updateTask.getException();
+                            mainHandler.post(() -> callback.onError(
+                                    e != null && e.getMessage() != null
+                                            ? e.getMessage()
+                                            : "Failed to update password in Firebase."));
+                        }
+                    });
+                });
     }
 
     public static void signInWithGoogle(@NonNull Activity activity, @NonNull AuthCallback callback) {
@@ -237,10 +351,6 @@ public final class GoogleAuthHelper {
                 });
     }
 
-    /**
-     * Registers an Email + Password account in Firebase Auth, sends a verification email,
-     * and saves the hashed password + email in the local SQLite database for offline login.
-     */
     public static void registerEmailPasswordAccount(
             @NonNull Activity activity,
             @NonNull String fullName,
@@ -275,7 +385,6 @@ public final class GoogleAuthHelper {
                         return;
                     }
 
-                    // Send verification email right away
                     firebaseUser.sendEmailVerification().addOnCompleteListener(verifyTask -> {
                         final boolean sent = verifyTask.isSuccessful();
                         AppExecutors.getInstance().diskIO().execute(() -> {
@@ -335,10 +444,6 @@ public final class GoogleAuthHelper {
                 });
     }
 
-    /**
-     * Authenticates with Firebase Email/Password (e.g. after a password reset link was used)
-     * and updates the local SQLite password hash + salt so offline login stays synchronized.
-     */
     public static void signInWithEmailAndSyncLocal(
             @NonNull Activity activity,
             @NonNull String email,
@@ -386,7 +491,6 @@ public final class GoogleAuthHelper {
                                     store.updatePassword(localAccount.getId(), newHash, newSalt);
                                     localAccount = store.getAccountById(localAccount.getId());
                                 } else {
-                                    // Provision local account if signing in on a fresh install
                                     localAccount = store.getOrCreateGoogleAccount(
                                             user.getUid(), normalizedEmail, user.getDisplayName());
                                     if (localAccount != null) {
@@ -412,9 +516,6 @@ public final class GoogleAuthHelper {
                 });
     }
 
-    /**
-     * Reloads the current FirebaseUser to check if the user clicked the verification link in their email.
-     */
     public static void checkEmailVerified(@NonNull VerificationStatusCallback callback) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
